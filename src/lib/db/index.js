@@ -168,4 +168,7 @@ export async function importDb(payload) {
 // Eager init helper (optional)
 export async function initDb() {
   await getAdapter();
+  // Auto-seed providers + ranking on first launch
+  const { seedProviders } = await import("./seedProviders.js");
+  await seedProviders();
 }

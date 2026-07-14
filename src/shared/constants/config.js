@@ -2,22 +2,22 @@ import pkg from "../../../package.json" with { type: "json" };
 
 // App configuration
 export const APP_CONFIG = {
-  name: "9Router Proxy",
-  description: "AI Infrastructure Management",
+  name: "MaxRouter",
+  description: "AI Router & Gateway",
   version: pkg.version,
 };
 
 // GitHub configuration
 export const GITHUB_CONFIG = {
-  changelogUrl: "https://raw.githubusercontent.com/decolua/9router/refs/heads/master/CHANGELOG.md",
-  donateUrl: "https://9router.com/api/donate",
+  changelogUrl: "https://raw.githubusercontent.com/nortelucas/9router-agent/refs/heads/master/CHANGELOG.md",
+  donateUrl: "",
 };
 
 // Updater configuration
 export const UPDATER_CONFIG = {
-  npmPackageName: "9router",
-  installCmd: "npm i -g 9router",
-  installCmdLatest: "npm i -g 9router@latest --prefer-online",
+  npmPackageName: "maxrouter",
+  installCmd: "npm i -g maxrouter",
+  installCmdLatest: "npm i -g maxrouter@latest --prefer-online",
   shutdownCountdownSec: 3,
   exitDelayMs: 500,
   statusPort: 20129,

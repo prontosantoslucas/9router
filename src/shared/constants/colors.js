@@ -1,14 +1,14 @@
-// Claude-inspired color palette for Endpoint Proxy
-// Light theme: Warm beige/cream tones
-// Dark theme: Deep charcoal/brown tones
+// MaxRouter color palette
+// Light theme: Cool gray/white tones
+// Dark theme: Deep slate tones
 
 export const COLORS = {
-  // Primary - Warm Coral/Terracotta (Claude-like)
+  // Primary - Electric Indigo (MaxRouter brand)
   primary: {
-    DEFAULT: "#D97757",
-    hover: "#C56243",
-    light: "#E8A58C",
-    dark: "#B0664D",
+    DEFAULT: "#7C3AED",
+    hover: "#6D28D9",
+    light: "#A78BFA",
+    dark: "#5B21B6",
   },
 
   // Light theme backgrounds
