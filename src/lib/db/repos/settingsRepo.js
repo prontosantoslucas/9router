@@ -37,7 +37,7 @@ const DEFAULT_SETTINGS = {
   mitmRouterBaseUrl: DEFAULT_MITM_ROUTER_BASE,
   dnsToolEnabled: {},
   rtkEnabled: true,
-  headroomEnabled: false,
+  headroomEnabled: true, // Headroom token saver on by default (fail-open if proxy absent)
   headroomUrl: DEFAULT_HEADROOM_URL,
   headroomCompressUserMessages: false,
   cavemanEnabled: true,

@@ -171,4 +171,10 @@ export async function initDb() {
   // Auto-seed providers + ranking on first launch
   const { seedProviders } = await import("./seedProviders.js");
   await seedProviders();
+  // Headroom token saver: install + start by default (non-blocking, fail-open)
+  try {
+    const { getSettings } = await import("./repos/settingsRepo.js");
+    const { ensureHeadroomAtBoot } = await import("../headroom/autostart.js");
+    void ensureHeadroomAtBoot(await getSettings());
+  } catch { /* fail-open */ }
 }

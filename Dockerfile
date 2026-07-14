@@ -43,6 +43,10 @@ RUN mkdir -p /app/data && chown -R node:node /app && \
   mkdir -p /app/data-home && chown node:node /app/data-home && \
   ln -sf /app/data-home /root/.9router 2>/dev/null || true
 
+# Headroom token saver bundled by default (Python proxy, started by the app at boot)
+RUN apk --no-cache add python3 py3-pip && \
+  pip3 install --no-cache-dir --break-system-packages "headroom-ai[proxy]"
+
 # Fix permissions at runtime (handles mounted volumes)
 RUN apk --no-cache upgrade && apk --no-cache add su-exec && \
   printf '#!/bin/sh\nchown -R node:node /app/data /app/data-home 2>/dev/null\nexec su-exec node "$@"\n' > /entrypoint.sh && \
