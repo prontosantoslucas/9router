@@ -33,7 +33,7 @@ function installHeadroomBase(py) {
     try {
       if (!fs.existsSync(HEADROOM_DIR)) fs.mkdirSync(HEADROOM_DIR, { recursive: true });
       const outFd = fs.openSync(INSTALL_LOG_FILE, "w");
-      const child = spawn(py, ["-m", "pip", "install", "--upgrade", "headroom-ai[proxy]"], {
+      const child = spawn(py, ["-m", "pip", "install", "--upgrade", "headroom-ai[proxy,code]"], {
         stdio: ["ignore", outFd, outFd],
         windowsHide: true,
         env: { ...process.env },
@@ -42,7 +42,7 @@ function installHeadroomBase(py) {
       child.once("exit", (code) => {
         try { fs.closeSync(outFd); } catch {}
         if (code === 0) resolve(true);
-        else reject(new Error(`pip install headroom-ai[proxy] exited with code=${code}`));
+        else reject(new Error(`pip install headroom-ai[proxy,code] exited with code=${code}`));
       });
     } catch (e) {
       reject(e);

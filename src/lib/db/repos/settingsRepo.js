@@ -38,13 +38,14 @@ const DEFAULT_SETTINGS = {
   dnsToolEnabled: {},
   rtkEnabled: true,
   headroomEnabled: true, // Headroom token saver on by default (fail-open if proxy absent)
+  headroomCodeAware: true, // AST-aware compression ([code] extra bundled by default)
   headroomUrl: DEFAULT_HEADROOM_URL,
   headroomCompressUserMessages: false,
   cavemanEnabled: true,
   cavemanLevel: "lite",
   ponytailEnabled: true,
   ponytailLevel: "lite",
-  pxpipeEnabled: false,
+  pxpipeEnabled: true, // PXPipe on by default — fail-open, auto-installs (pxpipeAutoInstall)
   pxpipeAutoInstall: true,
   pxpipeMinChars: 25000,
   pxpipeTimeoutMs: 15000,
