@@ -10,7 +10,7 @@ export const APP_CONFIG = {
 // GitHub configuration
 export const GITHUB_CONFIG = {
   changelogUrl: "https://raw.githubusercontent.com/nortelucas/9router-agent/refs/heads/master/CHANGELOG.md",
-  donateUrl: "",
+  donateUrl: "https://www.paypal.com/donate/?hosted_button_id=YOUR_PAYPAL_ID",
 };
 
 // Updater configuration
