@@ -2,7 +2,16 @@ export default {
   id: "openrouter",
   priority: 10,
   hasFree: true,
+  hasOAuth: true,
   alias: "openrouter",
+  // OAuth PKCE "one-click connect": https://openrouter.ai/docs/use-cases/oauth-pkce
+  // /auth?callback_url=...&code_challenge=...&code_challenge_method=S256 →
+  // POST /api/v1/auth/keys { code, code_verifier, code_challenge_method } → { key }
+  oauth: {
+    authorizeUrl: "https://openrouter.ai/auth",
+    tokenUrl: "https://openrouter.ai/api/v1/auth/keys",
+    codeChallengeMethod: "S256",
+  },
   display: {
     name: "OpenRouter",
     icon: "router",

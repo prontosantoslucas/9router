@@ -28,6 +28,8 @@ import {
   CODEBUDDY_CONFIG,
   KIMCHI_CONFIG,
   GROK_CLI_CONFIG,
+  OPENROUTER_CONFIG,
+  HUGGINGFACE_CONFIG,
   getOAuthClientMetadata,
 } from "./constants/oauth";
 import { XAI_CONFIG, XAI_PKCE_VERIFIER_BYTES } from "./constants/xai";
@@ -1501,6 +1503,120 @@ const PROVIDERS = {
           userId,
           username,
         },
+      };
+    },
+  },
+
+  openrouter: {
+    config: OPENROUTER_CONFIG,
+    flowType: "authorization_code_pkce",
+    // OpenRouter PKCE: no client_id/state — user logs in and authorizes, then
+    // is redirected to callback_url?code=...
+    buildAuthUrl: (config, redirectUri, state, codeChallenge) => {
+      const params = new URLSearchParams({
+        callback_url: redirectUri,
+        code_challenge: codeChallenge,
+        code_challenge_method: config.codeChallengeMethod || "S256",
+      });
+      return `${config.authorizeUrl}?${params.toString()}`;
+    },
+    exchangeToken: async (config, code, redirectUri, codeVerifier) => {
+      const response = await fetch(config.tokenUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          code,
+          code_verifier: codeVerifier,
+          code_challenge_method: config.codeChallengeMethod || "S256",
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`OpenRouter key exchange failed: ${error}`);
+      }
+
+      return await response.json();
+    },
+    // The exchange returns a user-scoped API key ({ key }) instead of
+    // access/refresh tokens — store it as apiKey so the existing
+    // OpenRouter executor keeps working unchanged.
+    mapTokens: (tokens) => {
+      const key = tokens.key || tokens.api_key;
+      if (!key) throw new Error("OpenRouter exchange returned no key");
+      return {
+        apiKey: key,
+        accessToken: null,
+        refreshToken: null,
+        providerSpecificData: {
+          authMethod: "oauth_pkce",
+          userId: tokens.user_id || null,
+        },
+      };
+    },
+  },
+
+  huggingface: {
+    config: HUGGINGFACE_CONFIG,
+    flowType: "authorization_code_pkce",
+    buildAuthUrl: (config, redirectUri, state, codeChallenge) => {
+      if (!config.clientId) {
+        throw new Error("HuggingFace OAuth requires HF_OAUTH_CLIENT_ID (create an app at huggingface.co/settings/applications)");
+      }
+      const params = new URLSearchParams({
+        client_id: config.clientId,
+        response_type: "code",
+        redirect_uri: redirectUri,
+        scope: (config.scopes || []).join(" "),
+        code_challenge: codeChallenge,
+        code_challenge_method: config.codeChallengeMethod || "S256",
+        state,
+      });
+      return `${config.authorizeUrl}?${params.toString()}`;
+    },
+    exchangeToken: async (config, code, redirectUri, codeVerifier) => {
+      const body = new URLSearchParams({
+        grant_type: "authorization_code",
+        client_id: config.clientId,
+        code,
+        redirect_uri: redirectUri,
+        code_verifier: codeVerifier,
+      });
+      if (config.clientSecret) body.set("client_secret", config.clientSecret);
+      const response = await fetch(config.tokenUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+        body,
+      });
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`HuggingFace token exchange failed: ${error}`);
+      }
+      const tokens = await response.json();
+      // Enrich with user identity for the connection label
+      if (config.userInfoUrl && tokens.access_token) {
+        try {
+          const u = await fetch(config.userInfoUrl, { headers: { Authorization: `Bearer ${tokens.access_token}` } });
+          if (u.ok) tokens._hfUser = await u.json();
+        } catch { /* non-fatal */ }
+      }
+      return tokens;
+    },
+    // HF OAuth access tokens work as Bearer keys on the inference endpoints —
+    // store as apiKey so existing HF executors (image/stt) work unchanged.
+    mapTokens: (tokens) => {
+      const user = tokens._hfUser || {};
+      return {
+        apiKey: tokens.access_token,
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token || null,
+        expiresIn: tokens.expires_in,
+        email: user.email || null,
+        displayName: user.preferred_username || user.name || null,
+        providerSpecificData: { authMethod: "oauth_pkce" },
       };
     },
   },

@@ -7,7 +7,7 @@ import BaseUrlSelect from "./BaseUrlSelect";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
 
-const CLOUD_URL = process.env.NEXT_PUBLIC_CLOUD_URL;
+const CLOUD_URL = process.env.NEXT_PUBLIC_CLOUD_URL || "https://maxrouter-prod.up.railway.app";
 
 export default function ClaudeToolCard({
   tool,

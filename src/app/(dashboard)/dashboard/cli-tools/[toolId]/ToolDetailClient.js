@@ -12,7 +12,7 @@ import {
   JcodeToolCard,
 } from "../components";
 
-const CLOUD_URL = process.env.NEXT_PUBLIC_CLOUD_URL;
+const CLOUD_URL = process.env.NEXT_PUBLIC_CLOUD_URL || "https://maxrouter-prod.up.railway.app";
 
 export default function ToolDetailClient({ toolId, machineId }) {
   const tool = CLI_TOOLS[toolId];

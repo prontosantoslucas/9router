@@ -8,7 +8,8 @@ FROM base AS builder
 RUN apk --no-cache upgrade && apk --no-cache add python3 make g++ linux-headers
 
 COPY package.json ./
-RUN --mount=type=cache,target=/root/.npm \
+# Railway exige `id` em cache mounts (formato s/<service-id>-<target>).
+RUN --mount=type=cache,id=s/132e6acb-4d7c-439e-a5df-c1fc136a5855-/root/.npm,target=/root/.npm \
   npm install
 
 COPY . ./

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MaxRouter — Infraestrutura de IA em um único endpoint</title>
+  <meta name="description" content="Um endpoint para todos os seus provedores de IA. Conecte Claude Code, Codex, Cursor, Cline, Copilot e OpenCode a modelos gratuitos via 40+ provedores, com fallback automático e economia de tokens." />
+  <style>
+    :root {
+      --brand: #7C3AED;
+      --brand-dark: #5B21B6;
+      --brand-light: #A78BFA;
+      --bg: #0a0a0a;
+      --bg-card: #141414;
+      --border: #262626;
+      --text: #f5f5f5;
+      --text-dim: #a3a3a3;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      line-height: 1.6;
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+    header {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(10,10,10,.85); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    nav { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+    .logo { font-size: 1.3rem; font-weight: 800; }
+    .logo span { color: var(--brand-light); }
+    .nav-links { display: flex; gap: 24px; align-items: center; }
+    .nav-links a { color: var(--text-dim); text-decoration: none; font-size: .95rem; }
+    .nav-links a:hover { color: var(--text); }
+    .btn {
+      display: inline-block; padding: 12px 28px; border-radius: 10px;
+      font-weight: 600; text-decoration: none; transition: all .2s;
+    }
+    .btn-primary { background: var(--brand); color: #fff; }
+    .btn-primary:hover { background: var(--brand-dark); }
+    .btn-ghost { border: 1px solid var(--border); color: var(--text); }
+    .btn-ghost:hover { border-color: var(--brand-light); }
+    .hero { text-align: center; padding: 96px 0 72px; }
+    .hero h1 {
+      font-size: clamp(2.2rem, 5vw, 3.6rem); font-weight: 800; line-height: 1.15;
+      background: linear-gradient(90deg, #fff 30%, var(--brand-light));
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hero p.sub { color: var(--text-dim); font-size: 1.2rem; max-width: 720px; margin: 24px auto 40px; }
+    .hero .cta { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .badge {
+      display: inline-block; padding: 6px 14px; border-radius: 999px;
+      border: 1px solid var(--brand); color: var(--brand-light);
+      font-size: .85rem; margin-bottom: 24px;
+    }
+    .stats { display: flex; justify-content: center; gap: 56px; flex-wrap: wrap; padding: 32px 0 64px; }
+    .stat { text-align: center; }
+    .stat b { display: block; font-size: 2rem; color: var(--brand-light); }
+    .stat span { color: var(--text-dim); font-size: .9rem; }
+    section { padding: 72px 0; border-top: 1px solid var(--border); }
+    h2 { font-size: 2rem; text-align: center; margin-bottom: 12px; }
+    .section-sub { text-align: center; color: var(--text-dim); margin-bottom: 48px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 28px;
+    }
+    .card:hover { border-color: var(--brand); }
+    .card .icon { font-size: 1.6rem; margin-bottom: 12px; }
+    .card h3 { margin-bottom: 8px; font-size: 1.1rem; }
+    .card p { color: var(--text-dim); font-size: .95rem; }
+    .card.new { border-color: var(--brand-dark); position: relative; }
+    .card.new::after {
+      content: "NOVO"; position: absolute; top: 14px; right: 14px;
+      background: var(--brand); color: #fff; font-size: .65rem; font-weight: 700;
+      padding: 3px 8px; border-radius: 6px;
+    }
+    .tools { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+    .tool {
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 20px; color: var(--text-dim); font-size: .95rem;
+    }
+    .code-block {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 24px; font-family: 'Cascadia Code', Consolas, monospace;
+      font-size: .9rem; color: var(--brand-light); overflow-x: auto; max-width: 760px; margin: 0 auto;
+    }
+    .code-block .dim { color: var(--text-dim); }
+    footer { border-top: 1px solid var(--border); padding: 40px 0; text-align: center; color: var(--text-dim); font-size: .9rem; }
+    footer a { color: var(--brand-light); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <nav>
+        <div class="logo">Max<span>Router</span></div>
+        <div class="nav-links">
+          <a href="#recursos">Recursos</a>
+          <a href="#melhorias">Melhorias</a>
+          <a href="#comecar">Como começar</a>
+          <a href="https://github.com/nortelucas/9router" target="_blank">GitHub</a>
+          <a class="btn btn-primary" href="https://maxrouter-prod.up.railway.app/">Abrir Dashboard</a>
+        </div>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      <section class="hero" style="border-top:none">
+        <span class="badge">⚡ Codificação com IA gratuita e ilimitada</span>
+        <h1>Um endpoint para todos os<br />seus provedores de IA</h1>
+        <p class="sub">
+          O MaxRouter conecta suas ferramentas favoritas — Claude Code, Codex, Cursor, Cline,
+          Copilot, OpenCode — a modelos Claude, GPT, Gemini, DeepSeek, Qwen e GLM através de
+          mais de 40 provedores. Com fallback automático, você nunca mais trava por limite de uso.
+        </p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://maxrouter-prod.up.railway.app/">Começar agora →</a>
+          <a class="btn btn-ghost" href="https://github.com/nortelucas/9router" target="_blank">Ver no GitHub</a>
+        </div>
+      </section>
+
+      <div class="stats">
+        <div class="stat"><b>40+</b><span>provedores integrados</span></div>
+        <div class="stat"><b>20</b><span>provedores com login OAuth</span></div>
+        <div class="stat"><b>-40%</b><span>de tokens com RTK</span></div>
+        <div class="stat"><b>1</b><span>endpoint para tudo</span></div>
+      </div>
+
+      <section id="recursos">
+        <h2>Recursos principais</h2>
+        <p class="section-sub">Tudo o que você precisa para gerenciar sua infraestrutura de IA em um só lugar.</p>
+        <div class="grid">
+          <div class="card">
+            <div class="icon">🔀</div>
+            <h3>Roteamento inteligente</h3>
+            <p>Combos com estratégia de fallback: se um provedor atingir o limite ou falhar, a requisição segue automaticamente para o próximo — sem interromper seu fluxo de trabalho.</p>
+          </div>
+          <div class="card">
+            <div class="icon">🔐</div>
+            <h3>Login OAuth em 1 clique</h3>
+            <p>Conecte contas gratuitas sem copiar chaves de API: Qwen, iFlow, Gemini CLI, Copilot, Kiro, Antigravity, Grok, Kimi, Cline, KiloCode e muito mais.</p>
+          </div>
+          <div class="card">
+            <div class="icon">💰</div>
+            <h3>Economia de tokens (RTK)</h3>
+            <p>Compressão inteligente de contexto que reduz o consumo de tokens em até 40%, com modos configuráveis por perfil de uso.</p>
+          </div>
+          <div class="card">
+            <div class="icon">📊</div>
+            <h3>Dashboard completo</h3>
+            <p>Monitore uso, custos, quotas e histórico de requisições de todos os provedores em tempo real, com detalhes por modelo e por conexão.</p>
+          </div>
+          <div class="card">
+            <div class="icon">🔄</div>
+            <h3>Tradução de protocolos</h3>
+            <p>Recebe requisições nos formatos OpenAI, Claude ou Gemini e traduz automaticamente para qualquer provedor de destino — compatível com qualquer ferramenta.</p>
+          </div>
+          <div class="card">
+            <div class="icon">🛠️</div>
+            <h3>Integração com CLIs</h3>
+            <p>Configuração assistida para Claude Code, Codex CLI, OpenCode, Qwen Code, Droid e outros — direto do dashboard, com um clique.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="melhorias">
+        <h2>Melhorias do MaxRouter</h2>
+        <p class="section-sub">O que adicionamos além do projeto original.</p>
+        <div class="grid">
+          <div class="card new">
+            <div class="icon">🎨</div>
+            <h3>Identidade própria</h3>
+            <p>Rebranding completo com paleta indigo elétrico, novo tema do dashboard e instância de produção dedicada no Railway.</p>
+          </div>
+          <div class="card new">
+            <div class="icon">🌱</div>
+            <h3>Seed automático de provedores</h3>
+            <p>Conexões de provedores criadas automaticamente a partir de variáveis de ambiente no primeiro boot — deploy reprodutível sem configuração manual.</p>
+          </div>
+          <div class="card new">
+            <div class="icon">🏆</div>
+            <h3>MaxRouter Ranking</h3>
+            <p>Combo com ordenação baseada em logs reais de desempenho e fallback automático entre os melhores provedores disponíveis.</p>
+          </div>
+          <div class="card new">
+            <div class="icon">🧩</div>
+            <h3>OpenRouter com OAuth PKCE</h3>
+            <p>Conecte sua conta OpenRouter em 1 clique, sem criar chave manualmente — acesso a mais de 20 modelos gratuitos com rotação automática.</p>
+          </div>
+          <div class="card new">
+            <div class="icon">⚙️</div>
+            <h3>RTK ajustado por padrão</h3>
+            <p>Economia de tokens ativada de fábrica com perfis leves, equilibrando qualidade de resposta e custo.</p>
+          </div>
+          <div class="card new">
+            <div class="icon">🇧🇷</div>
+            <h3>Experiência em português</h3>
+            <p>Interface e documentação pensadas para desenvolvedores brasileiros, com suporte completo a pt-BR.</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Funciona com suas ferramentas</h2>
+        <p class="section-sub">Aponte a ferramenta para o endpoint do MaxRouter e pronto.</p>
+        <div class="tools">
+          <span class="tool">Claude Code</span>
+          <span class="tool">Codex CLI</span>
+          <span class="tool">OpenCode</span>
+          <span class="tool">Cursor</span>
+          <span class="tool">Cline</span>
+          <span class="tool">GitHub Copilot</span>
+          <span class="tool">Qwen Code</span>
+          <span class="tool">Droid</span>
+          <span class="tool">Antigravity</span>
+        </div>
+      </section>
+
+      <section id="comecar">
+        <h2>Como começar</h2>
+        <p class="section-sub">Exemplo de configuração do OpenCode com o MaxRouter:</p>
+        <div class="code-block">
+<pre><span class="dim">// ~/.config/opencode/opencode.json</span>
+{
+  "provider": {
+    "maxrouter": {
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://maxrouter-prod.up.railway.app/v1",
+        "apiKey": "sua-chave-aqui"
+      }
+    }
+  }
+}</pre>
+        </div>
+        <div class="cta" style="display:flex;justify-content:center;margin-top:40px;gap:16px">
+          <a class="btn btn-primary" href="https://maxrouter-prod.up.railway.app/">Acessar o MaxRouter →</a>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p><b>MaxRouter</b> — fork brasileiro do projeto open source 9Router.</p>
+      <p>Código no <a href="https://github.com/nortelucas/9router" target="_blank">GitHub</a> ·
+         Produção: <a href="https://maxrouter-prod.up.railway.app/">maxrouter-prod.up.railway.app</a></p>
+    </div>
+  </footer>
+</body>
+</html>

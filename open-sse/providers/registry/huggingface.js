@@ -2,7 +2,18 @@ export default {
   id: "huggingface",
   priority: 70,
   hasFree: true,
+  hasOAuth: true,
   alias: "huggingface",
+  // OAuth PKCE (authorization code): requires an OAuth app created at
+  // https://huggingface.co/settings/applications — clientId/secret come from
+  // env (HF_OAUTH_CLIENT_ID / HF_OAUTH_CLIENT_SECRET), injected in constants/oauth.js.
+  oauth: {
+    authorizeUrl: "https://huggingface.co/oauth/authorize",
+    tokenUrl: "https://huggingface.co/oauth/token",
+    userInfoUrl: "https://huggingface.co/oauth/userinfo",
+    scopes: ["openid", "profile", "email", "inference-api"],
+    codeChallengeMethod: "S256",
+  },
   aliases: [
     "hf",
   ],

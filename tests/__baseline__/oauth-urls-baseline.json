@@ -38,6 +38,8 @@
     "kimi-coding": "https://auth.kimi.com/api/oauth/token"
   },
   "authUrls": {
+    "qwen": "https://chat.qwen.ai/api/v1/oauth2/device/code",
+    "iflow": "https://iflow.cn/oauth",
     "kiro": "https://prod.us-east-1.auth.desktop.kiro.dev"
   },
   "refreshUrls": {

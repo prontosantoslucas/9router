@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { OAUTH_ENDPOINTS } from "../../open-sse/config/appConstants.js";
-import { PROVIDERS } from "../../open-sse/config/providers.js";
+import { PROVIDERS, PROVIDER_OAUTH } from "../../open-sse/config/providers.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const snapPath = join(here, "oauth-urls-baseline.json");
@@ -25,8 +25,9 @@ const resolved = {
     "kimi-coding": PROVIDERS["kimi-coding"]?.tokenUrl,
   },
   authUrls: {
-    qwen: PROVIDERS.qwen?.authUrl,
-    iflow: PROVIDERS.iflow?.authUrl,
+    // Registry refactor: authUrl → authorizeUrl / deviceCodeUrl (oauth-canonical fields)
+    qwen: PROVIDER_OAUTH.qwen?.deviceCodeUrl || PROVIDERS.qwen?.authUrl,
+    iflow: PROVIDER_OAUTH.iflow?.authorizeUrl || PROVIDERS.iflow?.authUrl,
     kiro: PROVIDERS.kiro?.authUrl,
   },
   refreshUrls: {

@@ -114,6 +114,18 @@ export const CODEBUDDY_CONFIG = { ...PROVIDER_OAUTH["codebuddy-cn"] };
 // Kimchi OAuth Configuration (Browser token callback flow)
 export const KIMCHI_CONFIG = { ...PROVIDER_OAUTH["kimchi"] };
 
+// OpenRouter OAuth Configuration (Authorization Code Flow with PKCE, no clientId required)
+// Exchange returns a user-scoped API key instead of access/refresh tokens.
+export const OPENROUTER_CONFIG = { ...PROVIDER_OAUTH["openrouter"] };
+
+// HuggingFace OAuth Configuration (Authorization Code Flow with PKCE)
+// Requires operator-registered OAuth app (https://huggingface.co/settings/applications).
+export const HUGGINGFACE_CONFIG = {
+  ...PROVIDER_OAUTH["huggingface"],
+  clientId: process.env.HF_OAUTH_CLIENT_ID || "",
+  clientSecret: process.env.HF_OAUTH_CLIENT_SECRET || "",
+};
+
 // Grok CLI / Grok Build OAuth Configuration (Device Code Flow)
 // Endpoint: cli-chat-proxy.grok.com — same client_id as xai, different flow + scopes
 export const GROK_CLI_CONFIG = { ...PROVIDER_OAUTH["grok-cli"] };
@@ -142,4 +154,6 @@ export const PROVIDERS = {
   CODEBUDDY: "codebuddy-cn",
   KIMCHI: "kimchi",
   GROK_CLI: "grok-cli",
+  OPENROUTER: "openrouter",
+  HUGGINGFACE: "huggingface",
 };
