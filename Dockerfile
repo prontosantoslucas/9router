@@ -43,9 +43,12 @@ RUN mkdir -p /app/data && chown -R node:node /app && \
   mkdir -p /app/data-home && chown node:node /app/data-home && \
   ln -sf /app/data-home /root/.9router 2>/dev/null || true
 
-# Headroom token saver bundled by default (Python proxy, started by the app at boot)
+# Headroom token saver bundled by default (Python proxy, started by the app at boot).
+# Only the [proxy] extra here: it is pure-Python wheels and needs no compiler.
+# The [code] (tree-sitter) extra is installed lazily at runtime by autostart.js.
+# Non-fatal: a headroom install hiccup must never fail the image build.
 RUN apk --no-cache add python3 py3-pip && \
-  pip3 install --no-cache-dir --break-system-packages "headroom-ai[proxy,code]"
+  (pip3 install --no-cache-dir --break-system-packages "headroom-ai[proxy]" || echo "headroom install skipped")
 
 # Fix permissions at runtime (handles mounted volumes)
 RUN apk --no-cache upgrade && apk --no-cache add su-exec && \
