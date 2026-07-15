@@ -55,6 +55,11 @@ RUN apk --no-cache upgrade && apk --no-cache add su-exec && \
   printf '#!/bin/sh\nchown -R node:node /app/data /app/data-home 2>/dev/null\nexec su-exec node "$@"\n' > /entrypoint.sh && \
   chmod +x /entrypoint.sh
 
+# Persistent data (SQLite config, OAuth connections, combos) lives here.
+# Railway/Fly/etc: attach a PERSISTENT VOLUME mounted at /app/data or every
+# deploy/restart starts from an empty filesystem and the app resets to defaults.
+VOLUME ["/app/data"]
+
 EXPOSE 20128
 
 ENTRYPOINT ["/entrypoint.sh"]
