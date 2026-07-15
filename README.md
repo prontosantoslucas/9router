@@ -857,6 +857,8 @@ TURSO_AUTH_TOKEN=your-token
 # optional: TURSO_SYNC_INTERVAL_MS=15000
 ```
 
+You can also configure this from the dashboard (no env vars needed): **Profile → External Database** - paste the Turso URL + token, save, and restart. Leaving those fields empty keeps the default local SQLite database (the best out-of-the-box config after install). Connection settings live in a bootstrap file (`DATA_DIR/db-config.json`), not in the database itself.
+
 Turso uses the synchronous `libsql` client as an embedded replica: reads/writes hit a fast local copy and sync to the cloud in the background, so there is no per-query network latency. Get a free database at [turso.tech](https://turso.tech). (Postgres services like Supabase/Neon are not drop-in - MaxRouter's data layer is SQLite/synchronous - so Turso is the supported managed option.)
 
 Usage logs (`~/.9router/usage.json`, `log.txt`) live outside `DATA_DIR` and are not covered by either option; they are non-critical and reproducible.
@@ -1431,8 +1433,4 @@ Thanks to all contributors who helped make MaxRouter better!
 
 ## 📊 Star Chart
 
-[![Star Chart](https://starchart.cc/nortelucas/9router.svg?variant=adaptive)](https://starchart.cc/nortelucas/9router)
-
-## 🔀 Forks
-
-**[OmniRoute](https://github.com/diegosouzapw/OmniRoute)** — A full-featured TypeScript fork of MaxRouter. Adds 36+ providers, 4-tier auto-fallback, multi-modal APIs (images, embeddings, audio, TTS), circuit breaker, semantic cache, LLM evaluations, and a polished dashboard. 368+ unit tests. Available via npm and Docker.
+[![Star Chart](https://starchart.cc/nortelucas/9router.svg?variant=adaptive)](https://st

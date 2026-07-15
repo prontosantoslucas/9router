@@ -15,22 +15,21 @@
 // `libsql` native binary is unavailable, this fails closed (returns via throw)
 // and driver.js falls back to the local SQLite chain — never worse than today.
 import { PRAGMA_SQL } from "../schema.js";
+import { getDbConfig, externalDbConfigured } from "../dbConfig.js";
 
 const CHECKPOINT_INTERVAL_MS = 60 * 1000;
 // How often to push/pull the embedded replica to/from Turso.
-const SYNC_INTERVAL_MS = Number(process.env.TURSO_SYNC_INTERVAL_MS) || 15 * 1000;
+const DEFAULT_SYNC_INTERVAL_MS = 15 * 1000;
 
 export function libsqlConfigured() {
-  const url = process.env.TURSO_DATABASE_URL || process.env.LIBSQL_URL || "";
-  const token = process.env.TURSO_AUTH_TOKEN || process.env.LIBSQL_AUTH_TOKEN || "";
-  // Remote libsql/turso URLs need a token; a local file:// url does not.
-  const isRemote = /^libsql:\/\/|^https:\/\/|^wss:\/\//i.test(url);
-  return Boolean(url) && (!isRemote || Boolean(token));
+  // Env vars OR the dashboard-written DATA_DIR/db-config.json (see dbConfig.js).
+  return externalDbConfigured();
 }
 
 export async function createLibsqlAdapter(localFilePath) {
-  const syncUrl = process.env.TURSO_DATABASE_URL || process.env.LIBSQL_URL;
-  const authToken = process.env.TURSO_AUTH_TOKEN || process.env.LIBSQL_AUTH_TOKEN;
+  const cfg = getDbConfig();
+  const syncUrl = cfg.url;
+  const authToken = cfg.token;
 
   // Dynamic import so a missing/unbuildable native binary degrades gracefully
   // (driver.js catches and falls back to local SQLite).
@@ -58,7 +57,8 @@ export async function createLibsqlAdapter(localFilePath) {
   const checkpointTimer = setInterval(() => { try { db.pragma("wal_checkpoint(TRUNCATE)"); } catch {} }, CHECKPOINT_INTERVAL_MS);
   if (typeof checkpointTimer.unref === "function") checkpointTimer.unref();
 
-  const syncTimer = setInterval(syncNow, SYNC_INTERVAL_MS);
+  const syncInterval = cfg.syncIntervalMs > 0 ? cfg.syncIntervalMs : DEFAULT_SYNC_INTERVAL_MS;
+  const syncTimer = setInterval(syncNow, syncInterval);
   if (typeof syncTimer.unref === "function") syncTimer.unref();
 
   function gracefulClose() {

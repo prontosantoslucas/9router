@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Card, Button, Toggle, Input } from "@/shared/components";
+import DatabaseConnectionCard from "@/shared/components/DatabaseConnectionCard";
 import Modal, { ConfirmModal } from "@/shared/components/Modal";
 import LanguageSwitcher from "@/shared/components/LanguageSwitcher";
 import { useTheme } from "@/shared/hooks/useTheme";
@@ -652,6 +653,9 @@ export default function ProfilePage() {
           </div>
         </Card>
 
+        {/* External Database (Turso / libSQL) - optional cloud persistence */}
+        <DatabaseConnectionCard />
+
         {/* Language */}
         <Card>
           <div className="flex items-center gap-3 mb-4">
@@ -1172,11 +1176,4 @@ export default function ProfilePage() {
           type="password"
           value={dbAuth.password}
           onChange={(e) => setDbAuth((s) => ({ ...s, password: e.target.value }))}
-          onKeyDown={(e) => { if (e.key === "Enter" && dbAuth.password) handleDbAuthConfirm(); }}
-          placeholder="Current password"
-          autoFocus
-        />
-      </Modal>
-    </div>
-  );
-}
+          
