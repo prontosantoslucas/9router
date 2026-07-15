@@ -3,6 +3,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { existsSync } from "fs";
 import { cleanupProviderConnections, getSettings, updateSettings, getApiKeys } from "@/lib/localDb";
+import { initDb } from "@/lib/db/index.js";
 import {
   enableTunnel, enableTailscale,
   isTunnelManuallyDisabled, isTunnelReconnecting, isTailscaleReconnecting,
@@ -81,6 +82,15 @@ export async function initializeApp() {
 }
 
 async function runHeavyStartup() {
+  // Seed providers, ensure router-managed combos (auto), and install+start the
+  // Headroom token saver. This is the real boot path — initDb() was previously
+  // never invoked, so none of that ran (Headroom stayed "stopped", combos missing).
+  try {
+    await initDb();
+  } catch (e) {
+    console.error("[InitApp] initDb failed:", e.message);
+  }
+
   await cleanupProviderConnections();
   const settings = await getSettings();
 
