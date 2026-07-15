@@ -16,24 +16,30 @@ const SEEDABLE_PROVIDERS = {
   anthropic:{envVar: "ANTHROPIC_API_KEY",name: "Anthropic",  priority: 6 },
 };
 
+// Ordered by CODING quality (best free coding models, 2026 community consensus):
+// DeepSeek V4 -> Kimi K2 (agentic) -> Qwen3-Coder (long context) -> GLM.
+// Generic chat models (Llama 3.3, qwen3-32b) are weaker at code -> kept last.
+// Fallback tries top-down; each entry is skipped automatically when out of quota.
 const MODEL_RANKING = [
-  // Kimchi — fastest, reliable
+  // DeepSeek V4 — best overall free coder (SWE-Bench / LiveCodeBench leader)
   "kimchi/deepseek-v4-flash",
-  "kimchi/kimi-k2.7",
-  "kimchi/minimax-m3",
-  // NVIDIA — works but rate-limited (48/48)
   "nvidia/deepseek-ai/deepseek-v4-pro",
   "nvidia/deepseek-ai/deepseek-v4-flash",
-  // Groq — stable, not tested recently
-  "groq/llama-3.3-70b-versatile",
-  "groq/qwen/qwen3-32b",
-  // Kiro — monthly limit (402), last resort
-  "kr/claude-sonnet-4.5-thinking",
-  "kr/deepseek-3.2-thinking",
-  "kr/glm-5-thinking",
+  // Kimi K2 — strongest for agentic / tool-loop coding
+  "kimchi/kimi-k2.7",
+  // Qwen3-Coder — best for large codebases (long context)
   "kr/qwen3-coder-next-thinking",
+  // GLM 5 — tops SWE-Bench Pro, long autonomous runs
+  "kr/glm-5-thinking",
+  // Other strong coders / reasoning fallbacks
+  "kr/deepseek-3.2-thinking",
+  "kr/claude-sonnet-4.5-thinking",
   "kr/claude-haiku-4.5-thinking",
   "kr/auto-thinking",
+  "kimchi/minimax-m3",
+  // Generic chat models — weaker at code, last resort
+  "groq/llama-3.3-70b-versatile",
+  "groq/qwen/qwen3-32b",
 ];
 
 export async function seedProviders() {
