@@ -438,6 +438,25 @@ export async function POST(request) {
           break;
         }
 
+        case "venice": {
+          const veniceRes = await fetch("https://api.venice.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "venice-uncensored-1-2",
+              messages: [{ role: "user", content: "ping" }],
+              max_tokens: 1,
+            }),
+          });
+          // Venice /v1/models always returns 200 even w/ wrong key,
+          // so we probe chat directly. 401/403 = invalid, 200/400/429 = key accepted.
+          isValid = veniceRes.status !== 401 && veniceRes.status !== 403;
+          break;
+        }
+
         case "blackbox": {
           const res = await fetch("https://api.blackbox.ai/chat/completions", {
             method: "POST",

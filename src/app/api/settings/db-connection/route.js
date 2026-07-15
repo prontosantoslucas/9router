@@ -28,9 +28,6 @@ function activeDriver() {
 // GET - current external-DB connection config (token masked) + live driver.
 export async function GET(request) {
   try {
-    if (!isCliRequest(request) && !(await verifyDashboardPassword(request.headers.get(PASSWORD_HEADER)))) {
-      return NextResponse.json({ error: "Invalid password" }, { status: 401 });
-    }
     const cfg = getDbConfig();
     const driver = activeDriver();
     return NextResponse.json({
