@@ -4,6 +4,21 @@ import { ensureDirs, DATA_FILE } from "./paths.js";
 if (!global._dbAdapter) global._dbAdapter = { instance: null, initPromise: null, logged: false };
 const state = global._dbAdapter;
 
+async function tryLibsql() {
+  // Managed cloud SQLite (Turso). Opt-in via TURSO_DATABASE_URL/LIBSQL_URL.
+  // Synchronous better-sqlite3-compatible API + embedded-replica sync, so the
+  // rest of the DB layer is unchanged. Falls through to local SQLite if the
+  // env is unset or the native binary is unavailable.
+  try {
+    const { libsqlConfigured, createLibsqlAdapter } = await import("./adapters/libsqlAdapter.js");
+    if (!libsqlConfigured()) return null;
+    return await createLibsqlAdapter(DATA_FILE);
+  } catch (e) {
+    console.warn(`[DB] libsql/Turso unavailable, falling back to local SQLite: ${e.message}`);
+    return null;
+  }
+}
+
 async function tryBunSqlite() {
   // Bun runtime only — built-in, no install needed
   if (!process.versions.bun) return null;
@@ -54,10 +69,11 @@ async function trySqlJs() {
 
 async function initAdapter() {
   ensureDirs();
-  // Order per runtime:
+  // Order: Turso/libSQL (if configured) first, then local SQLite fallbacks.
   //   Bun:  bun:sqlite → sql.js
-  //   Node: better-sqlite3 → node:sqlite (≥22.5) → sql.js
-  let adapter = await tryBunSqlite();
+  //   Node: better-sqlite3 → node:sqlite (>=22.5) → sql.js
+  let adapter = await tryLibsql();
+  if (!adapter) adapter = await tryBunSqlite();
   if (!adapter) adapter = await tryBetterSqlite();
   if (!adapter) adapter = await tryNodeSqlite();
   if (!adapter) adapter = await trySqlJs();
