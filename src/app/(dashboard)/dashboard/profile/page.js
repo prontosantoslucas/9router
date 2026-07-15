@@ -1176,4 +1176,11 @@ export default function ProfilePage() {
           type="password"
           value={dbAuth.password}
           onChange={(e) => setDbAuth((s) => ({ ...s, password: e.target.value }))}
-          
+          onKeyDown={(e) => { if (e.key === "Enter" && dbAuth.password) handleDbAuthConfirm(); }}
+          placeholder="Current password"
+          autoFocus
+        />
+      </Modal>
+    </div>
+  );
+}
