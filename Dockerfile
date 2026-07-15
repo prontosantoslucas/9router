@@ -55,10 +55,11 @@ RUN apk --no-cache upgrade && apk --no-cache add su-exec && \
   printf '#!/bin/sh\nchown -R node:node /app/data /app/data-home 2>/dev/null\nexec su-exec node "$@"\n' > /entrypoint.sh && \
   chmod +x /entrypoint.sh
 
-# Persistent data (SQLite config, OAuth connections, combos) lives here.
-# Railway/Fly/etc: attach a PERSISTENT VOLUME mounted at /app/data or every
-# deploy/restart starts from an empty filesystem and the app resets to defaults.
-VOLUME ["/app/data"]
+# Persistent data (SQLite config, OAuth connections, combos) lives in /app/data.
+# Railway does NOT support the Dockerfile VOLUME instruction — attach a
+# persistent volume in the dashboard instead: Service > Volumes > mount path
+# /app/data. (Or use managed Turso: set TURSO_DATABASE_URL / TURSO_AUTH_TOKEN.)
+# On Fly/other hosts, mount a volume at /app/data likewise.
 
 EXPOSE 20128
 
