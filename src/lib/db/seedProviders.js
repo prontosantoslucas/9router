@@ -107,3 +107,25 @@ export async function seedProviders() {
   db.run(`INSERT INTO _meta(key, value) VALUES(?, ?)`, [SEED_KEY, "1"]);
   console.log("[Seed] Complete.");
 }
+
+// Runs on EVERY boot (not gated by SEED_KEY): guarantees the router-managed
+// combos exist even on already-seeded databases. Idempotent — only creates
+// what is missing, never touches provider connections. This is what makes the
+// "auto" model (used by OpenCode) resolve on existing production instances.
+export async function ensureCombos() {
+  try {
+    const existing = await getCombos();
+    const strategies = (await getSettings()).comboStrategies || {};
+    let changed = false;
+    for (const name of ["auto", "MaxRouter-Ranking"]) {
+      if (!existing.some((c) => c.name === name)) {
+        await createCombo({ name, kind: "llm", models: MODEL_RANKING });
+        console.log(`[Combos] Ensured combo: ${name}`);
+      }
+      if (!strategies[name]) { strategies[name] = "fallback"; changed = true; }
+    }
+    if (changed) await updateSettings({ comboStrategies: strategies });
+  } catch (err) {
+    console.warn(`[Combos] ensureCombos failed: ${err.message}`);
+  }
+}

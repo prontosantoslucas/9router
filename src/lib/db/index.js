@@ -169,8 +169,11 @@ export async function importDb(payload) {
 export async function initDb() {
   await getAdapter();
   // Auto-seed providers + ranking on first launch
-  const { seedProviders } = await import("./seedProviders.js");
+  const { seedProviders, ensureCombos } = await import("./seedProviders.js");
   await seedProviders();
+  // Ensure router-managed combos (auto, MaxRouter-Ranking) exist on every boot,
+  // including already-seeded databases. Idempotent + fail-open.
+  await ensureCombos();
   // Headroom token saver: install + start by default (non-blocking, fail-open)
   try {
     const { getSettings } = await import("./repos/settingsRepo.js");
