@@ -13,11 +13,10 @@ export default function DatabaseConnectionCard() {
   const [url, setUrl] = useState("");
   const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
-  const [status, setStatus] = useState(null); // { source, activeDriver, usingExternal, editable, url, tokenMasked }
-  const [msg, setMsg] = useState(null); // { type, text }
+  const [status, setStatus] = useState(null);
+  const [msg, setMsg] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Best-effort load of current status (works when the session allows it).
   useEffect(() => {
     let cancelled = false;
     fetch("/api/settings/db-connection")
@@ -79,8 +78,7 @@ export default function DatabaseConnectionCard() {
       {status && (
         <div className="mb-4 p-3 rounded-lg bg-bg border border-border text-xs sm:text-sm">
           <p>
-            Active driver:{" "}
-            <span className="font-mono">{status.activeDriver}</span>{" "}
+            Active driver: <span className="font-mono">{status.activeDriver}</span>{" "}
             {status.usingExternal ? "(cloud / Turso)" : "(local SQLite)"}
           </p>
           {envManaged && (
@@ -107,7 +105,7 @@ export default function DatabaseConnectionCard() {
             type="password"
             value={token}
             onChange={(e) => setToken(e.target.value)}
-            placeholder={status?.hasToken ? "•••••••• (leave blank to keep current token)" : "Turso auth token"}
+            placeholder={status?.hasToken ? "leave blank to keep current token" : "Turso auth token"}
             disabled={envManaged || loading}
           />
         </div>
