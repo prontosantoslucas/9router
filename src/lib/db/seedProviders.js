@@ -69,29 +69,38 @@ export async function seedProviders() {
     }
   }
 
-  // 2. Seed model ranking combo
+  // 2. Seed combos. "auto" is the router-managed entry (like openrouter/free):
+  // point any client at model "auto" and the router handles fallback across
+  // the whole ranking. "MaxRouter-Ranking" is kept as an explicit alias.
   const existingCombos = await getCombos();
-  const hasRanking = existingCombos.some(c => c.name === "MaxRouter-Ranking");
-  if (!hasRanking) {
+  const SEED_COMBOS = ["auto", "MaxRouter-Ranking"];
+  for (const comboName of SEED_COMBOS) {
+    if (existingCombos.some(c => c.name === comboName)) continue;
     try {
       await createCombo({
-        name: "MaxRouter-Ranking",
+        name: comboName,
         kind: "llm",
         models: MODEL_RANKING,
       });
-      console.log("[Seed] Created model ranking combo: MaxRouter-Ranking");
+      console.log(`[Seed] Created combo: ${comboName}`);
     } catch (err) {
-      console.warn(`[Seed] Failed to create combo: ${err.message}`);
+      console.warn(`[Seed] Failed to create combo ${comboName}: ${err.message}`);
     }
   }
 
-  // 3. Set combo strategy to fallback
+  // 3. Set combo strategy to fallback for the seeded combos
   const settings = await getSettings();
   const strategies = settings.comboStrategies || {};
-  if (!strategies["MaxRouter-Ranking"]) {
-    strategies["MaxRouter-Ranking"] = "fallback";
+  let strategiesChanged = false;
+  for (const comboName of SEED_COMBOS) {
+    if (!strategies[comboName]) {
+      strategies[comboName] = "fallback";
+      strategiesChanged = true;
+    }
+  }
+  if (strategiesChanged) {
     await updateSettings({ comboStrategies: strategies });
-    console.log("[Seed] Set combo strategy: MaxRouter-Ranking → fallback");
+    console.log("[Seed] Set combo strategies → fallback (auto, MaxRouter-Ranking)");
   }
 
   // Mark seeded
