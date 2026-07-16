@@ -87,6 +87,75 @@ export function reorderByCapabilities(models, required) {
  */
 const comboRotationState = new Map();
 
+/**
+ * Track model-level cooldowns per combo. Key = `${comboName}::${modelStr}`,
+ * value = epoch ms until which the model is banned from that combo.
+ *
+ * When a combo model returns 429 (or an upstream-signaled retryAfter), we
+ * ban it from the combo until the timestamp expires. Subsequent requests
+ * skip it entirely instead of re-hitting the same rate-limited model on
+ * every call. In-memory only — resets on process restart, which is fine:
+ * worst case we retry once and re-ban.
+ *
+ * @type {Map<string, number>}
+ */
+const comboModelCooldowns = new Map();
+
+const DEFAULT_COMBO_KEY = "__default__";
+
+function comboCooldownKey(comboName, modelStr) {
+  return `${comboName || DEFAULT_COMBO_KEY}::${modelStr}`;
+}
+
+/**
+ * Ban a model from a combo until a given time. `until` accepts an ISO string,
+ * a Date, or an epoch ms number. Called on 429 / rate-limit errors.
+ */
+export function banComboModel(comboName, modelStr, until) {
+  if (!modelStr) return;
+  let ts;
+  if (typeof until === "number") ts = until;
+  else if (until instanceof Date) ts = until.getTime();
+  else if (typeof until === "string") ts = new Date(until).getTime();
+  if (!Number.isFinite(ts) || ts <= Date.now()) return;
+  comboModelCooldowns.set(comboCooldownKey(comboName, modelStr), ts);
+}
+
+/**
+ * Return `{ available, earliestBannedUntil }`. `available` preserves the input
+ * order minus models still in cooldown. `earliestBannedUntil` is the soonest
+ * expiring ban among the dropped models (ISO string), or null.
+ * Also lazily purges expired entries it touches.
+ */
+export function filterBannedComboModels(models, comboName) {
+  const now = Date.now();
+  const available = [];
+  let earliestBanned = null;
+  for (const m of models) {
+    const key = comboCooldownKey(comboName, m);
+    const until = comboModelCooldowns.get(key);
+    if (until && until > now) {
+      if (!earliestBanned || until < earliestBanned) earliestBanned = until;
+      continue;
+    }
+    if (until) comboModelCooldowns.delete(key);
+    available.push(m);
+  }
+  return {
+    available,
+    earliestBannedUntil: earliestBanned ? new Date(earliestBanned).toISOString() : null,
+  };
+}
+
+/** Clear all combo-model bans (test helper / manual reset). */
+export function resetComboModelCooldowns(comboName) {
+  if (!comboName) { comboModelCooldowns.clear(); return; }
+  const prefix = `${comboName}::`;
+  for (const k of comboModelCooldowns.keys()) {
+    if (k.startsWith(prefix)) comboModelCooldowns.delete(k);
+  }
+}
+
 // Trailing run of items after the last assistant/model turn = the current user
 // turn. It may span several messages (e.g. text + image split across blocks),
 // so we return all of them. History media (older turns) must not pin the combo
@@ -241,9 +310,23 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
       rotatedModels = reordered;
     }
   }
-  
+
+  // Drop models currently in cooldown from a previous 429. If every model is
+  // banned, short-circuit with a 503 pointing at the earliest expiry.
+  const { available: unbannedModels, earliestBannedUntil } = filterBannedComboModels(rotatedModels, comboName);
+  if (unbannedModels.length === 0) {
+    const retryHuman = formatRetryAfter(earliestBannedUntil);
+    log.warn("COMBO", `All models in cooldown | ${retryHuman}`);
+    return unavailableResponse(503, "All combo models rate limited", earliestBannedUntil, retryHuman);
+  }
+  if (unbannedModels.length !== rotatedModels.length) {
+    const skipped = rotatedModels.length - unbannedModels.length;
+    log.info("COMBO", `Skipping ${skipped} model(s) in cooldown`);
+  }
+  rotatedModels = unbannedModels;
+
   let lastError = null;
-  let earliestRetryAfter = null;
+  let earliestRetryAfter = earliestBannedUntil;
   let lastStatus = null;
 
   for (let i = 0; i < rotatedModels.length; i++) {
@@ -286,6 +369,22 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
       if (!shouldFallback) {
         log.warn("COMBO", `Model ${modelStr} failed (no fallback)`, { status: result.status });
         return result;
+      }
+
+      // Ban rate-limited models from the combo so subsequent requests skip them
+      // until the cooldown expires (instead of paying the 429 latency each time).
+      // Prefer the upstream-signaled retryAfter; otherwise use the local cooldownMs
+      // only when it's meaningful (>10s — transient 5xx cooldowns aren't ban-worthy).
+      const isRateLimited = result.status === 429 || !!retryAfter;
+      if (isRateLimited) {
+        const banUntil = retryAfter
+          ? new Date(retryAfter).getTime()
+          : Date.now() + Math.max(cooldownMs || 0, 30_000);
+        if (Number.isFinite(banUntil) && banUntil > Date.now()) {
+          banComboModel(comboName, modelStr, banUntil);
+          const banHuman = formatRetryAfter(new Date(banUntil).toISOString());
+          log.warn("COMBO", `Model ${modelStr} rate limited → banned from combo (${banHuman})`);
+        }
       }
 
       // For transient errors (503/502/504), wait for cooldown before falling through
