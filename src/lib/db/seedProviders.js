@@ -3,6 +3,7 @@ import { getAdapter } from "./driver.js";
 import { getProviderConnections, createProviderConnection } from "./repos/connectionsRepo.js";
 import { getCombos, createCombo, updateCombo, deleteCombo } from "./repos/combosRepo.js";
 import { getSettings, updateSettings } from "./repos/settingsRepo.js";
+import { getModelAliases, setModelAlias } from "./repos/aliasRepo.js";
 
 const SEED_KEY = "maxrouter_seed_v1";
 
@@ -145,6 +146,26 @@ export async function seedProviders() {
 // entries pointing at dead providers (e.g. kr/* after quota) can't be picked.
 const OBSOLETE_COMBOS = ["auto-fallback", "claude-combo"];
 
+// Codex / OpenAI-style CLI clients rewrite the `model` field client-side to a
+// known OpenAI family name (e.g. `gpt-5-codex`) even when the config says
+// `model = "auto"`. Aliasing these names → the `auto` combo makes the router
+// route through the managed fallback instead of 404-ing on missing openai creds.
+// Only aliases pointing at a combo NAME (bare, no slash) are picked up by
+// `getComboModels()` / `getModelInfo()` in src/sse/services/model.js.
+const AUTO_ALIASES = {
+  "gpt-5":         "auto",
+  "gpt-5-mini":    "auto",
+  "gpt-5-nano":    "auto",
+  "gpt-5-codex":   "auto",
+  "o1":            "auto",
+  "o1-mini":       "auto",
+  "o3":            "auto",
+  "o3-mini":       "auto",
+  "claude-opus-4-8":       "auto",
+  "claude-sonnet-5":       "auto",
+  "claude-haiku-4-5":      "auto",
+};
+
 // Runs on EVERY boot (not gated by SEED_KEY): guarantees the router-managed
 // combos exist even on already-seeded databases AND syncs the model ranking
 // so de-opted/rate-limited models are dropped automatically.
@@ -173,6 +194,16 @@ export async function ensureCombos() {
       if (strategies[name]) { delete strategies[name]; changed = true; }
     }
     if (changed) await updateSettings({ comboStrategies: strategies });
+
+    // Ensure alias → combo entries exist so CLI clients that rewrite the model
+    // name (codex, etc.) still land in the managed combo.
+    const existingAliases = (await getModelAliases()) || {};
+    for (const [alias, target] of Object.entries(AUTO_ALIASES)) {
+      if (existingAliases[alias] !== target) {
+        await setModelAlias(alias, target);
+        console.log(`[Combos] Set model alias: ${alias} → ${target}`);
+      }
+    }
   } catch (err) {
     console.warn(`[Combos] ensureCombos failed: ${err.message}`);
   }

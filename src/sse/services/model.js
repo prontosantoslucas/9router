@@ -68,7 +68,16 @@ export async function getModelInfo(modelStr) {
 
   // Check if this is a combo name before resolving as alias
   // This prevents combo names from being incorrectly routed to providers
-  const combo = await getComboByName(parsed.model);
+  let combo = await getComboByName(parsed.model);
+  if (!combo) {
+    // Fallback: alias may point at a combo (e.g. "gpt-5-codex" → "auto" so
+    // codex CLI's rewritten model name still lands in the router-managed combo).
+    const aliases = await getModelAliases();
+    const target = aliases?.[parsed.model];
+    if (target && typeof target === "string" && !target.includes("/")) {
+      combo = await getComboByName(target);
+    }
+  }
   if (combo) {
     // Return null provider to signal this should be handled as combo
     // The caller (handleChat) will detect this and handle it as combo
@@ -86,7 +95,16 @@ export async function getComboModels(modelStr) {
   // Only check if it's not in provider/model format
   if (modelStr.includes("/")) return null;
 
-  const combo = await getComboByName(modelStr);
+  let combo = await getComboByName(modelStr);
+  if (!combo) {
+    // Fallback: alias-to-combo (e.g. "gpt-5-codex" → "auto") so CLI clients
+    // that rewrite the model name client-side still hit the managed combo.
+    const aliases = await getModelAliases();
+    const target = aliases?.[modelStr];
+    if (target && typeof target === "string" && !target.includes("/")) {
+      combo = await getComboByName(target);
+    }
+  }
   if (combo && combo.models && combo.models.length > 0) {
     return combo.models;
   }
