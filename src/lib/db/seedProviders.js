@@ -1,7 +1,7 @@
 // Auto-seed providers + model ranking combo on first launch
 import { getAdapter } from "./driver.js";
 import { getProviderConnections, createProviderConnection } from "./repos/connectionsRepo.js";
-import { getCombos, createCombo } from "./repos/combosRepo.js";
+import { getCombos, createCombo, updateCombo } from "./repos/combosRepo.js";
 import { getSettings, updateSettings } from "./repos/settingsRepo.js";
 
 const SEED_KEY = "maxrouter_seed_v1";
@@ -35,7 +35,6 @@ const MODEL_RANKING = [
   "kr/deepseek-3.2-thinking",
   "kr/claude-sonnet-4.5-thinking",
   "kr/claude-haiku-4.5-thinking",
-  "kr/auto-thinking",
   "kimchi/minimax-m3",
   // Generic chat models — weaker at code, last resort
   "groq/llama-3.3-70b-versatile",
@@ -115,18 +114,21 @@ export async function seedProviders() {
 }
 
 // Runs on EVERY boot (not gated by SEED_KEY): guarantees the router-managed
-// combos exist even on already-seeded databases. Idempotent — only creates
-// what is missing, never touches provider connections. This is what makes the
-// "auto" model (used by OpenCode) resolve on existing production instances.
+// combos exist even on already-seeded databases AND syncs the model ranking
+// so de-opted/rate-limited models are dropped automatically.
 export async function ensureCombos() {
   try {
     const existing = await getCombos();
     const strategies = (await getSettings()).comboStrategies || {};
     let changed = false;
     for (const name of ["auto", "MaxRouter-Ranking"]) {
-      if (!existing.some((c) => c.name === name)) {
+      const combo = existing.find((c) => c.name === name);
+      if (!combo) {
         await createCombo({ name, kind: "llm", models: MODEL_RANKING });
-        console.log(`[Combos] Ensured combo: ${name}`);
+        console.log(`[Combos] Created combo: ${name}`);
+      } else if (JSON.stringify(combo.models) !== JSON.stringify(MODEL_RANKING)) {
+        await updateCombo(combo.id, { models: MODEL_RANKING });
+        console.log(`[Combos] Synced models for combo: ${name}`);
       }
       if (!strategies[name]) { strategies[name] = "fallback"; changed = true; }
     }
