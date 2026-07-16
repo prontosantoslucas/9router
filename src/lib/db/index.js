@@ -67,6 +67,13 @@ export {
   saveRequestDetail, getRequestDetails, getRequestDetailById, getDistinctProviders,
 } from "./repos/requestDetailsRepo.js";
 
+// Threads / conversations
+export {
+  getOrCreateThread, getThreadMessages,
+  addThreadMessage, addThreadMessages,
+  deleteThread, listThreads,
+} from "./repos/threadsRepo.js";
+
 // Export/import full DB
 export async function exportDb() {
   const db = await getAdapter();
