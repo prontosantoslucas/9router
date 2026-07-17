@@ -1,9 +1,9 @@
-// ⚠️ AGENT/DEV: Bump this by +1 EVERY TIME you change the schema below
+// Ã¢Å¡Â Ã¯Â¸Â AGENT/DEV: Bump this by +1 EVERY TIME you change the schema below
 // (add/remove/alter a table, column, or index in TABLES). It drives the
 // pre-change safety backup in migrate.js: when the stored version is lower,
 // one lightweight DB backup is taken before applying schema changes. Forgetting
-// to bump only skips that backup — it does NOT break the additive auto-sync.
-export const SCHEMA_VERSION = 2;
+// to bump only skips that backup Ã¢â‚¬â€ it does NOT break the additive auto-sync.
+export const SCHEMA_VERSION = 3;
 
 export const PRAGMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -83,8 +83,24 @@ export const TABLES = {
       machineId: "TEXT",
       isActive: "INTEGER DEFAULT 1",
       createdAt: "TEXT NOT NULL",
+      userId: "TEXT",
+      planId: "TEXT",
+      label: "TEXT",
+      balanceCents: "INTEGER DEFAULT 0",
+      tokenBalance: "INTEGER",
+      periodStart: "TEXT",
+      periodEnd: "TEXT",
+      revokedAt: "TEXT",
+      boundIp: "TEXT",
+      bannedAt: "TEXT",
+      banReason: "TEXT",
+      strikeCount: "INTEGER DEFAULT 0",
     },
-    indexes: ["CREATE INDEX IF NOT EXISTS idx_ak_key ON apiKeys(key)"],
+    indexes: [
+      "CREATE INDEX IF NOT EXISTS idx_ak_key ON apiKeys(key)",
+      "CREATE INDEX IF NOT EXISTS idx_ak_user ON apiKeys(userId)",
+      "CREATE INDEX IF NOT EXISTS idx_ak_period ON apiKeys(periodEnd)",
+    ],
   },
   combos: {
     columns: {
@@ -114,6 +130,7 @@ export const TABLES = {
       model: "TEXT",
       connectionId: "TEXT",
       apiKey: "TEXT",
+      userId: "TEXT",
       endpoint: "TEXT",
       promptTokens: "INTEGER DEFAULT 0",
       completionTokens: "INTEGER DEFAULT 0",
@@ -127,6 +144,7 @@ export const TABLES = {
       "CREATE INDEX IF NOT EXISTS idx_uh_provider ON usageHistory(provider)",
       "CREATE INDEX IF NOT EXISTS idx_uh_model ON usageHistory(model)",
       "CREATE INDEX IF NOT EXISTS idx_uh_conn ON usageHistory(connectionId)",
+      "CREATE INDEX IF NOT EXISTS idx_uh_user_ts ON usageHistory(userId, timestamp DESC)",
     ],
   },
   usageDaily: {
@@ -174,6 +192,104 @@ export const TABLES = {
     indexes: [
       "CREATE INDEX IF NOT EXISTS idx_cm_conv ON conversationMessages(conversationId, id ASC)",
     ],
+  },
+  users: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      email: "TEXT UNIQUE NOT NULL",
+      passwordHash: "TEXT",
+      role: "TEXT DEFAULT 'user'",
+      status: "TEXT DEFAULT 'active'",
+      createdAt: "TEXT NOT NULL",
+      updatedAt: "TEXT NOT NULL",
+    },
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)"],
+  },
+  plans: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      name: "TEXT UNIQUE NOT NULL",
+      priceCents: "INTEGER DEFAULT 0",
+      currency: "TEXT DEFAULT 'USD'",
+      durationDays: "INTEGER NOT NULL",
+      tokenLimit: "INTEGER",
+      costLimitCents: "INTEGER",
+      rpm: "INTEGER",
+      allowedCombos: "TEXT",
+      isActive: "INTEGER DEFAULT 1",
+      createdAt: "TEXT NOT NULL",
+      updatedAt: "TEXT NOT NULL",
+    },
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_plans_active ON plans(isActive)"],
+  },
+  subscriptions: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      userId: "TEXT NOT NULL",
+      planId: "TEXT NOT NULL",
+      gateway: "TEXT NOT NULL",
+      externalId: "TEXT",
+      status: "TEXT DEFAULT 'active'",
+      currentPeriodEnd: "TEXT",
+      data: "TEXT",
+      createdAt: "TEXT NOT NULL",
+      updatedAt: "TEXT NOT NULL",
+    },
+    indexes: [
+      "CREATE INDEX IF NOT EXISTS idx_sub_user ON subscriptions(userId)",
+      "CREATE INDEX IF NOT EXISTS idx_sub_ext ON subscriptions(gateway, externalId)",
+    ],
+  },
+  payments: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      userId: "TEXT",
+      apiKeyId: "TEXT",
+      subscriptionId: "TEXT",
+      planId: "TEXT",
+      gateway: "TEXT NOT NULL",
+      externalId: "TEXT",
+      amountCents: "INTEGER DEFAULT 0",
+      currency: "TEXT DEFAULT 'USD'",
+      status: "TEXT DEFAULT 'pending'",
+      createdAt: "TEXT NOT NULL",
+      raw: "TEXT",
+    },
+    indexes: [
+      "CREATE INDEX IF NOT EXISTS idx_pay_user ON payments(userId)",
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_pay_ext ON payments(gateway, externalId)",
+    ],
+  },
+  webhookEvents: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      gateway: "TEXT NOT NULL",
+      externalId: "TEXT NOT NULL",
+      type: "TEXT",
+      processedAt: "TEXT NOT NULL",
+    },
+    indexes: ["CREATE UNIQUE INDEX IF NOT EXISTS idx_wh_ext ON webhookEvents(gateway, externalId)"],
+  },
+  keyIpLog: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      apiKeyId: "TEXT NOT NULL",
+      ip: "TEXT NOT NULL",
+      firstSeen: "TEXT NOT NULL",
+      lastSeen: "TEXT NOT NULL",
+      hitCount: "INTEGER DEFAULT 0",
+    },
+    indexes: ["CREATE UNIQUE INDEX IF NOT EXISTS idx_kip_key_ip ON keyIpLog(apiKeyId, ip)"],
+  },
+  banEvents: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      apiKeyId: "TEXT NOT NULL",
+      ip: "TEXT",
+      reason: "TEXT",
+      createdAt: "TEXT NOT NULL",
+    },
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_ban_key ON banEvents(apiKeyId)"],
   },
 };
 

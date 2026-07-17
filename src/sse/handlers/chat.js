@@ -5,7 +5,6 @@ import {
   markAccountUnavailable,
   clearAccountError,
   extractApiKey,
-  isValidApiKey,
 } from "../services/auth.js";
 import { cacheClaudeHeaders } from "open-sse/utils/claudeHeaderCache.js";
 import { getSettings } from "@/lib/localDb";
@@ -18,6 +17,7 @@ import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { handleComboChat, handleFusionChat } from "open-sse/services/combo.js";
 import { handleBypassRequest } from "open-sse/utils/bypassHandler.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
+import { resolveApiKey, isComboAllowed } from "@/lib/billing/enforcement.js";
 import { detectFormatByEndpoint } from "open-sse/translator/formats.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
@@ -50,7 +50,7 @@ export async function handleChat(request, clientRawRequest = null) {
 
   const modelStr = body.model;
 
-  // Request summary is emitted as the unified "▶" line in chatCore (has fmt/thinking/account)
+  // Request summary is emitted as the unified "Ã¢â€“Â¶" line in chatCore (has fmt/thinking/account)
 
   // Log API key (masked)
   const authHeader = request.headers.get("Authorization");
@@ -64,15 +64,23 @@ export async function handleChat(request, clientRawRequest = null) {
 
   // Enforce API key if enabled in settings
   const settings = await getSettings();
+  let accessKey = null;
   if (settings.requireApiKey) {
     if (!apiKey) {
       log.warn("AUTH", "Missing API key (requireApiKey=true)");
       return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
     }
-    const valid = await isValidApiKey(apiKey);
-    if (!valid) {
-      log.warn("AUTH", "Invalid API key (requireApiKey=true)");
-      return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");
+    const clientIp = request?.headers?.get("x-9r-real-ip") || null;
+    const access = await resolveApiKey(apiKey, { ip: clientIp, settings });
+    if (!access.ok) {
+      log.warn("AUTH", `Access denied [${access.code}]: ${access.reason}`);
+      return errorResponse(access.code, access.reason);
+    }
+    accessKey = access;
+    // Plan-gated combo access
+    if (access.plan && !isComboAllowed(access.plan, modelStr)) {
+      log.warn("AUTH", `Combo "${modelStr}" not in plan ${access.plan.name}`);
+      return errorResponse(HTTP_STATUS.FORBIDDEN, `Model "${modelStr}" not allowed on your plan`);
     }
   }
 
@@ -185,7 +193,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
 
   const { provider, model } = modelInfo;
 
-  // Routing shown in the unified "▶" line (client model → provider/model)
+  // Routing shown in the unified "Ã¢â€“Â¶" line (client model Ã¢â€ â€™ provider/model)
 
   // Extract userAgent from request
   const userAgent = request?.headers?.get("user-agent") || "";
@@ -214,7 +222,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
     }
 
-    // Account selection shown in the unified "▶" line (acc:...)
+    // Account selection shown in the unified "Ã¢â€“Â¶" line (acc:...)
     const refreshedCredentials = await checkAndRefreshToken(provider, credentials);
 
     // Ensure real project ID is available for providers that need it (P0 fix: cold miss)
@@ -275,7 +283,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model, result.resetsAtMs);
 
     if (shouldFallback) {
-      log.warn("FALLBACK", `⇄ ACC:${credentials.connectionName} UNAVAILABLE (${result.status}) → NEXT ACCOUNT`);
+      log.warn("FALLBACK", `Ã¢â€¡â€ž ACC:${credentials.connectionName} UNAVAILABLE (${result.status}) Ã¢â€ â€™ NEXT ACCOUNT`);
       excludeConnectionIds.add(credentials.connectionId);
       lastError = result.error;
       lastStatus = result.status;

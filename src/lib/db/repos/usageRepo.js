@@ -139,7 +139,7 @@ async function calculateCost(provider, model, tokens) {
     if (!pricing) return 0;
 
     // Delegate the actual math to the single source of truth (avoids the two
-    // copies drifting apart — see open-sse/providers/pricing.js for the
+    // copies drifting apart Ã¢â‚¬â€ see open-sse/providers/pricing.js for the
     // cache-inclusive prompt_tokens convention this assumes).
     const { calculateCostFromTokens } = await import("open-sse/providers/pricing.js");
     return calculateCostFromTokens(tokens, pricing);
@@ -189,7 +189,7 @@ export function trackPendingRequest(model, provider, connectionId, started, erro
     lastErrorProvider.ts = Date.now();
   }
 
-  // [PENDING] console line removed; lifecycle is visible via "▶" and "📊 done" lines
+  // [PENDING] console line removed; lifecycle is visible via "Ã¢â€“Â¶" and "Ã°Å¸â€œÅ  done" lines
   scheduleStatsEvent("pending");
 }
 
@@ -249,10 +249,19 @@ export async function saveRequestUsage(entry) {
     const promptTokens = tokens.prompt_tokens || tokens.input_tokens || 0;
     const completionTokens = tokens.completion_tokens || tokens.output_tokens || 0;
 
+    // Resolve the paid key (if any) so we can stamp userId + debit balance
+    // atomically inside the same transaction as the usage insert.
+    let paidKey = null;
+    if (entry.apiKey && typeof entry.apiKey === "string" && entry.apiKey.startsWith("sk-")) {
+      paidKey = db.get(`SELECT id, userId, tokenBalance, balanceCents FROM apiKeys WHERE key = ?`, [entry.apiKey]);
+    }
+    const totalTokens = promptTokens + completionTokens;
+    const costCents = Math.round((entry.cost || 0) * 100);
+
     let inserted = false;
 
     // All 3 writes (history insert, daily upsert, lifetime counter) in ONE transaction.
-    // better-sqlite3 is sync → no JS yield mid-transaction → no race in same process.
+    // better-sqlite3 is sync Ã¢â€ â€™ no JS yield mid-transaction Ã¢â€ â€™ no race in same process.
     db.transaction(() => {
       const existing = db.get(
         `SELECT id, endpoint FROM usageHistory
@@ -279,14 +288,21 @@ export async function saveRequestUsage(entry) {
       }
 
       db.run(
-        `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, userId, endpoint, promptTokens, completionTokens, cost, status, tokens, meta) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           entry.timestamp, entry.provider || null, entry.model || null,
-          entry.connectionId || null, entry.apiKey || null, entry.endpoint || null,
+          entry.connectionId || null, entry.apiKey || null, paidKey?.userId || null, entry.endpoint || null,
           promptTokens, completionTokens, entry.cost || 0, entry.status || "ok",
           stringifyJson(tokens), stringifyJson({}),
         ]
       );
+
+      // Atomic quota debit for paid keys (clamped at 0). Same tx as the insert.
+      if (paidKey) {
+        const nextTok = paidKey.tokenBalance == null ? null : Math.max(0, paidKey.tokenBalance - totalTokens);
+        const nextCents = Math.max(0, (paidKey.balanceCents ?? 0) - costCents);
+        db.run(`UPDATE apiKeys SET tokenBalance = ?, balanceCents = ? WHERE id = ?`, [nextTok, nextCents, paidKey.id]);
+      }
 
       const dateKey = getLocalDateKey(entry.timestamp);
       const row = db.get(`SELECT data FROM usageDaily WHERE dateKey = ?`, [dateKey]);
@@ -418,7 +434,7 @@ export async function getUsageStats(period = "all") {
     }
   }
 
-  // last10Minutes — query 10min window
+  // last10Minutes Ã¢â‚¬â€ query 10min window
   const now = new Date();
   const currentMinuteStart = new Date(Math.floor(now.getTime() / 60000) * 60000);
   const tenMinutesAgo = new Date(currentMinuteStart.getTime() - 9 * 60 * 1000);
@@ -713,7 +729,7 @@ export async function getChartData(period = "7d") {
   const today = new Date();
   const labelFn = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-  // Build map of dateKey → day data
+  // Build map of dateKey Ã¢â€ â€™ day data
   const dayRows = loadDaysInRange(db, bucketCount);
   const dayMap = {};
   for (const r of dayRows) dayMap[r.dateKey] = parseJson(r.data, {});
