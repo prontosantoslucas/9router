@@ -1,9 +1,9 @@
 import * as stripe from "./stripe.js";
-// future: import * as mercadopago from "./mercadopago.js";
-// future: import * as paypal from "./paypal.js";
-// future: import * as nowpayments from "./nowpayments.js";
+import * as mercadopago from "./mercadopago.js";
+import * as paypal from "./paypal.js";
+import * as nowpayments from "./nowpayments.js";
 
-const DRIVERS = { stripe };
+const DRIVERS = { stripe, mercadopago, paypal, nowpayments };
 const NAMES = Object.keys(DRIVERS);
 
 export function listGateways() {
