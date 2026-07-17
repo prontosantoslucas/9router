@@ -13,6 +13,8 @@ export async function resolveApiKey(rawKey, { ip = null, settings = {} } = {}) {
   if (!rawKey) return { ok: false, code: 401, reason: "Missing API key" };
   const key = await getApiKeyByKey(rawKey);
   if (!key) return { ok: false, code: 401, reason: "Invalid API key" };
+  // Free / legacy keys without a plan skip billing enforcement
+  if (!key.planId) return { ok: true, key, plan: null, apiKeyId: key.id, userId: key.userId || null };
 
   const pol = resolveIpPolicy(settings);
   let distinctIpsInWindow = null;

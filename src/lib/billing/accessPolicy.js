@@ -23,6 +23,8 @@ export function evaluateKeyAccess(key, { ip = null, now = Date.now(), settings =
   if (key.revokedAt) return deny(403, "Key revoked");
   if (key.isActive === false) return deny(403, "Key inactive");
 
+  // Free / legacy keys without planId skip billing enforcement
+  if (!key.planId) return allow(null);
   // access window
   if (key.periodEnd) {
     const end = Date.parse(key.periodEnd);
