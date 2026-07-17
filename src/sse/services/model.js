@@ -33,6 +33,46 @@ export async function resolveModelAlias(alias) {
 }
 
 /**
+ * Resolve "auto" model alias to a real model.
+ * Priority: AUTO_MODEL env → MODEL_RANKING env → first provider with defaultModel → fallback null
+ */
+async function resolveAutoModel() {
+  // 1. Explicit AUTO_MODEL env var (e.g., "openai/gpt-4o" or "kr/auto-thinking")
+  const envModel = process.env.AUTO_MODEL;
+  if (envModel) {
+    const info = await getModelInfo(envModel);
+    if (info && info.provider) return info;
+  }
+
+  // 2. Try MODEL_RANKING env var (same format as 9router-agent, comma-separated model IDs)
+  const ranking = (process.env.MODEL_RANKING || "")
+    .split(",")
+    .map(m => m.trim())
+    .filter(Boolean);
+  for (const modelId of ranking) {
+    const info = await getModelInfo(modelId);
+    if (info && info.provider) return info;
+  }
+
+  // 3. First configured provider node with a defaultModel
+  const allNodes = await getProviderNodes();
+  const withDefault = allNodes.find(n => n.defaultModel);
+  if (withDefault) {
+    return { provider: withDefault.id, model: withDefault.defaultModel };
+  }
+
+  // 4. First registry entry with a model
+  for (const entry of REGISTRY) {
+    const models = entry.models || [];
+    if (models.length > 0 && models[0].id) {
+      return { provider: entry.id, model: models[0].id };
+    }
+  }
+
+  return null;
+}
+
+/**
  * Get full model info (parse or resolve)
  */
 export async function getModelInfo(modelStr) {
@@ -82,6 +122,14 @@ export async function getModelInfo(modelStr) {
     // Return null provider to signal this should be handled as combo
     // The caller (handleChat) will detect this and handle it as combo
     return { provider: null, model: parsed.model };
+  }
+
+  // Handle "auto" alias — resolve via environment or first available model
+  if (parsed.model === "auto") {
+    const resolved = await resolveAutoModel();
+    if (resolved) return resolved;
+    // If nothing configured, signal combo path (will show error msg)
+    return { provider: null, model: "auto" };
   }
 
   return getModelInfoCore(modelStr, getModelAliases);
