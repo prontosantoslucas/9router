@@ -46,16 +46,18 @@ async function creditPurchase(gateway, event) {
     });
   }
 
+  const rawPayload = { ...(event.raw || {}), tempPassword: password };
+
   const { getAdapter } = await import("@/lib/db/driver.js");
   const db = await getAdapter();
   db.transaction(() => {
     const existing = db.get(`SELECT id FROM payments WHERE gateway = ? AND externalId = ?`, [gateway, event.externalId]);
     if (existing) {
       db.run(`UPDATE payments SET userId = ?, apiKeyId = ?, planId = ?, amountCents = ?, currency = ?, status = ?, raw = ? WHERE id = ?`,
-        [user.id, key.id, plan.id, event.amountCents || 0, event.currency || "USD", "paid", JSON.stringify(event.raw ?? null), existing.id]);
+        [user.id, key.id, plan.id, event.amountCents || 0, event.currency || "USD", "paid", JSON.stringify(rawPayload), existing.id]);
     } else {
       db.run(`INSERT INTO payments(id, userId, apiKeyId, planId, gateway, externalId, amountCents, currency, status, createdAt, raw) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [uuidv4(), user.id, key.id, plan.id, gateway, event.externalId, event.amountCents || 0, event.currency || "USD", "paid", new Date().toISOString(), JSON.stringify(event.raw ?? null)]);
+        [uuidv4(), user.id, key.id, plan.id, gateway, event.externalId, event.amountCents || 0, event.currency || "USD", "paid", new Date().toISOString(), JSON.stringify(rawPayload)]);
     }
   });
 
@@ -75,7 +77,7 @@ async function creditPurchase(gateway, event) {
   }
 
   await markWebhookProcessed(gateway, event.externalId, "paid");
-  return { action: "credited", userId: user.id, apiKeyId: key.id, password };
+  return { action: "credited", userId: user.id, apiKeyId: key.id, password, keyString: key.key };
 }
 
 async function ensureUser(event) {
