@@ -31,6 +31,30 @@ function scannerAlertHtml(keys) {
 </body></html>`;
 }
 
+function getNotifyTelegramChatId() {
+  return process.env.SCANNER_NOTIFY_TELEGRAM_CHAT_ID;
+}
+
+function getTelegramBotToken() {
+  return process.env.TELEGRAM_BOT_TOKEN;
+}
+
+async function sendTelegramMessage(chatId, text) {
+  const token = getTelegramBotToken();
+  if (!token) return { ok: false, error: "TELEGRAM_BOT_TOKEN not set" };
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: String(chatId), text, parse_mode: "HTML" }),
+    });
+    const data = await res.json();
+    return { ok: data.ok, error: data.description };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
 export async function sendScannerAlert(validKeys) {
   const errors = [];
 
@@ -58,6 +82,18 @@ export async function sendScannerAlert(validKeys) {
       if (!r.ok) errors.push({ channel: "whatsapp", error: r.error });
     } catch (e) {
       errors.push({ channel: "whatsapp", error: e.message });
+    }
+  }
+
+  const tgTo = getNotifyTelegramChatId();
+  if (tgTo && validKeys.length > 0) {
+    const valid = validKeys.filter(k => k.status === "valid");
+    const body = `🔑 <b>Scanner Alert</b> — ${valid.length} valid key(s) found\n\n${valid.map(k => `${k.provider}: ${k.key?.slice(0, 20)}... (${k.source})`).join("\n")}\n\nCheck dashboard for details.`;
+    try {
+      const r = await sendTelegramMessage(tgTo, body);
+      if (!r.ok) errors.push({ channel: "telegram", error: r.error });
+    } catch (e) {
+      errors.push({ channel: "telegram", error: e.message });
     }
   }
 
