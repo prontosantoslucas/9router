@@ -42,15 +42,16 @@
     "selfsigned": "^5.5.0",
     "socks-proxy-agent": "^8.0.5",
     "sql.js": "^1.14.1",
+    "telegraf": "^4.16.3",
     "undici": "^7.19.2",
     "uuid": "^13.0.0",
     "zustand": "^5.0.10"
   },
   "optionalDependencies": {
-    "better-sqlite3": "^12.6.2",
-    "libsql": "^0.5.29",
+    "@libsql/linux-x64-gnu": "0.5.29",
     "@libsql/linux-x64-musl": "0.5.29",
-    "@libsql/linux-x64-gnu": "0.5.29"
+    "better-sqlite3": "^12.6.2",
+    "libsql": "^0.5.29"
   },
   "comment_better_sqlite3": "kept in optionalDependencies so npm install doesn't fail on systems without build tools — sql.js is used as fallback at runtime",
   "devDependencies": {

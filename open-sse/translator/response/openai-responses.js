@@ -42,7 +42,6 @@ export function openaiToOpenAIResponsesResponse(chunk, state) {
       type: "response.created",
       response: {
         id: state.responseId,
-        object: "response",
         created_at: state.created,
         status: "in_progress",
         background: false,
@@ -55,7 +54,6 @@ export function openaiToOpenAIResponsesResponse(chunk, state) {
       type: "response.in_progress",
       response: {
         id: state.responseId,
-        object: "response",
         created_at: state.created,
         status: "in_progress"
       }
@@ -333,7 +331,6 @@ function sendCompleted(state, emit) {
       type: "response.completed",
       response: {
         id: state.responseId,
-        object: "response",
         created_at: state.created,
         status: "completed",
         background: false,

@@ -6,71 +6,78 @@ const NAME = "nowpayments";
 function getEnv() {
   const apiKey = process.env.NOWPAYMENTS_API_KEY;
   const ipnSecret = process.env.NOWPAYMENTS_IPN_SECRET;
-  if (!apiKey) throw new Error("NOWPAYMENTS_API_KEY not configured");
-  if (!ipnSecret) throw new Error("NOWPAYMENTS_IPN_SECRET not configured");
-  return { apiKey, ipnSecret, base: "https://api.nowpayments.io/v1" };
+  const email = process.env.NOWPAYMENTS_EMAIL;
+  const password = process.env.NOWPAYMENTS_PASSWORD;
+  if (!apiKey || !ipnSecret) throw new Error("NOWPAYMENTS_API_KEY and NOWPAYMENTS_IPN_SECRET required");
+  return { apiKey, ipnSecret, email, password, base: "https://api.nowpayments.io/v1" };
+}
+
+async function getAuthHeader(cfg) {
+  // Bearer key for most calls; optional JWT if email/password set.
+  if (cfg.email && cfg.password) {
+    try {
+      const { statusCode, body } = await undiciRequest(`${cfg.base}/auth`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: cfg.email, password: cfg.password }),
+      });
+      const data = await body.json();
+      if (statusCode < 300 && data.token) return `Bearer ${data.token}`;
+    } catch { /* fall back to static key */ }
+  }
+  return cfg.apiKey;
 }
 
 export async function createCheckout(plan, { successUrl, cancelUrl, metadata = {} }) {
   const cfg = getEnv();
+  const auth = await getAuthHeader(cfg);
   const payload = {
-    price_amount: (plan.priceCents || 0) / 100,
+    price_amount: Number(plan.priceCents) / 100,
     price_currency: (plan.currency || "USD").toUpperCase(),
-    pay_currency: metadata.payCurrency || "USDT",
-    order_id: `${plan.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    pay_currency: "BTC", // user can change on widget
+    order_id: metadata.planId || plan.id,
     order_description: plan.name,
-    ipn_callback_url: metadata.webhookUrl || process.env.NOWPAYMENTS_WEBHOOK_URL || "",
     success_url: successUrl,
-    cancel_url: cancelUrl || successUrl,
-    is_fixed_rate: true,
-    is_fee_paid_by_user: true,
-    ...Object.fromEntries(Object.entries(metadata).filter(([k]) => !["webhookUrl", "payCurrency"].includes(k)).map(([k, v]) => [`metadata[${k}]`, v])),
+    cancel_url: cancelUrl,
+    is_fee_paid_by_user: false,
   };
-  const { statusCode, body } = await undiciRequest(`${cfg.base}/invoice`, {
+  const { statusCode, body } = await undiciRequest(`${cfg.base}/payment`, {
     method: "POST",
-    headers: { "x-api-key": cfg.apiKey, "Content-Type": "application/json" },
+    headers: { "x-api-key": cfg.apiKey, Authorization: auth, "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   const data = await body.json();
-  if (statusCode >= 300 || data.error || data.message) {
-    throw new Error(data.message || data.error || `NOWPayments invoice failed (${statusCode})`);
-  }
-  return { url: data.invoice_url, externalId: data.id, raw: data };
+  if (statusCode >= 300 || data.error) throw new Error(data.message || data.error || `NOWPayments payment failed (${statusCode})`);
+  return { url: data.invoice_url, externalId: String(data.payment_id || data.id), raw: data };
 }
 
 export async function verifyWebhook(request) {
   const cfg = getEnv();
   const rawBody = await request.text();
-  const sig = request.headers.get("x-nowpayments-sig") || "";
-  if (!sig) return { ok: false, error: "missing x-nowpayments-sig header" };
+  const hmac = request.headers.get("x-nowpayments-sig") || "";
   const expected = crypto.createHmac("sha512", cfg.ipnSecret).update(rawBody).digest("hex");
-  if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig))) return { ok: false, error: "invalid signature" };
-  let body;
-  try { body = JSON.parse(rawBody); } catch { return { ok: false, error: "invalid JSON" }; }
-  if (!body.invoice_id) return { ok: false, error: "missing invoice_id" };
-  return { ok: true, event: parseEvent(body) };
+  if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(hmac))) return { ok: false, error: "invalid signature" };
+  const event = JSON.parse(rawBody);
+  return { ok: true, event: parseEvent(event) };
 }
 
-function parseEvent(body) {
-  const meta = body.metadata || {};
+function parseEvent(event) {
+  const meta = event.payment_metadata || {};
   return {
-    type: statusToCanonical(body.payment_status || body.status),
+    type: eventTypeToCanonical(event.payment_status),
     gateway: NAME,
-    externalId: body.invoice_id || body.payment_id,
-    amountCents: Math.round((parseFloat(body.price_amount || body.actually_paid || 0)) * 100),
-    currency: (body.price_currency || "USD").toUpperCase(),
+    externalId: String(event.payment_id || event.id || ""),
+    amountCents: Math.round((Number(event.price_amount) || 0) * 100),
+    currency: (event.price_currency || "USD").toUpperCase(),
     userId: meta.userId || null,
     apiKeyId: meta.apiKeyId || null,
-    planId: meta.planId || body.order_id?.split("-")[0] || null,
-    customerEmail: null,
-    raw: body,
+    planId: meta.planId || event.order_id || null,
+    customerEmail: event.customer_email || null,
+    raw: event,
   };
 }
 
-function statusToCanonical(status) {
-  const s = String(status || "").toLowerCase();
-  if (s === "finished") return "paid";
-  if (s === "failed" || s === "expired") return "failed";
-  if (s === "refunded") return "refunded";
-  return s;
+function eventTypeToCanonical(status) {
+  if (status === "finished" || status === "confirmed" || status === "sending") return "paid";
+  if (status === "failed" || status === "expired" || status === "refunded") return "failed";
+  return status;
 }

@@ -17,7 +17,7 @@ const keys = await import("../src/lib/db/repos/apiKeysRepo.js");
 const usage = await import("../src/lib/db/repos/usageRepo.js");
 
 // --- pure policy ---
-const base = { id: "k", isActive: true, boundIp: null, tokenBalance: 100, periodEnd: new Date(Date.now()+86400000).toISOString() };
+const base = { id: "k", isActive: true, boundIp: null, tokenBalance: 100, periodEnd: new Date(Date.now()+86400000).toISOString(), planId: "p1" };
 assert.equal(pol.evaluateKeyAccess(null).code, 401);
 assert.equal(pol.evaluateKeyAccess({ ...base, bannedAt: "x" }).code, 403);
 assert.equal(pol.evaluateKeyAccess({ ...base, periodEnd: new Date(Date.now()-1000).toISOString() }).code, 402);
