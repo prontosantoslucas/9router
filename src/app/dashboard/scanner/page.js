@@ -19,17 +19,44 @@ const ALL_PROVIDERS = {
 };
 
 const ALL_SOURCES = [
-  { id: "github", label: "GitHub Repos" },
-  { id: "pastebin", label: "Pastebin / Gists" },
+  { id: "github", label: "GitHub Repos", icon: "code" },
+  { id: "pastebin", label: "Pastebin / Gists", icon: "content_paste" },
 ];
 
-const STATUS_COLORS = {
-  valid: "bg-green-100 text-green-800",
-  insufficient_quota: "bg-yellow-100 text-yellow-800",
-  invalid: "bg-red-100 text-red-800",
-  rate_limited: "bg-gray-100 text-gray-600",
-  error: "bg-gray-100 text-gray-600",
+const STATUS_STYLES = {
+  valid: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/20",
+  insufficient_quota: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20",
+  invalid: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/20",
+  rate_limited: "bg-surface-3 text-text-muted border-border",
+  error: "bg-surface-3 text-text-muted border-border",
 };
+
+function StatusBadge({ status }) {
+  const label = status === "insufficient_quota" ? "zero balance" : status;
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${STATUS_STYLES[status] || STATUS_STYLES.error}`}>
+      {label}
+    </span>
+  );
+}
+
+function StatCard({ icon, label, value, tone = "default" }) {
+  const tones = {
+    default: "text-text-main",
+    green: "text-green-600 dark:text-green-400",
+    amber: "text-amber-600 dark:text-amber-400",
+    red: "text-red-600 dark:text-red-400",
+  };
+  return (
+    <div className="rounded-lg border border-border bg-surface p-4">
+      <div className="flex items-center gap-2 text-text-muted mb-1.5">
+        <span className="material-symbols-outlined text-[16px]">{icon}</span>
+        <span className="text-xs font-medium">{label}</span>
+      </div>
+      <p className={`text-2xl font-display font-bold ${tones[tone]}`}>{value}</p>
+    </div>
+  );
+}
 
 export default function ScannerPage() {
   const [keys, setKeys] = useState([]);
@@ -40,7 +67,6 @@ export default function ScannerPage() {
   const [selectedProviders, setSelectedProviders] = useState(Object.keys(ALL_PROVIDERS));
   const [selectedSources, setSelectedSources] = useState(["github"]);
 
-  // Manual test
   const [testKey, setTestKey] = useState("");
   const [testProvider, setTestProvider] = useState("openai");
   const [testResult, setTestResult] = useState(null);
@@ -57,17 +83,8 @@ export default function ScannerPage() {
 
   useEffect(() => { fetchKeys(); }, [fetchKeys]);
 
-  const toggleProvider = (id) => {
-    setSelectedProviders(prev =>
-      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
-    );
-  };
-
-  const toggleSource = (id) => {
-    setSelectedSources(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-    );
-  };
+  const toggleProvider = (id) => setSelectedProviders(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
+  const toggleSource = (id) => setSelectedSources(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
 
   const startScan = async () => {
     setScanning(true);
@@ -113,53 +130,78 @@ export default function ScannerPage() {
     fetchKeys();
   };
 
+  const selectAll = () => setSelectedProviders(Object.keys(ALL_PROVIDERS));
+  const selectNone = () => setSelectedProviders([]);
+
   return (
-    <div class="max-w-7xl mx-auto p-6">
-      <div class="mb-6">
-        <h1 class="text-2xl font-bold">API Key Scanner</h1>
-        <p class="text-sm text-gray-500 mt-1">Search GitHub and Pastebin for leaked API keys and validate them in real-time</p>
+    <div className="max-w-7xl mx-auto p-6 animate-fade-up">
+      {/* Header */}
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center size-9 rounded-md bg-amber-500/10 border border-amber-500/20">
+              <span className="material-symbols-outlined text-amber-500 text-[20px]">radar</span>
+            </div>
+            <h1 className="text-2xl font-display font-bold tracking-tight text-text-main">API Key Scanner</h1>
+          </div>
+          <p className="text-sm text-text-muted mt-2">Search GitHub and Pastebin for leaked API keys and validate them in real-time.</p>
+        </div>
       </div>
 
       {/* Manual Key Test */}
-      <div class="bg-white rounded-lg border p-4 mb-6">
-        <h2 class="text-sm font-semibold mb-3">Test a Key Manually</h2>
-        <div class="flex gap-3">
+      <div className="rounded-lg border border-border bg-surface p-5 mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="material-symbols-outlined text-text-muted text-[18px]">key</span>
+          <h2 className="text-sm font-semibold text-text-main">Test a Key Manually</h2>
+        </div>
+        <div className="flex gap-2 flex-col sm:flex-row">
           <input
             type="text"
-            class="flex-1 border rounded px-3 py-2 text-sm font-mono"
-            placeholder="Paste an API key to test..."
+            className="flex-1 rounded-md border border-border bg-bg px-3 py-2 text-sm font-mono text-text-main placeholder:text-text-subtle focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 transition-all"
+            placeholder="Paste an API key to test…"
             value={testKey}
             onChange={e => setTestKey(e.target.value)}
           />
-          <select value={testProvider} onChange={e => setTestProvider(e.target.value)} class="border rounded px-2 py-2 text-sm">
+          <select value={testProvider} onChange={e => setTestProvider(e.target.value)} className="rounded-md border border-border bg-bg px-3 py-2 text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-amber-500/30">
             {Object.entries(ALL_PROVIDERS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
-          <button onClick={testManualKey} disabled={testing || !testKey.trim()} class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
-            {testing ? "Testing..." : "Test Key"}
+          <button onClick={testManualKey} disabled={testing || !testKey.trim()} className="inline-flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-md text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed">
+            {testing ? <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span> : <span className="material-symbols-outlined text-[16px]">bolt</span>}
+            {testing ? "Testing…" : "Test Key"}
           </button>
         </div>
         {testResult && (
-          <div class={`mt-3 p-3 rounded text-sm ${testResult.status === "valid" ? "bg-green-50 text-green-800 border border-green-200" : testResult.status === "insufficient_quota" ? "bg-yellow-50 text-yellow-800 border border-yellow-200" : "bg-red-50 text-red-800 border border-red-200"}`}>
-            <strong>{testResult.key}</strong> → <strong>{testResult.status}</strong>
-            {testResult.status === "valid" && <span class="ml-2">🔥 Valid key!</span>}
-            {testResult.status === "insufficient_quota" && <span class="ml-2">Key is valid but has zero balance</span>}
+          <div className={`mt-3 p-3 rounded-md text-sm border flex items-center gap-2 ${testResult.status === "valid" ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20" : testResult.status === "insufficient_quota" ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20" : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"}`}>
+            <span className="material-symbols-outlined text-[18px]">{testResult.status === "valid" ? "check_circle" : testResult.status === "insufficient_quota" ? "warning" : "cancel"}</span>
+            <span className="font-mono text-xs">{testResult.key}</span>
+            <span className="opacity-60">→</span>
+            <strong>{testResult.status}</strong>
+            {testResult.status === "valid" && <span className="ml-auto text-xs font-semibold">Valid key!</span>}
+            {testResult.status === "insufficient_quota" && <span className="ml-auto text-xs">Valid but zero balance</span>}
           </div>
         )}
       </div>
 
       {/* Scan Controls */}
-      <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
-        <div class="lg:col-span-3 bg-white rounded-lg border p-4">
-          <h2 class="text-sm font-semibold mb-2">Providers to Scan</h2>
-          <div class="flex flex-wrap gap-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <div className="lg:col-span-2 rounded-lg border border-border bg-surface p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-text-main">Providers to Scan</h2>
+            <div className="flex gap-2 text-xs">
+              <button onClick={selectAll} className="text-amber-600 dark:text-amber-400 hover:underline font-medium">All</button>
+              <span className="text-border">·</span>
+              <button onClick={selectNone} className="text-text-muted hover:underline font-medium">None</button>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
             {Object.entries(ALL_PROVIDERS).map(([id, name]) => (
               <button
                 key={id}
                 onClick={() => toggleProvider(id)}
-                class={`px-3 py-1.5 rounded text-xs font-medium border transition-colors ${
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                   selectedProviders.includes(id)
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
+                    ? "bg-amber-500 text-white border-amber-500 shadow-sm"
+                    : "bg-transparent text-text-muted border-border hover:border-amber-500/40 hover:text-text-main"
                 }`}
               >
                 {name}
@@ -168,65 +210,48 @@ export default function ScannerPage() {
           </div>
         </div>
 
-        <div class="bg-white rounded-lg border p-4">
-          <h2 class="text-sm font-semibold mb-2">Sources</h2>
-          <div class="space-y-1.5">
+        <div className="rounded-lg border border-border bg-surface p-5 flex flex-col">
+          <h2 className="text-sm font-semibold text-text-main mb-3">Sources</h2>
+          <div className="space-y-2 flex-1">
             {ALL_SOURCES.map(s => (
-              <label key={s.id} class="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedSources.includes(s.id)}
-                  onChange={() => toggleSource(s.id)}
-                  class="rounded border-gray-300"
-                />
-                {s.label}
+              <label key={s.id} className={`flex items-center gap-2.5 text-sm cursor-pointer rounded-md border px-3 py-2 transition-all ${selectedSources.includes(s.id) ? "border-amber-500/40 bg-amber-500/5" : "border-border hover:bg-surface-2"}`}>
+                <input type="checkbox" checked={selectedSources.includes(s.id)} onChange={() => toggleSource(s.id)} className="rounded border-border accent-amber-500" />
+                <span className="material-symbols-outlined text-[16px] text-text-muted">{s.icon}</span>
+                <span className="text-text-main">{s.label}</span>
               </label>
             ))}
           </div>
           <button
             onClick={startScan}
             disabled={scanning || selectedProviders.length === 0 || selectedSources.length === 0}
-            class="mt-4 w-full bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-md text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {scanning ? "Scanning..." : "Run Scan"}
+            {scanning ? <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span> : <span className="material-symbols-outlined text-[18px]">travel_explore</span>}
+            {scanning ? "Scanning…" : "Run Scan"}
           </button>
         </div>
       </div>
 
-      {lastScan && (
-        <div class={`rounded-lg border p-4 mb-6 ${lastScan.error ? "bg-red-50 border-red-200" : "bg-blue-50 border-blue-200"}`}>
-          {lastScan.error ? (
-            <p class="text-red-700 text-sm">Error: {lastScan.error}</p>
-          ) : (
-            <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-              <span>Files scanned <strong>{lastScan.scanned || 0}</strong></span>
-              <span>Unique keys found <strong>{lastScan.total || 0}</strong></span>
-              <span class="text-green-700">Valid: <strong>{lastScan.valid || 0}</strong></span>
-              {lastScan.insufficient_quota > 0 && <span class="text-yellow-600">Zero balance: <strong>{lastScan.insufficient_quota}</strong></span>}
-              {lastScan.sources?.map(s => (
-                <span key={s.source} class="text-gray-500">{s.source}: {s.found} keys</span>
-              ))}
-              <details class="text-xs text-gray-400 mt-1">
-                <summary class="cursor-pointer">View result list ({lastScan.results?.length || 0} items)</summary>
-                <div class="mt-1 max-h-40 overflow-y-auto">
-                  {lastScan.results?.slice(0, 50).map((r, i) => (
-                    <div key={i} class="py-0.5">
-                      <span class={`${r.status === "valid" ? "text-green-600" : r.status === "insufficient_quota" ? "text-yellow-600" : "text-red-500"}`}>[{r.status}]</span>
-                      {" "}{r.key} <span class="text-gray-400">({r.provider}, {r.source})</span>
-                    </div>
-                  ))}
-                  {lastScan.results?.length > 50 && <div class="text-gray-400">...and {lastScan.results.length - 50} more</div>}
-                </div>
-              </details>
-            </div>
-          )}
+      {/* Scan Result Summary */}
+      {lastScan && !lastScan.error && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 animate-scale-in">
+          <StatCard icon="description" label="Files Scanned" value={lastScan.scanned || 0} />
+          <StatCard icon="vpn_key" label="Keys Found" value={lastScan.total || 0} />
+          <StatCard icon="verified" label="Valid" value={lastScan.valid || 0} tone="green" />
+          <StatCard icon="account_balance_wallet" label="Zero Balance" value={lastScan.insufficient_quota || 0} tone="amber" />
+        </div>
+      )}
+      {lastScan?.error && (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4 mb-6 flex items-center gap-2 text-red-700 dark:text-red-400 text-sm">
+          <span className="material-symbols-outlined text-[18px]">error</span>
+          Error: {lastScan.error}
         </div>
       )}
 
       {/* Results Table */}
-      <div class="bg-white rounded-lg border">
-        <div class="p-3 border-b flex gap-2 items-center">
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} class="border rounded px-2 py-1 text-xs">
+      <div className="rounded-lg border border-border bg-surface overflow-hidden">
+        <div className="p-3 border-b border-border flex gap-2 items-center flex-wrap">
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="rounded-md border border-border bg-bg px-2.5 py-1.5 text-xs text-text-main focus:outline-none focus:ring-2 focus:ring-amber-500/30">
             <option value="">All status</option>
             <option value="valid">Valid</option>
             <option value="insufficient_quota">Zero Balance</option>
@@ -234,42 +259,48 @@ export default function ScannerPage() {
             <option value="rate_limited">Rate Limited</option>
             <option value="error">Error</option>
           </select>
-          <select value={filterProvider} onChange={e => setFilterProvider(e.target.value)} class="border rounded px-2 py-1 text-xs">
+          <select value={filterProvider} onChange={e => setFilterProvider(e.target.value)} className="rounded-md border border-border bg-bg px-2.5 py-1.5 text-xs text-text-main focus:outline-none focus:ring-2 focus:ring-amber-500/30">
             <option value="">All providers</option>
-            {Object.entries(ALL_PROVIDERS).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
-            ))}
+            {Object.entries(ALL_PROVIDERS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
-          <button onClick={fetchKeys} class="ml-auto text-xs text-blue-600 hover:underline">Refresh</button>
+          <button onClick={fetchKeys} className="ml-auto inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:underline font-medium">
+            <span className="material-symbols-outlined text-[14px]">refresh</span>
+            Refresh
+          </button>
         </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
             <thead>
-              <tr class="border-b bg-gray-50">
-                <th class="text-left px-4 py-3 font-medium">Key</th>
-                <th class="text-left px-4 py-3 font-medium">Provider</th>
-                <th class="text-left px-4 py-3 font-medium">Status</th>
-                <th class="text-left px-4 py-3 font-medium">Source</th>
-                <th class="text-left px-4 py-3 font-medium">Scanned</th>
-                <th class="text-right px-4 py-3 font-medium"></th>
+              <tr className="border-b border-border bg-surface-2">
+                <th className="text-left px-4 py-3 font-semibold text-xs text-text-muted uppercase tracking-wider">Key</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs text-text-muted uppercase tracking-wider">Provider</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs text-text-muted uppercase tracking-wider">Status</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs text-text-muted uppercase tracking-wider">Source</th>
+                <th className="text-left px-4 py-3 font-semibold text-xs text-text-muted uppercase tracking-wider">Scanned</th>
+                <th className="text-right px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {keys.length === 0 && (
-                <tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">No keys scanned yet. Click "Run Scan" or paste a key above.</td></tr>
+                <tr><td colSpan="6" className="px-4 py-12 text-center text-text-muted">
+                  <span className="material-symbols-outlined text-[32px] opacity-40 block mb-2">search_off</span>
+                  No keys scanned yet. Click &quot;Run Scan&quot; or paste a key above.
+                </td></tr>
               )}
               {keys.map(k => (
-                <tr key={k.id} class="border-b hover:bg-gray-50">
-                  <td class="px-4 py-3 font-mono text-xs max-w-[200px] truncate">{k.key?.length > 30 ? k.key.slice(0, 28) + "..." : k.key}</td>
-                  <td class="px-4 py-3 text-xs text-gray-500">{ALL_PROVIDERS[k.provider] || k.provider}</td>
-                  <td class="px-4 py-3"><span class={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[k.status] || STATUS_COLORS.error}`}>{k.status === "insufficient_quota" ? "zero balance" : k.status}</span></td>
-                  <td class="px-4 py-3">
-                    {k.repoUrl ? <a href={k.repoUrl} target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline text-xs">{k.source}</a>
-                    : <span class="text-xs text-gray-500">{k.source}</span>}
+                <tr key={k.id} className="border-b border-border-subtle hover:bg-surface-2 transition-colors">
+                  <td className="px-4 py-3 font-mono text-xs max-w-[200px] truncate text-text-main">{k.key?.length > 30 ? k.key.slice(0, 28) + "…" : k.key}</td>
+                  <td className="px-4 py-3 text-xs text-text-muted">{ALL_PROVIDERS[k.provider] || k.provider}</td>
+                  <td className="px-4 py-3"><StatusBadge status={k.status} /></td>
+                  <td className="px-4 py-3">
+                    {k.repoUrl ? <a href={k.repoUrl} target="_blank" rel="noopener noreferrer" className="text-amber-600 dark:text-amber-400 hover:underline text-xs inline-flex items-center gap-0.5">{k.source}<span className="material-symbols-outlined text-[12px]">open_in_new</span></a>
+                    : <span className="text-xs text-text-muted">{k.source}</span>}
                   </td>
-                  <td class="px-4 py-3 text-xs text-gray-500">{k.scanDate ? new Date(k.scanDate).toLocaleString() : "-"}</td>
-                  <td class="px-4 py-3 text-right">
-                    <button onClick={() => deleteKey(k.id)} class="text-red-500 hover:text-red-700 text-xs">Delete</button>
+                  <td className="px-4 py-3 text-xs text-text-muted">{k.scanDate ? new Date(k.scanDate).toLocaleString() : "-"}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button onClick={() => deleteKey(k.id)} className="text-text-muted hover:text-red-500 transition-colors" title="Delete">
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -2,6 +2,19 @@
 
 import { useState, useEffect } from "react";
 
+function StatusBadge({ status }) {
+  const styles = {
+    paid: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/20",
+    refunded: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    pending: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20",
+  };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${styles[status] || "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/20"}`}>
+      {status}
+    </span>
+  );
+}
+
 export default function InvoicesPage() {
   const [tab, setTab] = useState("payments");
   const [email, setEmail] = useState("");
@@ -34,74 +47,108 @@ export default function InvoicesPage() {
   };
 
   return (
-    <div class="max-w-6xl mx-auto p-6">
-      <h1 class="text-2xl font-bold mb-2">Invoices & Payments</h1>
+    <div className="max-w-6xl mx-auto p-6 animate-fade-up">
+      <div className="mb-6 flex items-center gap-2.5">
+        <div className="flex items-center justify-center size-9 rounded-md bg-amber-500/10 border border-amber-500/20">
+          <span className="material-symbols-outlined text-amber-500 text-[20px]">receipt_long</span>
+        </div>
+        <h1 className="text-2xl font-display font-bold tracking-tight text-text-main">Invoices &amp; Payments</h1>
+      </div>
 
-      <div class="flex gap-1 mb-6 border-b">
-        <button onClick={() => setTab("payments")} class={`px-4 py-2 text-sm font-medium border-b-2 transition ${tab === "payments" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}>Payments</button>
-        <button onClick={() => setTab("invoices")} class={`px-4 py-2 text-sm font-medium border-b-2 transition ${tab === "invoices" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}>Usage Invoices</button>
+      <div className="flex gap-1 mb-6 border-b border-border">
+        <button onClick={() => setTab("payments")} className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${tab === "payments" ? "border-amber-500 text-amber-600 dark:text-amber-400" : "border-transparent text-text-muted hover:text-text-main"}`}>Payments</button>
+        <button onClick={() => setTab("invoices")} className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${tab === "invoices" ? "border-amber-500 text-amber-600 dark:text-amber-400" : "border-transparent text-text-muted hover:text-text-main"}`}>Usage Invoices</button>
       </div>
 
       {tab === "payments" && (
-        <div class="space-y-4">
-          <form onSubmit={lookupPayments} class="flex gap-3 items-end">
-            <div class="flex-1 max-w-sm">
-              <label class="block text-sm font-medium mb-1">Email used at checkout</label>
-              <input type="email" class="w-full px-3 py-2 rounded border" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
+        <div className="space-y-4">
+          <form onSubmit={lookupPayments} className="flex gap-3 items-end flex-wrap">
+            <div className="flex-1 max-w-sm min-w-[200px]">
+              <label className="block text-sm font-medium mb-1.5 text-text-muted">Email used at checkout</label>
+              <input type="email" className="w-full px-3 py-2 rounded-md border border-border bg-bg text-sm text-text-main placeholder:text-text-subtle focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 transition-all" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
             </div>
-            <button type="submit" disabled={loading} class="px-4 py-2 rounded bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50">{loading ? "..." : "Search"}</button>
+            <button type="submit" disabled={loading} className="inline-flex items-center gap-1.5 px-5 py-2 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-50">
+              <span className="material-symbols-outlined text-[16px]">search</span>
+              {loading ? "…" : "Search"}
+            </button>
           </form>
 
-          {payments.length === 0 && <p class="text-center text-gray-400 py-8">No payments found.</p>}
-
-          <div class="bg-white rounded-lg border">
-            <table class="w-full text-sm">
-              <thead><tr class="border-b bg-gray-50"><th class="text-left px-4 py-3">Amount</th><th class="text-left px-4 py-3">Status</th><th class="text-left px-4 py-3">Gateway</th><th class="text-left px-4 py-3">Plan</th><th class="text-left px-4 py-3">Date</th></tr></thead>
-              <tbody>
-                {payments.map(p => (
-                  <tr key={p.id} class="border-b hover:bg-gray-50">
-                    <td class="px-4 py-3 font-medium">{(p.amountCents / 100).toFixed(2)} {p.currency}</td>
-                    <td class="px-4 py-3"><span class={`px-2 py-0.5 rounded text-xs font-medium ${p.status === "paid" ? "bg-green-100 text-green-800" : p.status === "refunded" ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}`}>{p.status}</span></td>
-                    <td class="px-4 py-3 text-gray-500">{p.gateway}</td>
-                    <td class="px-4 py-3 text-gray-500">{p.planId?.slice(0, 8) || "-"}</td>
-                    <td class="px-4 py-3 text-gray-500 text-xs">{new Date(p.createdAt).toLocaleDateString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {payments.length === 0 ? (
+            <div className="text-center py-12 text-text-muted">
+              <span className="material-symbols-outlined text-[32px] opacity-40 block mb-2">payments</span>
+              No payments found.
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border bg-surface overflow-hidden">
+              <table className="w-full text-sm">
+                <thead><tr className="border-b border-border bg-surface-2">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-text-muted uppercase tracking-wider">Amount</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-text-muted uppercase tracking-wider">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-text-muted uppercase tracking-wider">Gateway</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-text-muted uppercase tracking-wider">Plan</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-text-muted uppercase tracking-wider">Date</th>
+                </tr></thead>
+                <tbody>
+                  {payments.map(p => (
+                    <tr key={p.id} className="border-b border-border-subtle hover:bg-surface-2 transition-colors">
+                      <td className="px-4 py-3 font-semibold text-text-main">{(p.amountCents / 100).toFixed(2)} <span className="text-text-muted text-xs font-normal">{p.currency}</span></td>
+                      <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
+                      <td className="px-4 py-3 text-text-muted text-xs">{p.gateway}</td>
+                      <td className="px-4 py-3 text-text-muted text-xs font-mono">{p.planId?.slice(0, 8) || "-"}</td>
+                      <td className="px-4 py-3 text-text-muted text-xs">{new Date(p.createdAt).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
       {tab === "invoices" && (
-        <div class="space-y-4">
-          <div class="flex items-center gap-3">
-            <button onClick={fetchInvoices} disabled={loading} class="px-4 py-2 rounded bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50">Refresh</button>
-          </div>
+        <div className="space-y-4">
+          <button onClick={fetchInvoices} disabled={loading} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-50">
+            <span className="material-symbols-outlined text-[16px]">refresh</span>
+            Refresh
+          </button>
 
-          {loading && <p class="text-center text-gray-400 py-8">Loading...</p>}
+          {loading && (
+            <div className="text-center py-12 text-text-muted">
+              <span className="material-symbols-outlined animate-spin text-[24px] block mb-2">progress_activity</span>
+              Loading…
+            </div>
+          )}
 
-          {!loading && invoices.length === 0 && <p class="text-center text-gray-400 py-8">No usage invoices generated yet. Run "Process Renewals" to create them.</p>}
+          {!loading && invoices.length === 0 && (
+            <div className="text-center py-12 text-text-muted">
+              <span className="material-symbols-outlined text-[32px] opacity-40 block mb-2">receipt_long</span>
+              No usage invoices generated yet. Run &quot;Process Renewals&quot; to create them.
+            </div>
+          )}
 
           {invoices.map(inv => (
-            <div key={inv.id} class="bg-white rounded-lg border p-4">
-              <div class="flex items-center justify-between mb-3">
-                <div>
-                  <span class="font-semibold">{(inv.totalCents / 100).toFixed(2)} {inv.currency}</span>
-                  <span class={`ml-3 px-2 py-0.5 rounded text-xs font-medium ${inv.status === "paid" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}>{inv.status}</span>
+            <div key={inv.id} className="rounded-lg border border-border bg-surface p-5">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-lg font-display font-bold text-text-main">{(inv.totalCents / 100).toFixed(2)} <span className="text-sm text-text-muted font-normal">{inv.currency}</span></span>
+                  <StatusBadge status={inv.status} />
                 </div>
-                <div class="text-xs text-gray-500">{inv.email || inv.userId?.slice(0, 8)}</div>
+                <div className="text-xs text-text-muted font-mono">{inv.email || inv.userId?.slice(0, 8)}</div>
               </div>
-              <div class="text-xs text-gray-500 mb-2">{inv.description || `${inv.periodStart?.slice(0, 10)} — ${inv.periodEnd?.slice(0, 10)}`}</div>
+              <div className="text-xs text-text-muted mb-3">{inv.description || `${inv.periodStart?.slice(0, 10)} → ${inv.periodEnd?.slice(0, 10)}`}</div>
               {inv.lineItems?.length > 0 && (
-                <table class="w-full text-xs border-t">
-                  <thead><tr class="text-gray-500"><th class="text-left py-1 pr-2">Model</th><th class="text-right py-1 px-2">Requests</th><th class="text-right py-1 pl-2">Amount</th></tr></thead>
+                <table className="w-full text-xs border-t border-border pt-2">
+                  <thead><tr className="text-text-muted">
+                    <th className="text-left py-1.5 pr-2 font-semibold uppercase tracking-wider">Model</th>
+                    <th className="text-right py-1.5 px-2 font-semibold uppercase tracking-wider">Requests</th>
+                    <th className="text-right py-1.5 pl-2 font-semibold uppercase tracking-wider">Amount</th>
+                  </tr></thead>
                   <tbody>
                     {inv.lineItems.map(item => (
-                      <tr key={item.id}>
-                        <td class="py-1 pr-2 font-mono">{item.model}</td>
-                        <td class="text-right py-1 px-2">{item.quantity}</td>
-                        <td class="text-right py-1 pl-2">{(item.amountCents / 100).toFixed(2)}</td>
+                      <tr key={item.id} className="border-t border-border-subtle">
+                        <td className="py-1.5 pr-2 font-mono text-text-main">{item.model}</td>
+                        <td className="text-right py-1.5 px-2 text-text-muted">{item.quantity}</td>
+                        <td className="text-right py-1.5 pl-2 text-text-main font-medium">{(item.amountCents / 100).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
