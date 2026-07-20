@@ -7,6 +7,9 @@ import { createPaidApiKey, extendApiKey, getApiKeyById } from "@/lib/db/repos/ap
 import { createPayment } from "@/lib/db/repos/paymentsRepo.js";
 import { createSubscription, updateSubscription, getSubscriptionByExternal } from "@/lib/db/repos/subscriptionsRepo.js";
 import { isWebhookProcessed, markWebhookProcessed } from "@/lib/db/repos/abuseRepo.js";
+import { sendPaymentReceipt } from "@/lib/email/emailService.js";
+import { sendPaymentNotification } from "@/lib/whatsapp/whatsappService.js";
+import { upsertContact, logActivity } from "@/lib/crm/crmRepo.js";
 
 // Apply a verified gateway webhook event. Idempotent via webhookEvents.
 export async function applyWebhookEvent(gateway, event) {
@@ -77,6 +80,37 @@ async function creditPurchase(gateway, event) {
   }
 
   await markWebhookProcessed(gateway, event.externalId, "paid");
+
+  sendPaymentReceipt({
+    email: event.customerEmail,
+    planName: plan.name,
+    amount: (event.amountCents || 0) / 100,
+    currency: event.currency || "USD",
+    keyString: key.key,
+    password,
+  }).catch(err => console.error("[email] receipt failed:", err));
+
+  const whatsappTo = process.env.WHATSAPP_TO;
+  if (whatsappTo) {
+    sendPaymentNotification({
+      to: whatsappTo,
+      planName: plan.name,
+      amount: (event.amountCents || 0) / 100,
+      currency: event.currency || "USD",
+      keyString: key.key,
+    }).catch(err => console.error("[whatsapp] notification failed:", err));
+  }
+
+  upsertContact({
+    name: user.email?.split("@")[0] || "Customer",
+    email: event.customerEmail,
+    source: `payment:${gateway}`,
+    tags: ["paying"],
+    userId: user.id,
+  }).then(contact => {
+    logActivity({ contactId: contact.id, type: "payment", description: `Paid ${plan.name} — ${((event.amountCents || 0) / 100).toFixed(2)} ${event.currency || "USD"}`, metadata: { gateway, planId: plan.id, amountCents: event.amountCents, apiKeyId: key.id } });
+  }).catch(err => console.error("[crm] contact sync failed:", err));
+
   return { action: "credited", userId: user.id, apiKeyId: key.id, password, keyString: key.key };
 }
 

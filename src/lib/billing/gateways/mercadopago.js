@@ -1,11 +1,13 @@
 import crypto from "node:crypto";
 import { request as undiciRequest } from "undici";
+import { loadGatewayConfig } from "./config.js";
 
 const NAME = "mercadopago";
 
-function getEnv() {
-  const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
-  const webhook = process.env.MERCADOPAGO_WEBHOOK_SECRET;
+async function getEnv() {
+  const cfg = await loadGatewayConfig(NAME);
+  const accessToken = cfg?.accessToken || process.env.MERCADOPAGO_ACCESS_TOKEN;
+  const webhook = cfg?.webhook || process.env.MERCADOPAGO_WEBHOOK_SECRET;
   if (!accessToken) throw new Error("MERCADOPAGO_ACCESS_TOKEN not configured");
   if (!webhook) throw new Error("MERCADOPAGO_WEBHOOK_SECRET not configured");
   return { accessToken, webhook, base: "https://api.mercadopago.com" };
@@ -18,7 +20,7 @@ function encodeForm(obj) {
 }
 
 export async function createCheckout(plan, { successUrl, cancelUrl, metadata = {} }) {
-  const cfg = getEnv();
+  const cfg = await getEnv();
   const payload = {
     items: [{ title: plan.name, quantity: 1, unit_price: Number(plan.priceCents) / 100, currency_id: (plan.currency || "USD").toUpperCase() }],
     back_urls: { success: successUrl, failure: cancelUrl, pending: successUrl },
@@ -37,7 +39,7 @@ export async function createCheckout(plan, { successUrl, cancelUrl, metadata = {
 }
 
 export async function verifyWebhook(request) {
-  const cfg = getEnv();
+  const cfg = await getEnv();
   const rawBody = await request.text();
   const signature = request.headers.get("x-signature") || "";
   const ts = request.headers.get("x-request-id");

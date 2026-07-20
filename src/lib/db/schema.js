@@ -3,7 +3,7 @@
 // pre-change safety backup in migrate.js: when the stored version is lower,
 // one lightweight DB backup is taken before applying schema changes. Forgetting
 // to bump only skips that backup Ã¢â‚¬â€ it does NOT break the additive auto-sync.
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 6;
 
 export const PRAGMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -270,6 +270,14 @@ export const TABLES = {
     },
     indexes: ["CREATE UNIQUE INDEX IF NOT EXISTS idx_wh_ext ON webhookEvents(gateway, externalId)"],
   },
+  gatewayConfig: {
+    columns: {
+      gateway: "TEXT PRIMARY KEY",
+      enabled: "INTEGER DEFAULT 0",
+      data: "TEXT NOT NULL",
+      updatedAt: "TEXT NOT NULL",
+    },
+  },
   keyIpLog: {
     columns: {
       id: "TEXT PRIMARY KEY",
@@ -290,6 +298,64 @@ export const TABLES = {
       createdAt: "TEXT NOT NULL",
     },
     indexes: ["CREATE INDEX IF NOT EXISTS idx_ban_key ON banEvents(apiKeyId)"],
+  },
+  crmContacts: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      userId: "TEXT",
+      name: "TEXT NOT NULL",
+      email: "TEXT",
+      phone: "TEXT",
+      company: "TEXT",
+      tags: "TEXT DEFAULT '[]'",
+      notes: "TEXT",
+      source: "TEXT",
+      createdAt: "TEXT NOT NULL",
+      updatedAt: "TEXT NOT NULL",
+    },
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_crm_contacts_email ON crmContacts(email)"],
+  },
+  crmDeals: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      contactId: "TEXT NOT NULL",
+      title: "TEXT NOT NULL",
+      valueCents: "INTEGER DEFAULT 0",
+      currency: "TEXT DEFAULT 'USD'",
+      stage: "TEXT NOT NULL DEFAULT 'lead'",
+      source: "TEXT",
+      notes: "TEXT",
+      closedAt: "TEXT",
+      createdAt: "TEXT NOT NULL",
+      updatedAt: "TEXT NOT NULL",
+    },
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_crm_deals_contact ON crmDeals(contactId)", "CREATE INDEX IF NOT EXISTS idx_crm_deals_stage ON crmDeals(stage)"],
+  },
+  crmActivities: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      contactId: "TEXT NOT NULL",
+      dealId: "TEXT",
+      type: "TEXT NOT NULL",
+      description: "TEXT",
+      metadata: "TEXT DEFAULT '{}'",
+      createdAt: "TEXT NOT NULL",
+    },
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_crm_activities_contact ON crmActivities(contactId)"],
+  },
+  scannedKeys: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      key: "TEXT NOT NULL UNIQUE",
+      provider: "TEXT NOT NULL DEFAULT 'openai'",
+      status: "TEXT NOT NULL",
+      source: "TEXT",
+      repoUrl: "TEXT",
+      filePath: "TEXT",
+      scanDate: "TEXT NOT NULL",
+      rawResponse: "TEXT",
+    },
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_scanned_keys_status ON scannedKeys(status)", "CREATE INDEX IF NOT EXISTS idx_scanned_keys_provider ON scannedKeys(provider)"],
   },
 };
 

@@ -1,13 +1,15 @@
 import crypto from "node:crypto";
 import { request as undiciRequest } from "undici";
+import { loadGatewayConfig } from "./config.js";
 
 const NAME = "nowpayments";
 
-function getEnv() {
-  const apiKey = process.env.NOWPAYMENTS_API_KEY;
-  const ipnSecret = process.env.NOWPAYMENTS_IPN_SECRET;
-  const email = process.env.NOWPAYMENTS_EMAIL;
-  const password = process.env.NOWPAYMENTS_PASSWORD;
+async function getEnv() {
+  const cfg = await loadGatewayConfig(NAME);
+  const apiKey = cfg?.apiKey || process.env.NOWPAYMENTS_API_KEY;
+  const ipnSecret = cfg?.ipnSecret || process.env.NOWPAYMENTS_IPN_SECRET;
+  const email = cfg?.email || process.env.NOWPAYMENTS_EMAIL;
+  const password = cfg?.password || process.env.NOWPAYMENTS_PASSWORD;
   if (!apiKey || !ipnSecret) throw new Error("NOWPAYMENTS_API_KEY and NOWPAYMENTS_IPN_SECRET required");
   return { apiKey, ipnSecret, email, password, base: "https://api.nowpayments.io/v1" };
 }
@@ -28,7 +30,7 @@ async function getAuthHeader(cfg) {
 }
 
 export async function createCheckout(plan, { successUrl, cancelUrl, metadata = {} }) {
-  const cfg = getEnv();
+  const cfg = await getEnv();
   const auth = await getAuthHeader(cfg);
   const payload = {
     price_amount: Number(plan.priceCents) / 100,
@@ -51,7 +53,7 @@ export async function createCheckout(plan, { successUrl, cancelUrl, metadata = {
 }
 
 export async function verifyWebhook(request) {
-  const cfg = getEnv();
+  const cfg = await getEnv();
   const rawBody = await request.text();
   const hmac = request.headers.get("x-nowpayments-sig") || "";
   const expected = crypto.createHmac("sha512", cfg.ipnSecret).update(rawBody).digest("hex");

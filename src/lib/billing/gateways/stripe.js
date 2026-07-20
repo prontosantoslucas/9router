@@ -1,11 +1,13 @@
 import crypto from "node:crypto";
 import { request as undiciRequest } from "undici";
+import { loadGatewayConfig } from "./config.js";
 
 const NAME = "stripe";
 
-function getEnv() {
-  const secret = process.env.STRIPE_SECRET_KEY;
-  const webhook = process.env.STRIPE_WEBHOOK_SECRET;
+async function getEnv() {
+  const cfg = await loadGatewayConfig(NAME);
+  const secret = cfg?.secret || process.env.STRIPE_SECRET_KEY;
+  const webhook = cfg?.webhook || process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret) throw new Error("STRIPE_SECRET_KEY not configured");
   if (!webhook) throw new Error("STRIPE_WEBHOOK_SECRET not configured");
   return { secret, webhook, base: "https://api.stripe.com/v1" };
@@ -22,7 +24,7 @@ function encodeForm(obj) {
 }
 
 export async function createCheckout(plan, { successUrl, cancelUrl, metadata = {} }) {
-  const cfg = getEnv();
+  const cfg = await getEnv();
   const payload = {
     mode: "payment",
     "line_items[0][price_data][currency]": (plan.currency || "USD").toLowerCase(),
@@ -50,7 +52,7 @@ export async function createCheckout(plan, { successUrl, cancelUrl, metadata = {
 }
 
 export async function verifyWebhook(request) {
-  const cfg = getEnv();
+  const cfg = await getEnv();
   const signature = request.headers.get("stripe-signature") || "";
   const rawBody = await request.text();
   return verifySignature(rawBody, signature, cfg.webhook);

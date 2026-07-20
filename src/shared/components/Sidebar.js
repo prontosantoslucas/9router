@@ -23,9 +23,17 @@ const navItems = [
   // { href: "/dashboard/basic-chat", label: "Basic Chat", icon: "chat" }, // Hidden
   { href: "/dashboard/combos", label: "Combos", icon: "layers" },
   { href: "/dashboard/usage", label: "Usage", icon: "bar_chart" },
+  { href: "/dashboard/analytics", label: "Analytics", icon: "insights" },
   { href: "/dashboard/quota", label: "Quota Tracker", icon: "data_usage" },
   { href: "/dashboard/token-saver", label: "Token Saver", icon: "savings" },
+  { href: "/dashboard/crm", label: "CRM", icon: "people" },
   { href: "/dashboard/billing", label: "Billing", icon: "payments" },
+  { href: "/dashboard/billing/plans", label: "Plans", icon: "cards" },
+  { href: "/dashboard/billing/gateways", label: "Gateways", icon: "settings_ethernet" },
+  { href: "/dashboard/billing/email", label: "Email", icon: "mail" },
+  { href: "/dashboard/billing/whatsapp", label: "WhatsApp", icon: "chat" },
+  { href: "/dashboard/billing/admin", label: "Admin", icon: "admin_panel_settings" },
+  { href: "/dashboard/scanner", label: "Scanner", icon: "search" },
   // { href: "/dashboard/pxpipe", label: "PXPIPE", icon: "image" },
   { href: "/dashboard/cli-tools", label: "CLI Tools", icon: "terminal" },
 ];

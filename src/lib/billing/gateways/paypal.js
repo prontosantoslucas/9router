@@ -1,15 +1,18 @@
 import crypto from "node:crypto";
 import { request as undiciRequest } from "undici";
+import { loadGatewayConfig } from "./config.js";
 
 const NAME = "paypal";
 
-function getEnv() {
-  const clientId = process.env.PAYPAL_CLIENT_ID;
-  const secret = process.env.PAYPAL_SECRET;
-  const webhook = process.env.PAYPAL_WEBHOOK_ID;
+async function getEnv() {
+  const cfg = await loadGatewayConfig(NAME);
+  const clientId = cfg?.clientId || process.env.PAYPAL_CLIENT_ID;
+  const secret = cfg?.secret || process.env.PAYPAL_SECRET;
+  const webhookId = cfg?.webhookId || process.env.PAYPAL_WEBHOOK_ID;
+  const base = cfg?.baseUrl || process.env.PAYPAL_BASE_URL || "https://api-m.sandbox.paypal.com";
   if (!clientId || !secret) throw new Error("PAYPAL_CLIENT_ID and PAYPAL_SECRET required");
-  if (!webhook) throw new Error("PAYPAL_WEBHOOK_ID required");
-  return { clientId, secret, webhookId: webhook, base: process.env.PAYPAL_BASE_URL || "https://api-m.sandbox.paypal.com" };
+  if (!webhookId) throw new Error("PAYPAL_WEBHOOK_ID required");
+  return { clientId, secret, webhookId, base };
 }
 
 async function getAccessToken(cfg) {
@@ -24,7 +27,7 @@ async function getAccessToken(cfg) {
 }
 
 export async function createCheckout(plan, { successUrl, cancelUrl, metadata = {} }) {
-  const cfg = getEnv();
+  const cfg = await getEnv();
   const token = await getAccessToken(cfg);
   const payload = {
     intent: "CAPTURE",
@@ -48,7 +51,7 @@ export async function createCheckout(plan, { successUrl, cancelUrl, metadata = {
 }
 
 export async function verifyWebhook(request) {
-  const cfg = getEnv();
+  const cfg = await getEnv();
   const rawBody = await request.text();
   const headers = { "auth-algo": request.headers.get("paypal-auth-algo"), "cert-url": request.headers.get("paypal-cert-url"), "transmission-id": request.headers.get("paypal-transmission-id"), "transmission-sig": request.headers.get("paypal-transmission-sig"), "transmission-time": request.headers.get("paypal-transmission-time") };
   if (Object.values(headers).some(h => !h)) return { ok: false, error: "missing PayPal webhook headers" };
