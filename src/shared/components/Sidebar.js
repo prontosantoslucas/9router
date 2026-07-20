@@ -29,6 +29,8 @@ const navItems = [
   { href: "/dashboard/crm", label: "CRM", icon: "people" },
   { href: "/dashboard/billing", label: "Billing", icon: "payments" },
   { href: "/dashboard/billing/plans", label: "Plans", icon: "cards" },
+  { href: "/dashboard/billing/subscriptions", label: "Subscriptions", icon: "autorenew" },
+  { href: "/dashboard/billing/invoices", label: "Invoices", icon: "receipt" },
   { href: "/dashboard/billing/gateways", label: "Gateways", icon: "settings_ethernet" },
   { href: "/dashboard/billing/email", label: "Email", icon: "mail" },
   { href: "/dashboard/billing/whatsapp", label: "WhatsApp", icon: "chat" },

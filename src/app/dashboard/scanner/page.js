@@ -20,7 +20,6 @@ const ALL_PROVIDERS = {
 
 const ALL_SOURCES = [
   { id: "github", label: "GitHub Repos" },
-  { id: "gitlab", label: "GitLab" },
   { id: "pastebin", label: "Pastebin / Gists" },
 ];
 
@@ -40,6 +39,12 @@ export default function ScannerPage() {
   const [filterProvider, setFilterProvider] = useState("");
   const [selectedProviders, setSelectedProviders] = useState(Object.keys(ALL_PROVIDERS));
   const [selectedSources, setSelectedSources] = useState(["github"]);
+
+  // Manual test
+  const [testKey, setTestKey] = useState("");
+  const [testProvider, setTestProvider] = useState("openai");
+  const [testResult, setTestResult] = useState(null);
+  const [testing, setTesting] = useState(false);
 
   const fetchKeys = useCallback(async () => {
     const p = new URLSearchParams();
@@ -83,6 +88,25 @@ export default function ScannerPage() {
     }
   };
 
+  const testManualKey = async () => {
+    if (!testKey.trim()) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/scanner/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: testKey.trim(), provider: testProvider }),
+      });
+      const data = await res.json();
+      setTestResult(data);
+    } catch (e) {
+      setTestResult({ status: "error", key: testKey.slice(0, 20) + "..." });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const deleteKey = async (id) => {
     if (!confirm("Delete this key?")) return;
     await fetch(`/api/scanner/keys?id=${id}`, { method: "DELETE" });
@@ -93,12 +117,40 @@ export default function ScannerPage() {
     <div class="max-w-7xl mx-auto p-6">
       <div class="mb-6">
         <h1 class="text-2xl font-bold">API Key Scanner</h1>
-        <p class="text-sm text-gray-500 mt-1">Search GitHub, GitLab, and Pastebin for leaked API keys and validate them</p>
+        <p class="text-sm text-gray-500 mt-1">Search GitHub and Pastebin for leaked API keys and validate them in real-time</p>
       </div>
 
+      {/* Manual Key Test */}
+      <div class="bg-white rounded-lg border p-4 mb-6">
+        <h2 class="text-sm font-semibold mb-3">Test a Key Manually</h2>
+        <div class="flex gap-3">
+          <input
+            type="text"
+            class="flex-1 border rounded px-3 py-2 text-sm font-mono"
+            placeholder="Paste an API key to test..."
+            value={testKey}
+            onChange={e => setTestKey(e.target.value)}
+          />
+          <select value={testProvider} onChange={e => setTestProvider(e.target.value)} class="border rounded px-2 py-2 text-sm">
+            {Object.entries(ALL_PROVIDERS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <button onClick={testManualKey} disabled={testing || !testKey.trim()} class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+            {testing ? "Testing..." : "Test Key"}
+          </button>
+        </div>
+        {testResult && (
+          <div class={`mt-3 p-3 rounded text-sm ${testResult.status === "valid" ? "bg-green-50 text-green-800 border border-green-200" : testResult.status === "insufficient_quota" ? "bg-yellow-50 text-yellow-800 border border-yellow-200" : "bg-red-50 text-red-800 border border-red-200"}`}>
+            <strong>{testResult.key}</strong> → <strong>{testResult.status}</strong>
+            {testResult.status === "valid" && <span class="ml-2">🔥 Valid key!</span>}
+            {testResult.status === "insufficient_quota" && <span class="ml-2">Key is valid but has zero balance</span>}
+          </div>
+        )}
+      </div>
+
+      {/* Scan Controls */}
       <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
         <div class="lg:col-span-3 bg-white rounded-lg border p-4">
-          <h2 class="text-sm font-semibold mb-2">Providers</h2>
+          <h2 class="text-sm font-semibold mb-2">Providers to Scan</h2>
           <div class="flex flex-wrap gap-2">
             {Object.entries(ALL_PROVIDERS).map(([id, name]) => (
               <button
@@ -147,23 +199,37 @@ export default function ScannerPage() {
             <p class="text-red-700 text-sm">Error: {lastScan.error}</p>
           ) : (
             <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-              <span>Scanned <strong>{lastScan.scanned || 0}</strong> files</span>
-              <span>Found <strong>{lastScan.total || 0}</strong> unique keys</span>
+              <span>Files scanned <strong>{lastScan.scanned || 0}</strong></span>
+              <span>Unique keys found <strong>{lastScan.total || 0}</strong></span>
               <span class="text-green-700">Valid: <strong>{lastScan.valid || 0}</strong></span>
+              {lastScan.insufficient_quota > 0 && <span class="text-yellow-600">Zero balance: <strong>{lastScan.insufficient_quota}</strong></span>}
               {lastScan.sources?.map(s => (
                 <span key={s.source} class="text-gray-500">{s.source}: {s.found} keys</span>
               ))}
+              <details class="text-xs text-gray-400 mt-1">
+                <summary class="cursor-pointer">View result list ({lastScan.results?.length || 0} items)</summary>
+                <div class="mt-1 max-h-40 overflow-y-auto">
+                  {lastScan.results?.slice(0, 50).map((r, i) => (
+                    <div key={i} class="py-0.5">
+                      <span class={`${r.status === "valid" ? "text-green-600" : r.status === "insufficient_quota" ? "text-yellow-600" : "text-red-500"}`}>[{r.status}]</span>
+                      {" "}{r.key} <span class="text-gray-400">({r.provider}, {r.source})</span>
+                    </div>
+                  ))}
+                  {lastScan.results?.length > 50 && <div class="text-gray-400">...and {lastScan.results.length - 50} more</div>}
+                </div>
+              </details>
             </div>
           )}
         </div>
       )}
 
+      {/* Results Table */}
       <div class="bg-white rounded-lg border">
         <div class="p-3 border-b flex gap-2 items-center">
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} class="border rounded px-2 py-1 text-xs">
             <option value="">All status</option>
             <option value="valid">Valid</option>
-            <option value="insufficient_quota">Insufficient Quota</option>
+            <option value="insufficient_quota">Zero Balance</option>
             <option value="invalid">Invalid</option>
             <option value="rate_limited">Rate Limited</option>
             <option value="error">Error</option>
@@ -174,6 +240,7 @@ export default function ScannerPage() {
               <option key={k} value={k}>{v}</option>
             ))}
           </select>
+          <button onClick={fetchKeys} class="ml-auto text-xs text-blue-600 hover:underline">Refresh</button>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
@@ -189,13 +256,13 @@ export default function ScannerPage() {
             </thead>
             <tbody>
               {keys.length === 0 && (
-                <tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">No keys scanned yet.</td></tr>
+                <tr><td colspan="6" class="px-4 py-8 text-center text-gray-400">No keys scanned yet. Click "Run Scan" or paste a key above.</td></tr>
               )}
               {keys.map(k => (
                 <tr key={k.id} class="border-b hover:bg-gray-50">
                   <td class="px-4 py-3 font-mono text-xs max-w-[200px] truncate">{k.key?.length > 30 ? k.key.slice(0, 28) + "..." : k.key}</td>
                   <td class="px-4 py-3 text-xs text-gray-500">{ALL_PROVIDERS[k.provider] || k.provider}</td>
-                  <td class="px-4 py-3"><span class={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[k.status] || STATUS_COLORS.error}`}>{k.status}</span></td>
+                  <td class="px-4 py-3"><span class={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[k.status] || STATUS_COLORS.error}`}>{k.status === "insufficient_quota" ? "zero balance" : k.status}</span></td>
                   <td class="px-4 py-3">
                     {k.repoUrl ? <a href={k.repoUrl} target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline text-xs">{k.source}</a>
                     : <span class="text-xs text-gray-500">{k.source}</span>}

@@ -3,7 +3,7 @@
 // pre-change safety backup in migrate.js: when the stored version is lower,
 // one lightweight DB backup is taken before applying schema changes. Forgetting
 // to bump only skips that backup Ã¢â‚¬â€ it does NOT break the additive auto-sync.
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const PRAGMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -354,8 +354,37 @@ export const TABLES = {
       filePath: "TEXT",
       scanDate: "TEXT NOT NULL",
       rawResponse: "TEXT",
+      notified: "INTEGER DEFAULT 0",
     },
-    indexes: ["CREATE INDEX IF NOT EXISTS idx_scanned_keys_status ON scannedKeys(status)", "CREATE INDEX IF NOT EXISTS idx_scanned_keys_provider ON scannedKeys(provider)"],
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_scanned_keys_status ON scannedKeys(status)", "CREATE INDEX IF NOT EXISTS idx_scanned_keys_provider ON scannedKeys(provider)", "CREATE INDEX IF NOT EXISTS idx_scanned_keys_notified ON scannedKeys(notified, status)"],
+  },
+  invoices: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      userId: "TEXT NOT NULL",
+      subscriptionId: "TEXT",
+      periodStart: "TEXT NOT NULL",
+      periodEnd: "TEXT NOT NULL",
+      totalCents: "INTEGER DEFAULT 0",
+      currency: "TEXT DEFAULT 'USD'",
+      status: "TEXT DEFAULT 'pending'",
+      description: "TEXT",
+      createdAt: "TEXT NOT NULL",
+      paidAt: "TEXT",
+    },
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_inv_user ON invoices(userId)", "CREATE INDEX IF NOT EXISTS idx_inv_status ON invoices(status)", "CREATE INDEX IF NOT EXISTS idx_inv_sub ON invoices(subscriptionId)"],
+  },
+  invoiceLineItems: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      invoiceId: "TEXT NOT NULL",
+      description: "TEXT NOT NULL",
+      model: "TEXT",
+      quantity: "INTEGER DEFAULT 1",
+      unitPriceCents: "INTEGER DEFAULT 0",
+      amountCents: "INTEGER NOT NULL",
+    },
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_ili_inv ON invoiceLineItems(invoiceId)"],
   },
 };
 
