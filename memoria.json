@@ -1,0 +1,11 @@
+{
+  "memorias": [
+    {
+      "data": "2025-06-25T17:00:00.000Z",
+      "tags": ["sistema-de-memoria", "unificacao","configuracao"],
+      "contexto": "Sistema de memoria deve ser unificado entre todas as instâncias (webchat, Telegram, etc). O objetivo é usar o GitHub como backend compartilhado para que todas as instâncias acessåm e consultem o mesmo arquivo de memória.",
+      "usuario": "lucas.farias",
+      	"assunto": "Conversa sobre a memória unificada e estrategia de implementação. Foi decido que o GitHub seria o backend. Criar arquivo memoria.json em repo compartilhado."
+    }
+  ]
+}
