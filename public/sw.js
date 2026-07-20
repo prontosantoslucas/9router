@@ -1,22 +1,40 @@
-self.addEventListener('push', function (event) {
-  if (event.data) {
-    const data = event.data.json()
-    const options = {
-      body: data.body,
-      icon: data.icon || '/icons/icon-192.svg',
-      badge: '/icons/icon-192.svg',
-      vibrate: [100, 50, 100],
-      data: {
-        dateOfArrival: Date.now(),
-        primaryKey: '2',
-      },
-    }
-    event.waitUntil(self.registration.showNotification(data.title, options))
-  }
-})
+const CACHE = "maxrouter-v1";
 
-self.addEventListener('notificationclick', function (event) {
-  console.log('Notification click received.')
-  event.notification.close()
-  event.waitUntil(clients.openWindow('/'))
-})
+self.addEventListener("install", (e) => {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (e) => {
+  e.waitUntil(
+    Promise.all([
+      self.clients.claim(),
+      caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))),
+    ])
+  );
+});
+
+self.addEventListener("fetch", (e) => {
+  const { request } = e;
+  const url = new URL(request.url);
+
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/v1/")) {
+    return;
+  }
+
+  e.respondWith(
+    (async () => {
+      const cached = await caches.match(request);
+      if (cached) return cached;
+      try {
+        const res = await fetch(request);
+        if (res.ok && res.status === 200) {
+          const clone = res.clone();
+          caches.open(CACHE).then((cache) => cache.put(request, clone));
+        }
+        return res;
+      } catch {
+        return cached || new Response("Offline", { status: 503 });
+      }
+    })()
+  );
+});
