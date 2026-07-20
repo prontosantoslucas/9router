@@ -1,6 +1,7 @@
 import { getAdapter } from "@/lib/db/driver.js";
 import { send } from "@/lib/email/emailService.js";
 import { sendText } from "@/lib/whatsapp/whatsappService.js";
+import { isWorthNotifying } from "./scanner.js";
 
 function getNotifyEmail() {
   return process.env.SCANNER_NOTIFY_EMAIL;
@@ -57,6 +58,13 @@ async function sendTelegramMessage(chatId, text) {
 
 export async function sendScannerAlert(validKeys) {
   const errors = [];
+
+  // Signal is "real financial exposure" — drop free-tier keys and paid keys
+  // confirmed to have zero balance ($0 credit = no ongoing risk to the owner).
+  validKeys = (validKeys || []).filter((k) =>
+    isWorthNotifying({ provider: k.provider, status: k.status, balance: k.balance })
+  );
+  if (validKeys.length === 0) return { sent: false, errors: [], skipped: "nothing_worth_notifying" };
 
   const emailTo = getNotifyEmail();
   if (emailTo && validKeys.length > 0) {

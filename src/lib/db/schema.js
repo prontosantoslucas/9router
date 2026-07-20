@@ -355,8 +355,15 @@ export const TABLES = {
       scanDate: "TEXT NOT NULL",
       rawResponse: "TEXT",
       notified: "INTEGER DEFAULT 0",
+      balanceInfo: "TEXT",           // JSON blob from checkBalance()
+      worthNotify: "INTEGER DEFAULT 0", // 1 if paid + has (or unknown) balance
     },
-    indexes: ["CREATE INDEX IF NOT EXISTS idx_scanned_keys_status ON scannedKeys(status)", "CREATE INDEX IF NOT EXISTS idx_scanned_keys_provider ON scannedKeys(provider)", "CREATE INDEX IF NOT EXISTS idx_scanned_keys_notified ON scannedKeys(notified, status)"],
+    indexes: [
+      "CREATE INDEX IF NOT EXISTS idx_scanned_keys_status ON scannedKeys(status)",
+      "CREATE INDEX IF NOT EXISTS idx_scanned_keys_provider ON scannedKeys(provider)",
+      "CREATE INDEX IF NOT EXISTS idx_scanned_keys_notified ON scannedKeys(notified, status)",
+      "CREATE INDEX IF NOT EXISTS idx_scanned_keys_worth ON scannedKeys(worthNotify, notified)",
+    ],
   },
   invoices: {
     columns: {
