@@ -6,6 +6,7 @@
 
 import fs from "fs";
 import path from "path";
+import { extractReasoningText } from "../translator/concerns/reasoning.js";
 
 // Create log directory for responses (Node.js only)
 export function createResponsesLogger(model, logsDir = null) {
@@ -239,6 +240,205 @@ export function createResponsesApiTransformStream(logger = null) {
     }
   };
 
+  const processParsedChunk = (parsed, controller) => {
+    // Handle error payloads from upstream (e.g. { error: { message: "..." } })
+    if (parsed.error || parsed.type === "error" || parsed.type === "response.failed") {
+      if (!state.started) {
+        state.started = true;
+        emit(controller, "response.created", {
+          type: "response.created",
+          response: {
+            id: state.responseId,
+            object: "response",
+            created_at: state.created,
+            status: "in_progress",
+            background: false,
+            error: null,
+            output: []
+          }
+        });
+      }
+
+      const errObj = parsed.error || parsed;
+      const errorMsg = typeof errObj === "string" ? errObj : (errObj.message || JSON.stringify(errObj));
+
+      emit(controller, "response.failed", {
+        type: "response.failed",
+        response: {
+          id: state.responseId,
+          object: "response",
+          created_at: state.created,
+          status: "failed",
+          error: {
+            type: errObj.type || "server_error",
+            message: errorMsg
+          }
+        }
+      });
+      sendCompleted(controller);
+      return;
+    }
+
+    if (!parsed.choices?.length) return;
+
+    const choice = parsed.choices[0];
+    const idx = choice.index || 0;
+    const delta = choice.delta || {};
+
+    // Emit initial events
+    if (!state.started) {
+      state.started = true;
+      state.responseId = parsed.id ? `resp_${parsed.id}` : state.responseId;
+
+      emit(controller, "response.created", {
+        type: "response.created",
+        response: {
+          id: state.responseId,
+          object: "response",
+          created_at: state.created,
+          status: "in_progress",
+          background: false,
+          error: null,
+          output: []
+        }
+      });
+
+      emit(controller, "response.in_progress", {
+        type: "response.in_progress",
+        response: {
+          id: state.responseId,
+          object: "response",
+          created_at: state.created,
+          status: "in_progress"
+        }
+      });
+    }
+
+    // Handle reasoning across vendor shapes (reasoning_content, reasoning, reasoning_details)
+    const reasoningText = extractReasoningText(delta);
+    if (reasoningText) {
+      startReasoning(controller, idx);
+      emitReasoningDelta(controller, reasoningText);
+    }
+
+    // Handle text content (may contain <think> tags)
+    if (delta.content) {
+      let content = delta.content;
+
+      if (content.includes("<think>")) {
+        state.inThinking = true;
+        content = content.replace("<think>", "");
+        startReasoning(controller, idx);
+      }
+
+      if (content.includes("</think>")) {
+        const parts = content.split("</think>");
+        const thinkPart = parts[0];
+        const textPart = parts.slice(1).join("</think>");
+
+        if (thinkPart) emitReasoningDelta(controller, thinkPart);
+        closeReasoning(controller);
+        state.inThinking = false;
+        content = textPart;
+      }
+
+      if (state.inThinking && content) {
+        emitReasoningDelta(controller, content);
+        return;
+      }
+
+      // Regular text content
+      if (content) {
+        if (!state.msgItemAdded[idx]) {
+          state.msgItemAdded[idx] = true;
+          const msgId = `msg_${state.responseId}_${idx}`;
+
+          emit(controller, "response.output_item.added", {
+            type: "response.output_item.added",
+            output_index: idx,
+            item: { id: msgId, type: "message", content: [], role: "assistant" }
+          });
+        }
+
+        if (!state.msgContentAdded[idx]) {
+          state.msgContentAdded[idx] = true;
+
+          emit(controller, "response.content_part.added", {
+            type: "response.content_part.added",
+            item_id: `msg_${state.responseId}_${idx}`,
+            output_index: idx,
+            content_index: 0,
+            part: { type: "output_text", annotations: [], logprobs: [], text: "" }
+          });
+        }
+
+        emit(controller, "response.output_text.delta", {
+          type: "response.output_text.delta",
+          item_id: `msg_${state.responseId}_${idx}`,
+          output_index: idx,
+          content_index: 0,
+          delta: content,
+          logprobs: []
+        });
+
+        if (!state.msgTextBuf[idx]) state.msgTextBuf[idx] = "";
+        state.msgTextBuf[idx] += content;
+      }
+    }
+
+    // Handle tool_calls
+    if (delta.tool_calls) {
+      closeMessage(controller, idx);
+
+      for (const tc of delta.tool_calls) {
+        const tcIdx = tc.index ?? 0;
+        const newCallId = tc.id;
+        const funcName = tc.function?.name;
+
+        if (funcName) state.funcNames[tcIdx] = funcName;
+
+        if (!state.funcCallIds[tcIdx] && newCallId) {
+          state.funcCallIds[tcIdx] = newCallId;
+
+          emit(controller, "response.output_item.added", {
+            type: "response.output_item.added",
+            output_index: tcIdx,
+            item: {
+              id: `fc_${newCallId}`,
+              type: "function_call",
+              arguments: "",
+              call_id: newCallId,
+              name: state.funcNames[tcIdx] || ""
+            }
+          });
+        }
+
+        if (!state.funcArgsBuf[tcIdx]) state.funcArgsBuf[tcIdx] = "";
+
+        if (tc.function?.arguments) {
+          const refCallId = state.funcCallIds[tcIdx] || newCallId;
+          if (refCallId) {
+            emit(controller, "response.function_call_arguments.delta", {
+              type: "response.function_call_arguments.delta",
+              item_id: `fc_${refCallId}`,
+              output_index: tcIdx,
+              delta: tc.function.arguments
+            });
+          }
+          state.funcArgsBuf[tcIdx] += tc.function.arguments;
+        }
+      }
+    }
+
+    // Handle finish_reason
+    if (choice.finish_reason) {
+      for (const i in state.msgItemAdded) closeMessage(controller, i);
+      closeReasoning(controller);
+      for (const i in state.funcCallIds) closeToolCall(controller, i);
+      sendCompleted(controller);
+    }
+  };
+
   return new TransformStream({
     transform(chunk, controller) {
       const text = new TextDecoder().decode(chunk);
@@ -264,176 +464,34 @@ export function createResponsesApiTransformStream(logger = null) {
           continue;
         }
 
-        if (!parsed.choices?.length) continue;
-        
-        const choice = parsed.choices[0];
-        const idx = choice.index || 0;
-        const delta = choice.delta || {};
-
-        // Emit initial events
-        if (!state.started) {
-          state.started = true;
-          state.responseId = parsed.id ? `resp_${parsed.id}` : state.responseId;
-          
-          emit(controller, "response.created", {
-            type: "response.created",
-            response: {
-              id: state.responseId,
-              object: "response",
-              created_at: state.created,
-              status: "in_progress",
-              background: false,
-              error: null,
-              output: []
-            }
-          });
-
-          emit(controller, "response.in_progress", {
-            type: "response.in_progress",
-            response: {
-              id: state.responseId,
-              object: "response",
-              created_at: state.created,
-              status: "in_progress"
-            }
-          });
-        }
-
-        // Handle reasoning_content (OpenAI native format)
-        if (delta.reasoning_content) {
-          startReasoning(controller, idx);
-          emitReasoningDelta(controller, delta.reasoning_content);
-        }
-
-        // Handle text content (may contain <think> tags)
-        if (delta.content) {
-          let content = delta.content;
-
-          if (content.includes("<think>")) {
-            state.inThinking = true;
-            content = content.replace("<think>", "");
-            startReasoning(controller, idx);
-          }
-
-          if (content.includes("</think>")) {
-            const parts = content.split("</think>");
-            const thinkPart = parts[0];
-            const textPart = parts.slice(1).join("</think>");
-            
-            if (thinkPart) emitReasoningDelta(controller, thinkPart);
-            closeReasoning(controller);
-            state.inThinking = false;
-            content = textPart;
-          }
-
-          if (state.inThinking && content) {
-            emitReasoningDelta(controller, content);
-            continue;
-          }
-
-          // Regular text content
-          if (content) {
-            if (!state.msgItemAdded[idx]) {
-              state.msgItemAdded[idx] = true;
-              const msgId = `msg_${state.responseId}_${idx}`;
-              
-              emit(controller, "response.output_item.added", {
-                type: "response.output_item.added",
-                output_index: idx,
-                item: { id: msgId, type: "message", content: [], role: "assistant" }
-              });
-            }
-
-            if (!state.msgContentAdded[idx]) {
-              state.msgContentAdded[idx] = true;
-              
-              emit(controller, "response.content_part.added", {
-                type: "response.content_part.added",
-                item_id: `msg_${state.responseId}_${idx}`,
-                output_index: idx,
-                content_index: 0,
-                part: { type: "output_text", annotations: [], logprobs: [], text: "" }
-              });
-            }
-
-            emit(controller, "response.output_text.delta", {
-              type: "response.output_text.delta",
-              item_id: `msg_${state.responseId}_${idx}`,
-              output_index: idx,
-              content_index: 0,
-              delta: content,
-              logprobs: []
-            });
-
-            if (!state.msgTextBuf[idx]) state.msgTextBuf[idx] = "";
-            state.msgTextBuf[idx] += content;
-          }
-        }
-
-        // Handle tool_calls
-        if (delta.tool_calls) {
-          closeMessage(controller, idx);
-
-          for (const tc of delta.tool_calls) {
-            const tcIdx = tc.index ?? 0;
-            const newCallId = tc.id;
-            const funcName = tc.function?.name;
-
-            if (funcName) state.funcNames[tcIdx] = funcName;
-
-            if (!state.funcCallIds[tcIdx] && newCallId) {
-              state.funcCallIds[tcIdx] = newCallId;
-              
-              emit(controller, "response.output_item.added", {
-                type: "response.output_item.added",
-                output_index: tcIdx,
-                item: {
-                  id: `fc_${newCallId}`,
-                  type: "function_call",
-                  arguments: "",
-                  call_id: newCallId,
-                  name: state.funcNames[tcIdx] || ""
-                }
-              });
-            }
-
-            if (!state.funcArgsBuf[tcIdx]) state.funcArgsBuf[tcIdx] = "";
-
-            if (tc.function?.arguments) {
-              const refCallId = state.funcCallIds[tcIdx] || newCallId;
-              if (refCallId) {
-                emit(controller, "response.function_call_arguments.delta", {
-                  type: "response.function_call_arguments.delta",
-                  item_id: `fc_${refCallId}`,
-                  output_index: tcIdx,
-                  delta: tc.function.arguments
-                });
-              }
-              state.funcArgsBuf[tcIdx] += tc.function.arguments;
-            }
-          }
-        }
-
-        // Handle finish_reason
-        if (choice.finish_reason) {
-          for (const i in state.msgItemAdded) closeMessage(controller, i);
-          closeReasoning(controller);
-          for (const i in state.funcCallIds) closeToolCall(controller, i);
-          sendCompleted(controller);
-        }
+        processParsedChunk(parsed, controller);
       }
     },
 
     flush(controller) {
+      if (state.buffer.trim()) {
+        const remainingMsgs = state.buffer.split("\n\n");
+        state.buffer = "";
+        for (const msg of remainingMsgs) {
+          if (!msg.trim()) continue;
+          const dataMatch = msg.match(/^data:\s*(.+)$/m);
+          if (!dataMatch) continue;
+          const dataStr = dataMatch[1].trim();
+          if (dataStr === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(dataStr);
+            processParsedChunk(parsed, controller);
+          } catch {}
+        }
+      }
+
       for (const i in state.msgItemAdded) closeMessage(controller, i);
       closeReasoning(controller);
       for (const i in state.funcCallIds) closeToolCall(controller, i);
       sendCompleted(controller);
-
-      logger?.logOutput("data: [DONE]");
-      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       logger?.flush();
     }
   });
+}
 }
 

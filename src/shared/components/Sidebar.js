@@ -27,6 +27,11 @@ const navItems = [
   { href: "/dashboard/cli-tools", label: "CLI Tools", icon: "terminal" },
 ];
 
+const lucasItems = [
+  { href: "/chat", label: "Chat do Lucas", icon: "forum", highlight: true },
+  { href: "/dashboard2", label: "Painel do Lucas", icon: "smart_toy", highlight: true },
+];
+
 const systemItems = [
   { href: "/dashboard/proxy-pools", label: "Proxy Pools", icon: "lan" },
   { href: "/dashboard/skills", label: "Skills", icon: "extension" },
@@ -127,6 +132,32 @@ export default function Sidebar({ onClose }) {
               <span className="text-[13px]">{item.label}</span>
             </Link>
           ))}
+
+          {/* Agente Lucas Section */}
+          <div className="pt-3 mt-2 space-y-0.5 border-t border-border">
+            <p className="px-3 pb-1 text-[10px] font-bold text-amber-500 uppercase tracking-[0.15em] flex items-center gap-1">
+              <span className="material-symbols-outlined text-[12px]">smart_toy</span>
+              <span>Agente Lucas</span>
+            </p>
+            {lucasItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onClose}
+                className={cn(
+                  "flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-all duration-150 group font-semibold",
+                  isActive(item.href)
+                    ? "bg-amber-500 text-white shadow-soft"
+                    : "text-amber-500 hover:bg-amber-500/10 dark:text-amber-400"
+                )}
+              >
+                <span className="material-symbols-outlined text-[18px] text-amber-500 dark:text-amber-400 group-hover:scale-110 transition-transform">
+                  {item.icon}
+                </span>
+                <span className="text-[13px]">{item.label}</span>
+              </Link>
+            ))}
+          </div>
 
           {/* System section */}
           <div className="pt-4 mt-3 space-y-0.5 border-t border-border">

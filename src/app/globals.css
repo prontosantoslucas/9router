@@ -43,6 +43,12 @@
   --color-accent: var(--color-brand-500);
   --color-accent-secondary: #0891b2;
 
+  --color-chat-user-bg: #f59e0b;
+  --color-chat-user-text: #ffffff;
+  --color-chat-assistant-bg: #ffffff;
+  --color-chat-code-bg: #1e1e1e;
+  --color-drop-overlay: rgba(245, 158, 11, 0.15);
+
   --radius-brand: 4px;
   --radius-brand-lg: 8px;
 
@@ -95,6 +101,12 @@
 
   --color-accent: #f59e0b;
   --color-accent-secondary: #22d3ee;
+
+  --color-chat-user-bg: #d97706;
+  --color-chat-user-text: #ffffff;
+  --color-chat-assistant-bg: #1f1c18;
+  --color-chat-code-bg: #14120f;
+  --color-drop-overlay: rgba(245, 158, 11, 0.25);
 
   --shadow-soft: 0 1px 2px 0 rgba(0,0,0,0.3);
   --shadow-warm: 0 2px 12px -2px rgba(245, 158, 11, 0.15);

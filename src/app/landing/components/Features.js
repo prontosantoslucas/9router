@@ -1,128 +1,69 @@
 "use client";
 
-const FEATURES = [
-  { 
-    icon: "link", 
-    title: "Unified Endpoint", 
-    desc: "Access all providers via a single standard API URL.", 
-    colors: {
-      border: "hover:border-blue-500/50",
-      bg: "hover:bg-blue-500/5",
-      iconBg: "bg-blue-500/10",
-      iconText: "text-blue-500",
-      titleHover: "group-hover:text-blue-400"
-    }
-  },
-  { 
-    icon: "bolt", 
-    title: "Easy Setup", 
-    desc: "Get up and running in minutes with npx command.", 
-    colors: {
-      border: "hover:border-orange-500/50",
-      bg: "hover:bg-orange-500/5",
-      iconBg: "bg-orange-500/10",
-      iconText: "text-orange-500",
-      titleHover: "group-hover:text-orange-400"
-    }
-  },
-  { 
-    icon: "shield_with_heart", 
-    title: "Model Fallback", 
-    desc: "Automatically switch providers on failure or high latency.", 
-    colors: {
-      border: "hover:border-rose-500/50",
-      bg: "hover:bg-rose-500/5",
-      iconBg: "bg-rose-500/10",
-      iconText: "text-rose-500",
-      titleHover: "group-hover:text-rose-400"
-    }
-  },
-  { 
-    icon: "monitoring", 
-    title: "Usage Tracking", 
-    desc: "Detailed analytics and cost monitoring across all models.", 
-    colors: {
-      border: "hover:border-purple-500/50",
-      bg: "hover:bg-purple-500/5",
-      iconBg: "bg-purple-500/10",
-      iconText: "text-purple-500",
-      titleHover: "group-hover:text-purple-400"
-    }
-  },
-  { 
-    icon: "key", 
-    title: "OAuth & API Keys", 
-    desc: "Securely manage credentials in one vault.", 
-    colors: {
-      border: "hover:border-amber-500/50",
-      bg: "hover:bg-amber-500/5",
-      iconBg: "bg-amber-500/10",
-      iconText: "text-amber-500",
-      titleHover: "group-hover:text-amber-400"
-    }
-  },
-  { 
-    icon: "cloud_sync", 
-    title: "Cloud Sync", 
-    desc: "Sync your configurations across devices instantly.", 
-    colors: {
-      border: "hover:border-sky-500/50",
-      bg: "hover:bg-sky-500/5",
-      iconBg: "bg-sky-500/10",
-      iconText: "text-sky-500",
-      titleHover: "group-hover:text-sky-400"
-    }
-  },
-  { 
-    icon: "terminal", 
-    title: "CLI Support", 
-    desc: "Works with Claude Code, Codex, Cline, Cursor, and more.", 
-    colors: {
-      border: "hover:border-emerald-500/50",
-      bg: "hover:bg-emerald-500/5",
-      iconBg: "bg-emerald-500/10",
-      iconText: "text-emerald-500",
-      titleHover: "group-hover:text-emerald-400"
-    }
-  },
-  { 
-    icon: "dashboard", 
-    title: "Dashboard", 
-    desc: "Visual dashboard for real-time traffic analysis.", 
-    colors: {
-      border: "hover:border-fuchsia-500/50",
-      bg: "hover:bg-fuchsia-500/5",
-      iconBg: "bg-fuchsia-500/10",
-      iconText: "text-fuchsia-500",
-      titleHover: "group-hover:text-fuchsia-400"
-    }
-  },
-];
-
 export default function Features() {
+  const featuresList = [
+    {
+      title: "Gateway OpenAI-Compatible",
+      desc: "Um único endpoint para Claude Code, OpenAI Codex, Gemini, Groq e modelos locais com rotação de chaves e fallback.",
+      icon: "dns",
+    },
+    {
+      title: "Telegram Userbot (MTProto)",
+      desc: "O Lucas responde no Telegram pela sua conta pessoal sem o selo de bot, atuando diretamente em chats privados.",
+      icon: "send",
+    },
+    {
+      title: "WhatsApp via Evolution API",
+      desc: "Atendimento automático e inteligente no WhatsApp com pareamento simples por QR Code no painel.",
+      icon: "chat",
+    },
+    {
+      title: "Memória Obrigatória ai-memory",
+      desc: "Engine de memória de longo prazo baseada em wiki markdown e busca semântica para retenção de contexto.",
+      icon: "psychology",
+    },
+    {
+      title: "Personalidade via GitHub",
+      desc: "Sincronização dinâmica de instruções de conduta a partir de um documento .md público ou privado no GitHub.",
+      icon: "code",
+    },
+    {
+      title: "Modo Co-Piloto (Human-in-the-Loop)",
+      desc: "Rascunhos de resposta gerados para você aprovar ou editar em 1-clique antes do envio final.",
+      icon: "verified_user",
+    },
+    {
+      title: "Áudio STT & TTS",
+      desc: "Transcrição automática de notas de voz recebidas e síntese de voz realista para respostas em áudio.",
+      icon: "record_voice_over",
+    },
+    {
+      title: "Daily Executive Briefing",
+      desc: "Relatório diário matinal às 8h compilando compromissos do Google Calendar, e-mails do Gmail e pendências.",
+      icon: "free_breakfast",
+    },
+  ];
+
   return (
-    <section className="py-24 px-6" id="features">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Powerful Features</h2>
-          <p className="text-gray-400 max-w-xl text-lg">
-            Everything you need to manage your AI infrastructure in one place, built for scale.
+    <section id="features" className="py-24 px-6 relative bg-bg">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-text-main">Recursos de Classe Executiva</h2>
+          <p className="text-base text-text-muted">
+            Tudo o que você precisa para gerenciar modelos de IA e automatizar seu atendimento em um só lugar.
           </p>
         </div>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {FEATURES.map((feature) => (
-            <div 
-              key={feature.title}
-              className={`p-6 rounded-xl bg-[#23180f] border border-[#3a2f27] ${feature.colors.border} ${feature.colors.bg} transition-all duration-300 group`}
-            >
-              <div className={`w-10 h-10 rounded-lg ${feature.colors.iconBg} flex items-center justify-center mb-4 ${feature.colors.iconText} group-hover:scale-110 transition-transform duration-300`}>
-                <span className="material-symbols-outlined">{feature.icon}</span>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {featuresList.map((f, i) => (
+            <div key={i} className="card-soft p-6 border border-border flex flex-col justify-between hover:border-brand-500/50 transition-all">
+              <div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-500/10 text-brand-500 mb-4">
+                  <span className="material-symbols-outlined text-2xl">{f.icon}</span>
+                </div>
+                <h3 className="font-bold text-base text-text-main mb-2">{f.title}</h3>
+                <p className="text-xs text-text-muted leading-relaxed">{f.desc}</p>
               </div>
-              <h3 className={`text-lg font-bold mb-2 ${feature.colors.titleHover} transition-colors`}>
-                {feature.title}
-              </h3>
-              <p className="text-sm text-gray-400 leading-relaxed">{feature.desc}</p>
             </div>
           ))}
         </div>
@@ -130,4 +71,3 @@ export default function Features() {
     </section>
   );
 }
-

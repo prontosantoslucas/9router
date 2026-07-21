@@ -42,6 +42,18 @@ const ALWAYS_PROTECTED = [
   "/api/version/update",
   "/api/oauth/cursor/auto-import",
   "/api/oauth/kiro/auto-import",
+  "/dashboard2",
+  "/chat",
+  "/api/agent",
+];
+
+// Rotas legadas/internas do agente que devem retornar 404 estrito no Maxrouter
+const BLOCKED_AGENT_LEGACY_PATHS = [
+  "/agent",
+  "/send",
+  "/schedule",
+  "/cache",
+  "/sync-superbrain",
 ];
 
 // Require auth, but allow through if requireLogin is disabled
@@ -182,6 +194,11 @@ export const __test__ = {
 
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
+
+  // Bloqueio de rotas legadas do agente que foram desativadas
+  if (BLOCKED_AGENT_LEGACY_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    return NextResponse.json({ error: "Not Found" }, { status: 404 });
+  }
 
   // Local-only gate for spawn-capable / host-secret routes.
   if (LOCAL_ONLY_PATHS.some((p) => pathname.startsWith(p))) {

@@ -73,10 +73,15 @@ const readConfig = async () => {
   }
 };
 
-// Check if config has 9Router settings
+// Check if config has MaxRouter/9Router settings
 const has9RouterConfig = (config) => {
   if (!config) return false;
-  return config.includes("model_provider = \"9router\"") || config.includes("[model_providers.9router]");
+  return (
+    config.includes('model_provider = "maxrouter"') ||
+    config.includes('model_provider = "9router"') ||
+    config.includes("[model_providers.maxrouter]") ||
+    config.includes("[model_providers.9router]")
+  );
 };
 
 // GET - Check codex CLI and read current settings
@@ -106,7 +111,7 @@ export async function GET() {
   }
 }
 
-// POST - Update 9Router settings (merge with existing config)
+// POST - Update MaxRouter/9Router settings (merge with existing config)
 export async function POST(request) {
   try {
     const { baseUrl, apiKey, model, subagentModel } = await request.json();
@@ -128,16 +133,26 @@ export async function POST(request) {
       parsed = parsedToWritable(parseTOML(existingConfig));
     } catch { /* No existing config */ }
 
-    // Update only 9Router related fields (api_key goes to auth.json, not config.toml)
+    // Set model_provider to maxrouter
     parsed.model = model;
-    parsed.model_provider = "9router";
+    parsed.model_provider = "maxrouter";
 
-    // Update or create 9router provider section (no api_key - Codex reads from auth.json)
     // Ensure /v1 suffix is added only once
     const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
-    setNestedSection(parsed, "model_providers.9router", {
-      name: "9Router",
+    setNestedSection(parsed, "model_providers.maxrouter", {
+      name: "MaxRouter",
       base_url: normalizedBaseUrl,
+      api_key: apiKey,
+      requires_openai_auth: false,
+      wire_api: "responses",
+    });
+
+    // Also write 9router provider section for backward compatibility
+    setNestedSection(parsed, "model_providers.9router", {
+      name: "MaxRouter",
+      base_url: normalizedBaseUrl,
+      api_key: apiKey,
+      requires_openai_auth: false,
       wire_api: "responses",
     });
 
@@ -166,7 +181,7 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      message: "Codex settings applied successfully!",
+      message: "Codex settings applied successfully for MaxRouter!",
       configPath,
     });
   } catch (error) {
@@ -175,7 +190,7 @@ export async function POST(request) {
   }
 }
 
-// DELETE - Remove 9Router settings only (keep other settings)
+// DELETE - Remove MaxRouter/9Router settings only (keep other settings)
 export async function DELETE() {
   try {
     const configPath = getCodexConfigPath();
@@ -195,13 +210,14 @@ export async function DELETE() {
       throw error;
     }
 
-    // Remove 9Router related root fields only if they point to 9router
-    if (parsed.model_provider === "9router") {
+    // Remove provider related root fields only if they point to maxrouter or 9router
+    if (parsed.model_provider === "9router" || parsed.model_provider === "maxrouter") {
       delete parsed.model;
       delete parsed.model_provider;
     }
 
-    // Remove 9router provider section
+    // Remove maxrouter & 9router provider sections
+    deleteNestedSection(parsed, "model_providers.maxrouter");
     deleteNestedSection(parsed, "model_providers.9router");
 
     // Remove subagent configuration

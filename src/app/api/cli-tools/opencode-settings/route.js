@@ -128,13 +128,24 @@ export async function POST(request) {
       apiKey: keyToUse,
     };
 
-    // Ensure models map exists
-    existingProvider.models = existingProvider.models || {};
+    const DEFAULT_VALID_MODELS = [
+      "auto",
+      "big-pickle",
+      "deepseek-v4-flash-free",
+      "mimo-v2.5-free",
+      "hy3-free",
+      "nemotron-3-ultra-free",
+      "north-mini-code-free"
+    ];
 
-    // Add or update entries for all requested models
-    for (const m of modelsArray) {
+    const finalModelsList = Array.from(new Set([...DEFAULT_VALID_MODELS, ...modelsArray]));
+
+    // Re-create models map with valid models and friendly names
+    existingProvider.models = {};
+    for (const m of finalModelsList) {
       if (!m || typeof m !== "string") continue;
-      existingProvider.models[m] = { name: m, modalities: { input: ["text", "image"], output: ["text"] } };
+      const displayName = m === "auto" ? "auto (router gerencia fallback)" : m;
+      existingProvider.models[m] = { name: displayName, modalities: { input: ["text", "image"], output: ["text"] } };
     }
 
     // Save merged provider back

@@ -1,0 +1,26 @@
+{
+  "name": "9router-agent",
+  "version": "1.0.0",
+  "description": "Smart AI Agent proxy with multi-model fallback via 9router",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "postinstall": "git submodule update --init --recursive 2>nul || echo Submodule init ignorado",
+    "build:sidecar": "node -e \"const fs=require('fs'),cp=require('child_process');const p='9router'+require('path').sep+'cli';if(!fs.existsSync(p)){console.log('submodule 9router nao encontrado');return}if(!process.env.SIDECAR_ENABLED){console.log('SIDECAR_ENABLED=false, pulando build sidecar');return}console.log('Buildando sidecar 9Router...');cp.execSync('npm install && npm run build',{cwd:'9router',stdio:'inherit'})\"",
+    "build": "npm run build:sidecar"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mammoth": "^1.12.0",
+    "openai": "^4.80.0",
+    "pdf-parse": "^2.4.5",
+    "telegraf": "^4.16.3",
+    "telegram": "^2.26.15",
+    "uuid": "^11.1.0",
+    "xlsx": "^0.18.5"
+  }
+}

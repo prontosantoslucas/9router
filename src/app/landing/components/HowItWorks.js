@@ -1,66 +1,58 @@
 "use client";
 
 export default function HowItWorks() {
+  const steps = [
+    {
+      num: "01",
+      title: "Conecte seus Provedores & Gateway",
+      desc: "Cadastre suas chaves de IA (Gemini, Claude, OpenAI) no 9Router e use uma única URL OpenAI-compatible.",
+      icon: "hub",
+    },
+    {
+      num: "02",
+      title: "Personalize o Agente Lucas",
+      desc: "Cole a URL de um documento Markdown no GitHub (público ou privado) para definir as regras e personalidade do Lucas.",
+      icon: "tune",
+    },
+    {
+      num: "03",
+      title: "Conecte WhatsApp & Telegram",
+      desc: "Pareie seu WhatsApp via QR Code (Evolution API) e conecte sua conta pessoal no Telegram via Userbot MTProto.",
+      icon: "devices",
+    },
+    {
+      num: "04",
+      title: "Atendimento & Memória Contínua",
+      desc: "O Lucas atende autonomamente com busca semântica no ai-memory, áudio STT/TTS e aprovação no Modo Co-Piloto.",
+      icon: "psychology",
+    },
+  ];
+
   return (
-    <section className="py-24 border-y border-[#3a2f27] bg-[#23180f]/30" id="how-it-works">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">How MaxRouter Works</h2>
-          <p className="text-gray-400 max-w-xl text-lg">
-            Data flows seamlessly from your application through our intelligent routing layer to the best provider for the job.
+    <section id="how-it-works" className="py-24 px-6 relative border-t border-border/40 bg-hero-gradient">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-text-main">Como Funciona</h2>
+          <p className="text-base text-text-muted">
+            Da orquestração de LLMs ao atendimento automático em menos de 5 minutos.
           </p>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
-          {/* Connection line */}
-          <div className="hidden md:block absolute top-12 left-[16%] right-[16%] h-[2px] bg-linear-to-r from-gray-700 via-[#f97815] to-gray-700 -z-10"></div>
-          
-          {/* Step 1: CLI & SDKs */}
-          <div className="flex flex-col gap-6 relative group">
-            <div className="w-24 h-24 rounded-2xl bg-[#181411] border border-[#3a2f27] flex items-center justify-center shadow-xl group-hover:border-gray-500 transition-colors z-10 mx-auto md:mx-0">
-              <span className="material-symbols-outlined text-4xl text-gray-300">terminal</span>
-            </div>
-            <div>
-              <h3 className="text-xl font-bold mb-2">1. CLI &amp; SDKs</h3>
-              <p className="text-sm text-gray-400">
-                Your requests start from your favorite tools or our unified SDK. Just change the base URL.
-              </p>
-            </div>
-          </div>
 
-          {/* Step 2: MaxRouter Hub */}
-          <div className="flex flex-col gap-6 relative group md:items-center md:text-center">
-            <div className="w-24 h-24 rounded-2xl bg-[#181411] border-2 border-[#f97815] flex items-center justify-center shadow-[0_0_30px_rgba(249,120,21,0.2)] z-10 mx-auto">
-              <span className="material-symbols-outlined text-4xl text-[#f97815] animate-pulse">hub</span>
-            </div>
-            <div>
-              <h3 className="text-xl font-bold mb-2 text-[#f97815]">2. MaxRouter Hub</h3>
-              <p className="text-sm text-gray-400">
-                Our engine analyzes the prompt, checks provider health, and routes for lowest latency or cost.
-              </p>
-            </div>
-          </div>
-
-          {/* Step 3: AI Providers */}
-          <div className="flex flex-col gap-6 relative group md:items-end md:text-right">
-            <div className="w-24 h-24 rounded-2xl bg-[#181411] border border-[#3a2f27] flex items-center justify-center shadow-xl group-hover:border-gray-500 transition-colors z-10 mx-auto md:mx-0">
-              <div className="grid grid-cols-2 gap-2">
-                <div className="w-6 h-6 rounded bg-white/10"></div>
-                <div className="w-6 h-6 rounded bg-white/10"></div>
-                <div className="w-6 h-6 rounded bg-white/10"></div>
-                <div className="w-6 h-6 rounded bg-white/10"></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {steps.map((step) => (
+            <div key={step.num} className="card-soft p-6 border border-border relative flex flex-col justify-between hover:border-brand-500/50 transition-all">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-2xl font-black text-brand-500">{step.num}</span>
+                  <span className="material-symbols-outlined text-text-muted text-2xl">{step.icon}</span>
+                </div>
+                <h3 className="font-bold text-base text-text-main mb-2">{step.title}</h3>
+                <p className="text-xs text-text-muted leading-relaxed">{step.desc}</p>
               </div>
             </div>
-            <div>
-              <h3 className="text-xl font-bold mb-2">3. AI Providers</h3>
-              <p className="text-sm text-gray-400">
-                The request is fulfilled by OpenAI, Anthropic, Gemini, or others instantly.
-              </p>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
     </section>
   );
 }
-

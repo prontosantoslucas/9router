@@ -234,6 +234,13 @@ export async function buildModelsList(kindFilter) {
     }
   }
 
+  // Include no-auth providers (e.g. opencode, mimo-free) which are always available
+  for (const [providerId, providerInfo] of Object.entries(AI_PROVIDERS)) {
+    if (providerInfo?.noAuth && !activeConnectionByProvider.has(providerId)) {
+      activeConnectionByProvider.set(providerId, { provider: providerId, isActive: true });
+    }
+  }
+
   const models = [];
 
   // Combos first (filtered by kind). Web combos expose `kind` so AI knows search vs fetch.

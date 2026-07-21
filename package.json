@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "description": "MaxRouter web dashboard",
   "private": true,
+  "workspaces": [
+    "apps/agent"
+  ],
   "scripts": {
     "dev": "next dev --port 20127",
+    "agent": "npm --prefix apps/agent start",
     "dev:webpack": "next dev --webpack --port 20127",
     "build": "next build --webpack",
     "start": "next start --port 20127",

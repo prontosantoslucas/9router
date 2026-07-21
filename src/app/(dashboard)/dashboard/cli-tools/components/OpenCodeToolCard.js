@@ -50,11 +50,24 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
 
   // Sync models from existing config
   useEffect(() => {
-    if (status?.opencode?.models) {
-      setSelectedModels(status.opencode.models);
+    const defaultValidModels = [
+      "auto",
+      "big-pickle",
+      "deepseek-v4-flash-free",
+      "mimo-v2.5-free",
+      "hy3-free",
+      "nemotron-3-ultra-free",
+      "north-mini-code-free"
+    ];
+    if (Array.isArray(status?.opencode?.models) && status.opencode.models.length > 0) {
+      setSelectedModels(Array.from(new Set([...status.opencode.models, ...defaultValidModels])));
+    } else {
+      setSelectedModels(defaultValidModels);
     }
     if (status?.opencode?.activeModel) {
       setActiveModel(status.opencode.activeModel);
+    } else if (!activeModel) {
+      setActiveModel("auto");
     }
 
     // Parse subagent settings from agent.explorer if exists
@@ -186,13 +199,23 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
       ? selectedApiKey
       : (!cloudEnabled ? "sk_9router" : "<API_KEY_FROM_DASHBOARD>");
 
-    const modelsToShow = selectedModels.length > 0 ? selectedModels : ["provider/model-id"];
-    const activeModelToShow = activeModel || selectedModels[0] || modelsToShow[0];
+    const defaultValidModels = [
+      "auto",
+      "big-pickle",
+      "deepseek-v4-flash-free",
+      "mimo-v2.5-free",
+      "hy3-free",
+      "nemotron-3-ultra-free",
+      "north-mini-code-free"
+    ];
+    const modelsToShow = Array.from(new Set([...selectedModels, ...defaultValidModels]));
+    const activeModelToShow = activeModel || selectedModels[0] || "auto";
     const effectiveSubagentModel = subagentModel || activeModelToShow;
 
     const modelsObj = {};
     modelsToShow.forEach(m => {
-      modelsObj[m] = { name: m, modalities: { input: ["text", "image"], output: ["text"] } };
+      const displayName = m === "auto" ? "auto (router gerencia fallback)" : m;
+      modelsObj[m] = { name: displayName, modalities: { input: ["text", "image"], output: ["text"] } };
     });
 
     return [{

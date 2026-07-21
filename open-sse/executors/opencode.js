@@ -11,7 +11,13 @@ export class OpenCodeExecutor extends BaseExecutor {
   }
 
   transformRequest(model, body) {
-    return injectReasoningContent({ provider: this.provider, model, body });
+    let effectiveModel = model;
+    let effectiveBody = body;
+    if (effectiveModel === "auto" || body?.model === "auto") {
+      effectiveModel = "deepseek-v4-flash-free";
+      if (effectiveBody) effectiveBody = { ...effectiveBody, model: "deepseek-v4-flash-free" };
+    }
+    return injectReasoningContent({ provider: this.provider, model: effectiveModel, body: effectiveBody }) || effectiveBody;
   }
 
   buildUrl(model) {

@@ -1,4 +1,4 @@
-import { DM_Sans, Outfit } from "next/font/google";
+import { DM_Sans, Outfit, JetBrains_Mono } from "next/font/google";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import "material-symbols/outlined.css";
 import "./globals.css";
@@ -20,6 +20,12 @@ const dmSans = DM_Sans({
 const outfit = Outfit({
   subsets: ["latin"],
   variable: "--font-outfit",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
   display: "swap",
 });
 
@@ -49,7 +55,7 @@ export default function RootLayout({ children }) {
           }}
         />
       </head>
-      <body className={`${dmSans.variable} ${outfit.variable} font-sans antialiased`}>
+      <body className={`${dmSans.variable} ${outfit.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
         <ThemeProvider>
           <RuntimeI18nProvider>
             {children}

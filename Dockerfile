@@ -40,16 +40,15 @@ COPY --from=builder /app/node_modules/node-forge ./node_modules/node-forge
 COPY --from=builder /app/node_modules/next ./node_modules/next
 # Native libSQL/Turso binary for Alpine (not traced by Next.js standalone)
 COPY --from=builder /app/node_modules/@libsql ./node_modules/@libsql
-COPY --from=builder /app/node_modules/libsql ./node_modules/libsql
+COPY --from=builder /app/apps/agent ./apps/agent
+COPY --from=builder /app/runner-start.sh ./runner-start.sh
+RUN chmod +x ./runner-start.sh
 
-RUN mkdir -p /app/data && chown -R node:node /app && \
+RUN mkdir -p /app/data /app/data/agent && chown -R node:node /app && \
   mkdir -p /app/data-home && chown node:node /app/data-home && \
   ln -sf /app/data-home /root/.9router 2>/dev/null || true
 
 # Headroom token saver bundled by default (Python proxy, started by the app at boot).
-# Only the [proxy] extra here: it is pure-Python wheels and needs no compiler.
-# The [code] (tree-sitter) extra is installed lazily at runtime by autostart.js.
-# Non-fatal: a headroom install hiccup must never fail the image build.
 RUN apk --no-cache add python3 py3-pip && \
   (pip3 install --no-cache-dir --break-system-packages "headroom-ai[proxy]" || echo "headroom install skipped")
 
@@ -58,13 +57,7 @@ RUN apk --no-cache upgrade && apk --no-cache add su-exec && \
   printf '#!/bin/sh\nchown -R node:node /app/data /app/data-home 2>/dev/null\nexec su-exec node "$@"\n' > /entrypoint.sh && \
   chmod +x /entrypoint.sh
 
-# Persistent data (SQLite config, OAuth connections, combos) lives in /app/data.
-# Railway does NOT support the Dockerfile VOLUME instruction — attach a
-# persistent volume in the dashboard instead: Service > Volumes > mount path
-# /app/data. (Or use managed Turso: set TURSO_DATABASE_URL / TURSO_AUTH_TOKEN.)
-# On Fly/other hosts, mount a volume at /app/data likewise.
-
 EXPOSE 20128
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["node", "custom-server.js"]
+CMD ["/bin/sh", "/app/runner-start.sh"]

@@ -1,5 +1,8 @@
 import { ROLE, OPENAI_BLOCK, RESPONSES_ITEM } from "../schema/index.js";
 
+const MAX_CALL_ID_LEN = 64;
+const clampCallId = (id) => (typeof id === "string" && id.length > MAX_CALL_ID_LEN ? id.substring(0, MAX_CALL_ID_LEN) : id);
+
 /**
  * Normalize Responses API input to array format.
  * Accepts string or array, returns array of message items.
@@ -91,8 +94,9 @@ export function convertResponsesApiFormat(body) {
       }
       // Skip items with empty/missing name — upstream APIs reject nameless tool calls (#444)
       if (!item.name || typeof item.name !== "string" || item.name.trim() === "") continue;
+
       currentAssistantMsg.tool_calls.push({
-        id: item.call_id,
+        id: clampCallId(item.call_id),
         type: OPENAI_BLOCK.FUNCTION,
         function: {
           name: item.name,
@@ -109,7 +113,7 @@ export function convertResponsesApiFormat(body) {
       // Add tool result
       pendingToolResults.push({
         role: ROLE.TOOL,
-        tool_call_id: item.call_id,
+        tool_call_id: clampCallId(item.call_id),
         content: typeof item.output === "string" ? item.output : JSON.stringify(item.output)
       });
     }
