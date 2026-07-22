@@ -10,6 +10,21 @@ http.createServer = (...args) => {
   const rest = args.filter((a) => typeof a !== "function");
   if (!handler) return origCreate(...args);
   const wrapped = (req, res) => {
+    // Se for uma navegação de documento HTML no navegador (sec-fetch-dest: document ou Accept: text/html),
+    // remove os cabeçalhos RSC/prefetch para forçar o Next.js a entregar HTML completo (text/html)
+    const accept = req.headers["accept"] || "";
+    const fetchDest = req.headers["sec-fetch-dest"] || "";
+    const isDocumentNavigation =
+      fetchDest === "document" ||
+      (accept.includes("text/html") && !accept.includes("text/x-component"));
+
+    if (isDocumentNavigation) {
+      delete req.headers["rsc"];
+      delete req.headers["next-router-prefetch"];
+      delete req.headers["next-router-state-tree"];
+      delete req.headers["next-url"];
+    }
+
     const socketIp = req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : "";
     const xff = req.headers["x-forwarded-for"];
     const xRealIp = req.headers["x-real-ip"];

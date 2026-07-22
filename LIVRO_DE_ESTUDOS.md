@@ -31,12 +31,13 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 ### Capítulo 2: Renderização de Texto Puro RSC (`1:"$Sreact.fragment"...`) ao Acessar Páginas
 
 * **Por que deu esse problema (Causa Raiz)**:
-  - O Service Worker (`public/sw.js`) da versão `maxrouter-v2` capturava requisições do Next.js App Router feitas durante a navegação do cliente (que possuem cabeçalhos `_rsc` e `text/x-component`) e armazenava esse payload de texto bruto no `CacheStorage` sob a URL da página (ex: `/login`). Ao recarregar ou navegar diretamente para a URL, o Service Worker devolvia o arquivo de texto RSC gravado no cache em vez de buscar o documento HTML real.
+  1. **Cache Residual do Service Worker**: O Service Worker (`public/sw.js` em `maxrouter-v2`) capturava requisições cliente com `_rsc` / `text/x-component` e salvava esse texto puro no `CacheStorage` do navegador sob a URL `/login`.
+  2. **Injeção de Cabeçalhos RSC por Proxies de Edge**: Quando requisições de navegação direta de página passavam por proxies reversos (como CDN/Edge do Railway), cabeçalhos de prefetch (`rsc`, `next-router-prefetch`) chegavam ao servidor Node.js standalone, fazendo o Next.js App Router pre-renderizar e entregar o arquivo `.rsc` serializado em vez de renderizar a página HTML (`.html`).
 
 * **Como foi resolvido (Solução Aplicada)**:
-  1. **Public/sw.js**: Promovido o Service Worker para `maxrouter-v3` adicionando uma regra estrita que ignora totalmente qualquer requisição contendo parâmetros `_rsc` ou cabeçalhos `text/x-component`.
-  2. **Navegação HTML Direta**: Definido que requisições do tipo `navigate` (`text/html`) buscam o documento sempre diretamente da rede.
-  3. **Script de Auto-Healing no layout.js**: Injetado um script no `<head>` em `src/app/layout.js` que detecta se o navegador exibiu um payload RSC bruto (`$Sreact`), desregistra automaticamente os Service Workers corrompidos antigos, limpa o `CacheStorage` e força o recarregamento limpo do HTML.
+  1. **Higienização no custom-server.js**: Atualizado o wrapper do servidor HTTP em `custom-server.js` para detectar navegações de documentos (`sec-fetch-dest: document` ou `Accept: text/html`) e deletar os cabeçalhos `rsc`, `next-router-prefetch` e `next-router-state-tree`, forçando o Next.js a entregar HTML renderizado puro (`text/html; charset=utf-8`).
+  2. **Public/sw.js**: Promovido o Service Worker para `maxrouter-v3` ignorando requisições com `_rsc` e `text/x-component`.
+  3. **Script de Auto-Healing em layout.js**: Injetado script cliente no `<head>` em `src/app/layout.js` que detecta a presença de texto RSC (`$Sreact`), limpa o `CacheStorage`, desregistra o SW corrompido e força o recarregamento automático da página.
 
 ---
 
