@@ -34,12 +34,8 @@ COPY --from=builder /app/custom-server.js ./custom-server.js
 COPY --from=builder /app/open-sse ./open-sse
 # Next file tracing can omit sibling files; MITM runs server.js as a separate process.
 COPY --from=builder /app/src/mitm ./src/mitm
-# Standalone node_modules may omit deps only required by the MITM child process.
-COPY --from=builder /app/node_modules/node-forge ./node_modules/node-forge
-# Ensure `next` is available at runtime in case tracing did not include it.
-COPY --from=builder /app/node_modules/next ./node_modules/next
-# Native libSQL/Turso binary for Alpine (not traced by Next.js standalone)
-COPY --from=builder /app/node_modules/@libsql ./node_modules/@libsql
+# Ensure all production node_modules (including agent workspace dependencies) are available at runtime
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/agent ./apps/agent
 COPY --from=builder /app/runner-start.sh ./runner-start.sh
 RUN chmod +x ./runner-start.sh

@@ -1,42 +1,59 @@
-const cache = require("../src/cache");
-const memory = require("../src/memory");
+import { describe, it, expect, beforeEach } from "vitest";
+import cache from "../src/cache.js";
+import memory from "../src/memory.js";
+import { getHistory, clearHistory } from "../src/orchestrator.js";
 
-async function main() {
-  // Cache
-  cache.set("test", { ok: true }, 5000);
-  const v = cache.get("test");
-  if (!v || !v.ok) { console.error("FAIL: cache get/set"); process.exit(1); }
-  console.log("PASS: cache get/set");
+describe("Agente Lucas - Core Internal Services", () => {
+  beforeEach(() => {
+    cache.clear();
+  });
 
-  const stats = cache.stats();
-  if (stats.total !== 1 || stats.valid !== 1) { console.error("FAIL: cache stats"); process.exit(1); }
-  console.log("PASS: cache stats");
+  describe("Cache Service", () => {
+    it("should set and get values correctly", () => {
+      cache.set("test", { ok: true }, 5000);
+      const v = cache.get("test");
+      expect(v).toEqual({ ok: true });
+    });
 
-  cache.clear();
-  if (cache.stats().total !== 0) { console.error("FAIL: cache clear"); process.exit(1); }
-  console.log("PASS: cache clear");
+    it("should report cache stats accurately", () => {
+      cache.set("test1", { ok: true }, 5000);
+      const stats = cache.stats();
+      expect(stats.total).toBe(1);
+      expect(stats.valid).toBe(1);
+    });
 
-  // Memory
-  const initLen = memory.getState().corrections.length;
-  await memory.addCorrection("teste de correção");
-  if (memory.getState().corrections.length !== initLen + 1) { console.error("FAIL: memory addCorrection"); process.exit(1); }
-  console.log("PASS: memory addCorrection");
+    it("should clear cached entries", () => {
+      cache.set("test1", { ok: true }, 5000);
+      cache.clear();
+      expect(cache.stats().total).toBe(0);
+    });
+  });
 
-  const recent = memory.getRecentCorrections(1);
-  if (recent.length !== 1 || !recent[0].includes("teste")) { console.error("FAIL: memory getRecent"); process.exit(1); }
-  console.log("PASS: memory getRecent");
+  describe("Memory Service", () => {
+    it("should record corrections in memory state", async () => {
+      const initLen = memory.getState().corrections.length;
+      await memory.addCorrection("teste de correção");
+      expect(memory.getState().corrections.length).toBe(initLen + 1);
+    });
 
-  // Orquestrador
-  const { getHistory, clearHistory } = require("../src/orchestrator");
-  const h = getHistory("test-user");
-  if (!h || !h.msgs) { console.error("FAIL: history init"); process.exit(1); }
-  console.log("PASS: history init");
+    it("should retrieve recent corrections", () => {
+      const recent = memory.getRecentCorrections(1);
+      expect(recent.length).toBe(1);
+      expect(recent[0]).toContain("teste");
+    });
+  });
 
-  clearHistory("test-user");
-  if (getHistory("test-user").msgs.length !== 0) { console.error("FAIL: history clear"); process.exit(1); }
-  console.log("PASS: history clear");
+  describe("Orchestrator History", () => {
+    it("should initialize user chat history", () => {
+      const h = getHistory("test-user");
+      expect(h).toBeDefined();
+      expect(Array.isArray(h.msgs)).toBe(true);
+    });
 
-  console.log("\n✅ Todos os testes passaram.");
-}
-
-main().catch((e) => { console.error("FAIL:", e.message); process.exit(1); });
+    it("should clear session history", () => {
+      getHistory("test-user");
+      clearHistory("test-user");
+      expect(getHistory("test-user").msgs.length).toBe(0);
+    });
+  });
+});

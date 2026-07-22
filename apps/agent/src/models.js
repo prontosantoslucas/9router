@@ -5,7 +5,7 @@ const OPENAI = require("openai");
 
 const openai = new OPENAI({
   baseURL: ROUTER_BASE_URL,
-  apiKey: keyrotator.getKey(),
+  apiKey: keyrotator.getKey() || "dummy_internal_key",
 });
 
 const RANKING = (process.env.MODEL_RANKING || "").split(",").map((m) => m.trim()).filter(Boolean);
@@ -130,9 +130,25 @@ function getStatus() {
   };
 }
 
+function setModels(modelList) {
+  state.available = modelList.map((m) => (typeof m === "string" ? m : m.id));
+  state.capabilities = {};
+  state.exhausted.clear();
+  for (const m of modelList) {
+    if (typeof m === "object" && m.capabilities) {
+      state.capabilities[m.id] = {
+        vision: m.capabilities.vision || false,
+        reasoning: m.capabilities.reasoning || false,
+        contextWindow: m.capabilities.contextWindow || 0,
+      };
+    }
+  }
+  state.lastFetch = Date.now();
+}
+
 async function init() {
   await fetchModels();
   setInterval(fetchModels, FETCH_INTERVAL);
 }
 
-module.exports = { init, getPriorityList, markExhausted, getStatus, fetchModels, hasCapability };
+module.exports = { init, getPriorityList, markExhausted, getStatus, fetchModels, hasCapability, setModels };

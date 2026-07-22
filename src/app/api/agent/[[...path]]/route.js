@@ -10,6 +10,7 @@ const AGENT_INTERNAL_SECRET = process.env.AGENT_INTERNAL_SECRET || "default_inte
 // Endpoints públicos que não exigem auth JWT (ex.: webhook externo do WhatsApp)
 const PUBLIC_WEBHOOK_PATHS = [
   "/api/agent/webhook/evolution",
+  "/api/webhook/evolution",
 ];
 
 // Allowlist explícita dos caminhos permitidos no agente
@@ -25,14 +26,15 @@ const ALLOWED_PATHS = [
   "/api/notion/list",
   "/api/stats",
   "/api/agent/personality/github",
+  "/api/personality/github",
   "/api/agent/memory/status",
+  "/api/memory/status",
   "/api/agent/webhook/evolution",
-  "/api/agent/telegram/userbot/start-auth",
-  "/api/agent/telegram/userbot/complete-auth",
-  "/api/agent/telegram/userbot/status",
-  "/api/agent/copilot/approvals",
-  "/api/agent/copilot/approve",
-  "/api/agent/copilot/reject",
+  "/api/webhook/evolution",
+  "/api/agent/telegram/userbot/",
+  "/api/telegram/userbot/",
+  "/api/agent/copilot/",
+  "/api/copilot/",
 ];
 
 function isPathAllowed(targetPath) {

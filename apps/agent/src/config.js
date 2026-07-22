@@ -5,7 +5,7 @@ const cfg = {
   BOT_TOKEN: process.env.BOT_TOKEN || "",
   ROUTER_BASE_URL: process.env.ROUTER_BASE_URL || "http://127.0.0.1:20128/v1",
   ROUTER_API_KEY: process.env.ROUTER_API_KEY || "",
-  PORT: parseInt(process.env.PORT || process.env.AGENT_PORT) || 3717,
+  PORT: parseInt(process.env.AGENT_PORT) || 3717,
   MAX_HISTORY: parseInt(process.env.MAX_HISTORY) || 20,
   QUOTA_RETRY_SEC: parseInt(process.env.QUOTA_RETRY_SEC) || 120,
   MODEL_RANKING: (process.env.MODEL_RANKING || "").split(",").map((m) => m.trim()).filter(Boolean),

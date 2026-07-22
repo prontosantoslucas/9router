@@ -7,7 +7,16 @@ export async function GET(request) {
     const id = searchParams.get("id");
     const stage = searchParams.get("stage");
     const summary = searchParams.get("summary");
-    if (summary) return NextResponse.json({ summary: await getPipelineSummary(), stages: DEFAULT_STAGES });
+    // Bug fix (2026-07-22): quando o frontend pede ?summary=1 ele espera
+    // renderizar o Kanban COM os deals + os totais. A versão antiga só
+    // devolvia { summary, stages } e o board ficava vazio para sempre.
+    if (summary) {
+      const [deals, pipelineSummary] = await Promise.all([
+        getDeals(stage || undefined),
+        getPipelineSummary(),
+      ]);
+      return NextResponse.json({ deals, summary: pipelineSummary, stages: DEFAULT_STAGES });
+    }
     if (id) return NextResponse.json({ deal: await getDeal(id) });
     return NextResponse.json({ deals: await getDeals(stage || undefined) });
   } catch (e) { return NextResponse.json({ error: e.message }, { status: 500 }); }

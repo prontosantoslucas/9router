@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getContacts, getContact, upsertContact, deleteContact } from "@/lib/crm/crmRepo.js";
+import { getContacts, getContact, getContactByEmail, upsertContact, deleteContact } from "@/lib/crm/crmRepo.js";
 
 export async function GET(request) {
   try {
@@ -7,8 +7,9 @@ export async function GET(request) {
     const id = searchParams.get("id");
     const email = searchParams.get("email");
     if (id) return NextResponse.json({ contact: await getContact(id) });
-    if (email) return NextResponse.json({ contact: await getContact(email) });
-    return NextResponse.json({ contacts: await getContacts({ email: searchParams.get("email") || undefined }) });
+    // Bug fix: quando busca é por email, precisa usar getContactByEmail; getContact busca por id.
+    if (email) return NextResponse.json({ contact: await getContactByEmail(email) });
+    return NextResponse.json({ contacts: await getContacts() });
   } catch (e) { return NextResponse.json({ error: e.message }, { status: 500 }); }
 }
 

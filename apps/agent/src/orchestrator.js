@@ -280,4 +280,8 @@ function getHistorySize() {
   return histories.size;
 }
 
-module.exports = { getHistory, clearHistory, processMessage, isMuted, getHistorySize };
+function resetMuted() {
+  muted.clear();
+}
+
+module.exports = { getHistory, clearHistory, processMessage, isMuted, getHistorySize, resetMuted };

@@ -5,7 +5,7 @@ const metrics = require("./metrics");
 const keyrotator = require("./keyrotator");
 const OPENAI = require("openai");
 
-const client = new OPENAI({ baseURL: ROUTER_BASE_URL, apiKey: keyrotator.getKey() });
+const client = new OPENAI({ baseURL: ROUTER_BASE_URL, apiKey: keyrotator.getKey() || "dummy_internal_key" });
 
 // Semáforo: max 2 requests simultâneos para não estourar rate limit do upstream
 const MAX_CONCURRENT = 2;
