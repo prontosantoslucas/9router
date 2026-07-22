@@ -22,7 +22,25 @@ function rowToPlan(row) {
 
 export async function getPlans() {
   const db = await getAdapter();
-  return db.all(`SELECT * FROM plans ORDER BY priceCents ASC`).map(rowToPlan);
+  let rows = db.all(`SELECT * FROM plans ORDER BY priceCents ASC`);
+  if (rows.length === 0) {
+    const defaultPlans = [
+      { name: "Starter (Gratuito)", priceCents: 0, currency: "USD", durationDays: 30, tokenLimit: 100000, costLimitCents: 0, rpm: 60, isActive: 1 },
+      { name: "Pro Developer", priceCents: 2990, currency: "USD", durationDays: 30, tokenLimit: 5000000, costLimitCents: 5000, rpm: 600, isActive: 1 },
+      { name: "Enterprise AI", priceCents: 9990, currency: "USD", durationDays: 30, tokenLimit: 25000000, costLimitCents: 30000, rpm: 3000, isActive: 1 },
+      { name: "Pay-As-You-Go", priceCents: 0, currency: "USD", durationDays: 365, tokenLimit: null, costLimitCents: null, rpm: 1200, isActive: 1 }
+    ];
+    const now = new Date().toISOString();
+    for (const p of defaultPlans) {
+      const id = uuidv4();
+      db.run(
+        `INSERT INTO plans(id, name, priceCents, currency, durationDays, tokenLimit, costLimitCents, rpm, allowedCombos, isActive, createdAt, updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, p.name, p.priceCents, p.currency, p.durationDays, p.tokenLimit, p.costLimitCents, p.rpm, null, p.isActive, now, now]
+      );
+    }
+    rows = db.all(`SELECT * FROM plans ORDER BY priceCents ASC`);
+  }
+  return rows.map(rowToPlan);
 }
 
 export async function getPlanById(id) {
