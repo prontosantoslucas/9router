@@ -5,9 +5,53 @@
 // Segredo: AGENT_INTERNAL_SECRET — obrigatório em produção.
 
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
 
 const HEADER = "x-9r-agent-auth";
 const WINDOW_MS = 30 * 1000;
+
+// ─────────────────────────────────────────────────────────────
+// Resolução do segredo interno usado no HMAC agente ↔ proxy.
+// Prioridade:
+//   1. process.env.AGENT_INTERNAL_SECRET (se definido e não for o placeholder fraco)
+//   2. Arquivo persistido em $DATA_DIR/.agent-internal-secret (mesmo padrão do JWT_SECRET do maxrouter)
+//   3. Gera 64 bytes aleatórios, persiste no arquivo, retorna.
+// Ambos os processos (agente Express e proxy Next) chamam esta função e
+// convergem no mesmo segredo — sem env config manual.
+// ─────────────────────────────────────────────────────────────
+function resolveInternalSecret({ dataDir } = {}) {
+  const envValue = process.env.AGENT_INTERNAL_SECRET;
+  if (envValue && envValue !== "default_internal_secret" && envValue.length >= 16) {
+    return { secret: envValue, source: "env" };
+  }
+
+  const baseDir = dataDir || process.env.DATA_DIR || path.join(os.homedir(), ".9router");
+  const file = path.join(baseDir, ".agent-internal-secret");
+
+  try {
+    if (fs.existsSync(file)) {
+      const value = fs.readFileSync(file, "utf8").trim();
+      if (value && value.length >= 32) {
+        return { secret: value, source: "file" };
+      }
+    }
+  } catch (err) {
+    console.warn(`[hmacAuth] Não consegui ler ${file}: ${err.message}`);
+  }
+
+  // Gera + persiste. mkdirSync recursive é idempotente.
+  const generated = crypto.randomBytes(48).toString("hex"); // 96 chars hex
+  try {
+    fs.mkdirSync(baseDir, { recursive: true });
+    fs.writeFileSync(file, generated, { mode: 0o600 });
+    return { secret: generated, source: "generated", file };
+  } catch (err) {
+    console.warn(`[hmacAuth] Falha ao persistir segredo em ${file}: ${err.message} — usando em memória (só nesta instância)`);
+    return { secret: generated, source: "in-memory" };
+  }
+}
 
 /**
  * Extrai e valida o header HMAC. Retorna { ok: true } ou { ok: false, reason }.
@@ -88,4 +132,5 @@ module.exports = {
   verifyHmacHeader,
   buildHmacHeader,
   createHmacMiddleware,
+  resolveInternalSecret,
 };

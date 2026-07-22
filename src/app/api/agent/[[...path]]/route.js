@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
 import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession";
 import { getSettings } from "@/lib/localDb";
 
@@ -8,14 +11,44 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const AGENT_LOOPBACK_URL = process.env.AGENT_LOOPBACK_URL || "http://127.0.0.1:3717";
-const AGENT_INTERNAL_SECRET = process.env.AGENT_INTERNAL_SECRET || "default_internal_secret";
 
-// Guard: aviso em runtime se o segredo estiver com o default fraco em produção.
-if (
-  process.env.NODE_ENV === "production" &&
-  (!process.env.AGENT_INTERNAL_SECRET || process.env.AGENT_INTERNAL_SECRET === "default_internal_secret")
-) {
-  console.error("[FATAL] AGENT_INTERNAL_SECRET não configurado em produção — proxy inseguro");
+// ─────────────────────────────────────────────────────────────
+// Resolve o segredo HMAC. Ordem: env → arquivo persistido → gera+persiste.
+// MESMO ALGORITMO do apps/agent/src/hmacAuth.js#resolveInternalSecret,
+// duplicado aqui porque Next não pode importar de apps/agent (bundling / diff runtime).
+// Ambos os processos convergem no MESMO arquivo `$DATA_DIR/.agent-internal-secret`.
+// ─────────────────────────────────────────────────────────────
+function resolveInternalSecret() {
+  const envValue = process.env.AGENT_INTERNAL_SECRET;
+  if (envValue && envValue !== "default_internal_secret" && envValue.length >= 16) {
+    return envValue;
+  }
+  const baseDir = process.env.DATA_DIR || path.join(os.homedir(), ".9router");
+  const file = path.join(baseDir, ".agent-internal-secret");
+  try {
+    if (fs.existsSync(file)) {
+      const v = fs.readFileSync(file, "utf8").trim();
+      if (v && v.length >= 32) return v;
+    }
+  } catch {}
+  const generated = crypto.randomBytes(48).toString("hex");
+  try {
+    fs.mkdirSync(baseDir, { recursive: true });
+    fs.writeFileSync(file, generated, { mode: 0o600 });
+    console.log(`[Proxy] AGENT_INTERNAL_SECRET gerado e persistido em ${file}`);
+  } catch (err) {
+    console.warn(`[Proxy] Falha ao persistir segredo em ${file}: ${err.message}`);
+  }
+  return generated;
+}
+
+// Lazy — resolvido no primeiro request (não no import) para dar tempo do
+// agente popular o arquivo se ele subir primeiro.
+let _cachedSecret = null;
+function getInternalSecret() {
+  if (_cachedSecret) return _cachedSecret;
+  _cachedSecret = resolveInternalSecret();
+  return _cachedSecret;
 }
 
 // Endpoints públicos que não exigem auth JWT.
@@ -69,7 +102,7 @@ function isPublicWebhook(targetPath) {
 
 function generateHmacSignature() {
   const timestamp = Date.now().toString();
-  const hmac = crypto.createHmac("sha256", AGENT_INTERNAL_SECRET);
+  const hmac = crypto.createHmac("sha256", getInternalSecret());
   hmac.update(`maxrouter:${timestamp}`);
   const signature = hmac.digest("hex");
   return `${timestamp}:${signature}`;

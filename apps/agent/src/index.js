@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const cfg = require("./config");
-const { PORT, SIDECAR_ENABLED, setBaseUrl, AGENT_INTERNAL_SECRET } = cfg;
+const { PORT, SIDECAR_ENABLED, setBaseUrl } = cfg;
 const keyrotator = require("./keyrotator");
 const models = require("./models");
 const proxy = require("./proxy");
@@ -14,7 +14,7 @@ const fileproc = require("./fileproc");
 const imagine = require("./imagine");
 const metrics = require("./metrics");
 const { processMessage, clearHistory, isMuted } = require("./orchestrator");
-const { createHmacMiddleware } = require("./hmacAuth");
+const { createHmacMiddleware, resolveInternalSecret } = require("./hmacAuth");
 const copilotController = require("./copilot/copilotController");
 const personalityPoller = require("./personality/personalityPoller");
 const userbotAuth = require("./channels/telegram/userbotAuth");
@@ -57,13 +57,18 @@ function withGoogle(lazyFn, res, handler) {
   };
 }
 
-// Guard: em produção o segredo interno é obrigatório.
-if (!AGENT_INTERNAL_SECRET || AGENT_INTERNAL_SECRET === "default_internal_secret") {
-  if (process.env.NODE_ENV === "production") {
-    console.error("[FATAL] AGENT_INTERNAL_SECRET não configurado em produção — abortando");
-    process.exit(1);
-  }
-  console.warn("[SEC] AGENT_INTERNAL_SECRET usando fallback fraco — só aceito em desenvolvimento");
+// Resolve o segredo HMAC — env var, ou arquivo persistido, ou gera+persiste.
+// Mesmo padrão do JWT_SECRET do maxrouter. NÃO aborta se env faltar.
+const { secret: AGENT_INTERNAL_SECRET, source: secretSource, file: secretFile } =
+  resolveInternalSecret({ dataDir: process.env.DATA_DIR });
+if (secretSource === "generated") {
+  console.log(`[SEC] AGENT_INTERNAL_SECRET gerado automaticamente e persistido em ${secretFile}`);
+} else if (secretSource === "file") {
+  console.log("[SEC] AGENT_INTERNAL_SECRET carregado do arquivo persistido");
+} else if (secretSource === "env") {
+  console.log("[SEC] AGENT_INTERNAL_SECRET configurado via variável de ambiente");
+} else {
+  console.warn("[SEC] AGENT_INTERNAL_SECRET só em memória — instâncias paralelas terão HMAC divergente");
 }
 
 const app = express();
