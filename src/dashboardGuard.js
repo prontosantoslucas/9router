@@ -193,6 +193,19 @@ export const __test__ = {
   canAccessLocalOnlyRoute,
 };
 
+// Respostas de PÁGINA (navegação HTML/RSC) nunca podem ser cacheadas pelo
+// edge do Railway (railway-hikari) — ele não respeita `Vary: rsc` e acaba
+// servindo o payload RSC (text/x-component) cru para navegações HTML.
+// O Next marca páginas estáticas com `s-maxage=31536000`; sobrescrevemos aqui
+// no middleware (sempre roda, sobrepõe o header do framework).
+function pageNoStore(request) {
+  const res = NextResponse.next();
+  res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.headers.set("CDN-Cache-Control", "no-store");
+  res.headers.set("Vary", "*");
+  return res;
+}
+
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
@@ -211,7 +224,7 @@ export async function proxy(request) {
   // Always protected - require valid JWT or local CLI token (machineId-based)
   if (ALWAYS_PROTECTED.some((p) => pathname.startsWith(p))) {
     if (await hasValidCliToken(request) || await hasValidToken(request))
-      return NextResponse.next();
+      return pageNoStore(request);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -254,13 +267,13 @@ export async function proxy(request) {
     }
 
     // If login not required, allow through
-    if (!requireLogin) return NextResponse.next();
+    if (!requireLogin) return pageNoStore(request);
 
     // Verify JWT token
     const token = request.cookies.get("auth_token")?.value;
     if (token) {
       if (await verifyDashboardAuthToken(token)) {
-        return NextResponse.next();
+        return pageNoStore(request);
       } else {
         return NextResponse.redirect(new URL("/login", request.url));
       }
@@ -277,8 +290,9 @@ export async function proxy(request) {
         return NextResponse.redirect(new URL("/dashboard", request.url));
       }
     }
-    return NextResponse.next();
+    return pageNoStore(request);
   }
 
-  return NextResponse.next();
+  // Rotas de página restantes (login, callback, chat, dashboard2, etc.)
+  return pageNoStore(request);
 }
