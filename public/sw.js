@@ -1,4 +1,4 @@
-const CACHE = "maxrouter-v3";
+const CACHE = "maxrouter-v4";
 
 self.addEventListener("install", (e) => {
   self.skipWaiting();

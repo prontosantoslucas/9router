@@ -50,6 +50,23 @@ const nextConfig = {
     };
     return config;
   },
+  async headers() {
+    // Impede o edge cache do Railway (railway-hikari) de cachear o payload RSC
+    // das páginas de aplicação. O Next 16 marca páginas estáticas com
+    // `Cache-Control: s-maxage=31536000`, e o edge do Railway não respeita o
+    // `Vary: rsc` corretamente — então um prefetch RSC populava o cache e o
+    // edge passava a servir `text/x-component` cru para navegações HTML.
+    // `no-store` nas rotas de página resolve; assets estáticos (_next/static)
+    // continuam com cache imutável (excluídos pelo matcher).
+    const noStore = { key: "Cache-Control", value: "no-store, must-revalidate" };
+    return [
+      {
+        // Todas as rotas EXCETO assets estáticos, imagens e favicon.
+        source: "/((?!_next/static|_next/image|favicon\\.ico|icons/|manifest).*)",
+        headers: [noStore],
+      },
+    ];
+  },
   async rewrites() {
     return [
       {
