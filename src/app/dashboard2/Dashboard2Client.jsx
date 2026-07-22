@@ -344,6 +344,7 @@ export default function Dashboard2Client() {
               Gerar QR Code para Pareamento no WhatsApp
             </button>
           )}
+        </div>
         {/* Card 4: Google Workspace (Gmail, Calendar, Drive, Docs) */}
         <div className="card-soft p-6 border border-border space-y-4">
           <div className="flex items-center justify-between border-b border-border pb-3">
