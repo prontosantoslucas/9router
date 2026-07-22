@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession";
+import { getSettings } from "@/lib/localDb";
 
 export const runtime = "nodejs";
 // Necessário para streamar bodies grandes (uploads) sem bufferizar em RAM.
@@ -24,6 +25,7 @@ const PUBLIC_WEBHOOK_PATHS = [
   "/api/agent/webhook/evolution",
   "/api/webhook/evolution",
   "/api/agent/google/callback",
+  "/api/google/callback",
 ];
 
 // Allowlist explícita dos caminhos permitidos no agente.
@@ -45,12 +47,16 @@ const ALLOWED_PATHS = [
   "/api/memory/status",
   "/api/agent/webhook/evolution",
   "/api/webhook/evolution",
+  "/api/agent/evolution/",
+  "/api/evolution/",
   "/api/agent/telegram/userbot/",
   "/api/telegram/userbot/",
   "/api/agent/copilot/",
   "/api/copilot/",
-  "/api/agent/status/sidecars",
+  "/api/agent/status",
+  "/api/status",
   "/api/agent/google/",
+  "/api/google/",
 ];
 
 function isPathAllowed(targetPath) {
@@ -86,12 +92,16 @@ async function handleProxy(request, context) {
     );
   }
 
-  // 2. Validação de Autenticação JWT (para rotas não-públicas)
+  // 2. Validação de Autenticação JWT (para rotas não-públicas quando requireLogin está ativado)
   if (!isPublicWebhook(targetPath)) {
-    const token = request.cookies.get("auth_token")?.value;
-    const isValid = await verifyDashboardAuthToken(token);
-    if (!isValid) {
-      return NextResponse.json({ error: "Unauthorized — Token de sessão JWT ausente ou inválido" }, { status: 401 });
+    const settings = await getSettings().catch(() => ({}));
+    const requireLogin = settings?.requireLogin !== false;
+    if (requireLogin) {
+      const token = request.cookies.get("auth_token")?.value;
+      const isValid = await verifyDashboardAuthToken(token);
+      if (!isValid) {
+        return NextResponse.json({ error: "Unauthorized — Token de sessão JWT ausente ou inválido" }, { status: 401 });
+      }
     }
   }
 

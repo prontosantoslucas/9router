@@ -35,9 +35,50 @@ export default function Dashboard2Client() {
     autonomousInteractions: true,
   });
 
+  // Integration Google Workspace
+  const [googleStatus, setGoogleStatus] = useState(null);
+
   useEffect(() => {
     fetchStats();
+    fetchGoogleStatus();
   }, []);
+
+  const fetchGoogleStatus = async () => {
+    try {
+      const res = await fetch("/api/agent/google/status");
+      if (res.ok) {
+        const data = await res.json();
+        setGoogleStatus(data);
+      }
+    } catch (err) {
+      console.error("[Dashboard2] Erro ao carregar status do Google:", err);
+    }
+  };
+
+  const handleConnectGoogle = async () => {
+    try {
+      const res = await fetch("/api/agent/google/auth-url");
+      const data = await res.json();
+      if (res.ok && data.url) {
+        window.location.assign(data.url);
+      } else {
+        alert(data.error || "Google Client ID/Secret não configurado no .env");
+      }
+    } catch (err) {
+      alert(`Erro no Google OAuth: ${err.message}`);
+    }
+  };
+
+  const handleDisconnectGoogle = async () => {
+    try {
+      const res = await fetch("/api/agent/google/disconnect", { method: "POST" });
+      if (res.ok) {
+        fetchGoogleStatus();
+      }
+    } catch (err) {
+      console.error("Erro ao desconectar Google:", err);
+    }
+  };
 
   const fetchStats = async () => {
     try {
@@ -301,6 +342,37 @@ export default function Dashboard2Client() {
               className="w-full rounded-lg border border-border bg-surface py-3 text-xs font-bold text-text-main hover:border-brand-500 transition-colors"
             >
               Gerar QR Code para Pareamento no WhatsApp
+            </button>
+          )}
+        {/* Card 4: Google Workspace (Gmail, Calendar, Drive, Docs) */}
+        <div className="card-soft p-6 border border-border space-y-4">
+          <div className="flex items-center justify-between border-b border-border pb-3">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-brand-500">mail</span>
+              <h3 className="font-bold text-base">Google Workspace (Gmail, Calendar, Drive)</h3>
+            </div>
+            <HealthDot status={googleStatus?.authorized ? "ok" : "warning"} label={googleStatus?.authorized ? "Conectado" : "Não Autorizado"} />
+          </div>
+
+          <p className="text-xs text-text-muted">
+            {googleStatus?.authorized
+              ? `Conectado como ${googleStatus.email || "Google Account"}. O Lucas tem acesso a Gmail, Agenda e Google Docs.`
+              : "Conecte sua conta do Google para permitir que o Lucas gerencie e-mails, reagende reuniões na Agenda e crie documentos."}
+          </p>
+
+          {googleStatus?.authorized ? (
+            <button
+              onClick={handleDisconnectGoogle}
+              className="w-full rounded-lg border border-border bg-surface py-2.5 text-xs font-bold text-danger hover:bg-red-500/10 transition-colors"
+            >
+              Desconectar Conta Google
+            </button>
+          ) : (
+            <button
+              onClick={handleConnectGoogle}
+              className="w-full rounded-lg bg-brand-500 py-2.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors"
+            >
+              Conectar Conta Google via OAuth
             </button>
           )}
         </div>

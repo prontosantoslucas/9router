@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { AgentBadge } from "@/shared/components/primitives/AgentBadge";
 import { MessageBubble } from "@/shared/components/primitives/MessageBubble";
 import { ChatComposer } from "@/shared/components/primitives/ChatComposer";
@@ -42,6 +43,7 @@ export default function ChatPageClient() {
 }
 
 function ChatShell() {
+  const router = useRouter();
   const { showToast } = useToast();
   const { messages, isSending, sendMessage, clearSession } = useChatSession("main");
   const { uploadFile, isUploading } = useFileUpload();
@@ -165,7 +167,24 @@ function ChatShell() {
 
       {/* Header */}
       <header className="flex h-16 items-center justify-between border-b border-border bg-surface px-6 shadow-soft dark:bg-surface-2">
-        <AgentBadge agentId="lucas" size="md" />
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              if (window.history.length > 1) {
+                router.back();
+              } else {
+                router.push("/dashboard");
+              }
+            }}
+            className="flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:bg-bg-alt hover:text-text-main"
+            title="Voltar ao Painel"
+          >
+            <span className="material-symbols-outlined text-sm text-brand-500">arrow_back</span>
+            <span>Voltar</span>
+          </button>
+          <AgentBadge agentId="lucas" size="md" />
+        </div>
 
         <div className="flex items-center gap-3">
           <button

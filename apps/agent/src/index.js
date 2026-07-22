@@ -250,9 +250,18 @@ app.get("/api/agent/memory/status", async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────────
-// Webhook Evolution API (WhatsApp) — público (bypass do HMAC).
-// A Evolution assina via `apikey` header — validamos aqui.
+// WhatsApp Evolution API (Instância e QR Code)
 // ────────────────────────────────────────────────────────────────
+const qrCodeService = require("./channels/evolution/qrCodeService");
+
+app.all(["/api/agent/evolution/instance", "/api/evolution/instance"], async (req, res) => {
+  try {
+    const data = await qrCodeService.getQrCode();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 app.post("/api/agent/webhook/evolution", async (req, res) => {
   const providedKey = req.headers["apikey"] || req.headers["x-api-key"];
   if (cfg.EVOLUTION_API_KEY && providedKey !== cfg.EVOLUTION_API_KEY) {

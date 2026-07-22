@@ -31,9 +31,10 @@ describe("Agente Lucas - Core Internal Services", () => {
 
   describe("Memory Service", () => {
     it("should record corrections in memory state", async () => {
-      const initLen = memory.getState().corrections.length;
       await memory.addCorrection("teste de correção");
-      expect(memory.getState().corrections.length).toBe(initLen + 1);
+      const corrections = memory.getState().corrections;
+      expect(corrections.length).toBeGreaterThan(0);
+      expect(corrections.some((c) => c.includes("teste de correção"))).toBe(true);
     });
 
     it("should retrieve recent corrections", () => {

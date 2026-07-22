@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import PropTypes from "prop-types";
 import ProviderIcon from "@/shared/components/ProviderIcon";
@@ -178,9 +178,12 @@ const getPageInfo = (pathname) => {
 };
 
 export default function Header({ onMenuClick, showMenuButton = true }) {
+  const router = useRouter();
   const pathname = usePathname();
   const [displayName, setDisplayName] = useState("");
   const [loginMethod, setLoginMethod] = useState("");
+
+  const canGoBack = pathname !== "/dashboard" && pathname !== "/";
 
   // Memoize page info to prevent unnecessary recalculations
   const pageInfo = useMemo(() => getPageInfo(pathname), [pathname]);
@@ -225,14 +228,32 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
 
   return (
     <header className="shrink-0 flex items-center justify-between gap-3 px-4 lg:px-8 pt-3 pb-2 border-b border-border-subtle bg-surface/60 backdrop-blur-xl lg:bg-transparent lg:backdrop-blur-none z-20">
-      {/* Mobile menu button */}
-      <div className="flex items-center gap-3 lg:hidden shrink-0">
+      {/* Mobile menu button & Back Button */}
+      <div className="flex items-center gap-2 shrink-0">
         {showMenuButton && (
           <button
             onClick={onMenuClick}
-            className="text-text-main hover:text-primary transition-colors"
+            className="lg:hidden text-text-main hover:text-primary transition-colors p-1"
+            aria-label="Abrir menu"
           >
             <span className="material-symbols-outlined">menu</span>
+          </button>
+        )}
+        {canGoBack && (
+          <button
+            type="button"
+            onClick={() => {
+              if (window.history.length > 1) {
+                router.back();
+              } else {
+                router.push("/dashboard");
+              }
+            }}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-border bg-surface hover:bg-surface-2 text-text-muted hover:text-text-main text-xs font-semibold transition-all active:scale-95 shadow-soft"
+            title="Voltar para a página anterior"
+          >
+            <span className="material-symbols-outlined text-[16px] text-amber-500">arrow_back</span>
+            <span className="hidden sm:inline">Voltar</span>
           </button>
         )}
       </div>
