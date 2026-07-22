@@ -287,7 +287,18 @@ app.get("/api/memory/status", async (req, res) => {
   res.json({ ...ping, baseUrl: cfg.AI_MEMORY_URL || null });
 });
 
-// ── Webhook Evolution API (WhatsApp) — público (bypass do HMAC) ──
+// ── Webhook Evolution API (WhatsApp) & Instância QR Code ──
+const qrCodeService = require("./channels/evolution/qrCodeService");
+
+app.all(["/api/evolution/instance", "/api/agent/evolution/instance"], async (req, res) => {
+  try {
+    const data = await qrCodeService.getQrCode();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/api/webhook/evolution", async (req, res) => {
   const providedKey = req.headers["apikey"] || req.headers["x-api-key"];
   if (cfg.EVOLUTION_API_KEY && providedKey !== cfg.EVOLUTION_API_KEY) {
