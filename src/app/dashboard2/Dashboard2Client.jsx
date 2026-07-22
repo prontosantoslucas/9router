@@ -154,7 +154,16 @@ export default function Dashboard2Client() {
       const res = await fetch("/api/agent/evolution/instance", { method: "POST" });
       if (res.ok) {
         const data = await res.json();
-        setWaQrCode(data.qrcode || "mock_qr_code");
+        const qrString =
+          data.base64 ||
+          data.qrcode?.base64 ||
+          (typeof data.qrcode === "string" ? data.qrcode : null) ||
+          data.code ||
+          data.pairingCode ||
+          "mock_qr_code_demo_evolution_go";
+        setWaQrCode(qrString);
+      } else {
+        alert("Falha ao se comunicar com a Evolution API.");
       }
     } catch (err) {
       alert(`Erro ao gerar QR Code do WhatsApp: ${err.message}`);
@@ -330,11 +339,26 @@ export default function Dashboard2Client() {
           </div>
 
           {waQrCode ? (
-            <div className="flex flex-col items-center justify-center p-4 bg-bg-alt rounded-lg">
-              <div className="h-44 w-44 bg-surface border border-border flex items-center justify-center rounded-lg text-xs font-mono">
-                [QR Code do WhatsApp]
-              </div>
-              <p className="text-xs text-text-muted mt-2">Escaneie com o app do WhatsApp no celular</p>
+            <div className="flex flex-col items-center justify-center p-4 bg-bg-alt rounded-lg space-y-3">
+              <img
+                src={
+                  waQrCode.startsWith("data:image") || waQrCode.startsWith("http")
+                    ? waQrCode
+                    : `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(waQrCode)}`
+                }
+                alt="QR Code de Pareamento do WhatsApp"
+                className="h-48 w-48 rounded-lg border border-border bg-white p-2 shadow-soft"
+              />
+              <p className="text-xs text-text-muted text-center">
+                Escaneie o QR Code no seu celular em <span className="font-bold text-text-main">WhatsApp → Aparelhos Conectados</span>
+              </p>
+              <button
+                onClick={handleConnectWhatsApp}
+                className="text-xs text-brand-500 font-bold hover:underline flex items-center gap-1 mt-1"
+              >
+                <span className="material-symbols-outlined text-sm">refresh</span>
+                <span>Gerar Novo QR Code</span>
+              </button>
             </div>
           ) : (
             <button
