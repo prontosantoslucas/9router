@@ -94,6 +94,24 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_copilot_status ON copilot_drafts(status);
+
+  CREATE TABLE IF NOT EXISTS google_tokens (
+    -- Um registro por identidade Google conectada (single-user por instância; scale-out fica em user_id futuro)
+    user_id TEXT PRIMARY KEY DEFAULT 'default',
+    access_token TEXT,
+    refresh_token TEXT,
+    scope TEXT,
+    token_type TEXT,
+    expiry_date INTEGER,
+    email TEXT,
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS google_oauth_state (
+    -- state gerado no auth-url, consumido uma única vez no callback (proteção CSRF)
+    state TEXT PRIMARY KEY,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 module.exports = db;

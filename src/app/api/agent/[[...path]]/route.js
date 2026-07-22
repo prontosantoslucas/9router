@@ -3,17 +3,31 @@ import crypto from "node:crypto";
 import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession";
 
 export const runtime = "nodejs";
+// Necessário para streamar bodies grandes (uploads) sem bufferizar em RAM.
+export const dynamic = "force-dynamic";
 
 const AGENT_LOOPBACK_URL = process.env.AGENT_LOOPBACK_URL || "http://127.0.0.1:3717";
 const AGENT_INTERNAL_SECRET = process.env.AGENT_INTERNAL_SECRET || "default_internal_secret";
 
-// Endpoints públicos que não exigem auth JWT (ex.: webhook externo do WhatsApp)
+// Guard: aviso em runtime se o segredo estiver com o default fraco em produção.
+if (
+  process.env.NODE_ENV === "production" &&
+  (!process.env.AGENT_INTERNAL_SECRET || process.env.AGENT_INTERNAL_SECRET === "default_internal_secret")
+) {
+  console.error("[FATAL] AGENT_INTERNAL_SECRET não configurado em produção — proxy inseguro");
+}
+
+// Endpoints públicos que não exigem auth JWT.
+// - webhook Evolution (WhatsApp) é chamado direto pela Evolution/Meta cloud, valida com apikey própria.
+// - Google OAuth callback recebe o redirect do usuário no browser (com state validado no handler).
 const PUBLIC_WEBHOOK_PATHS = [
   "/api/agent/webhook/evolution",
   "/api/webhook/evolution",
+  "/api/agent/google/callback",
 ];
 
-// Allowlist explícita dos caminhos permitidos no agente
+// Allowlist explícita dos caminhos permitidos no agente.
+// Match exato OU prefixo. Manter estritamente sincronizado com o Express do agente.
 const ALLOWED_PATHS = [
   "/api/chat",
   "/api/chat/new",
@@ -35,6 +49,8 @@ const ALLOWED_PATHS = [
   "/api/telegram/userbot/",
   "/api/agent/copilot/",
   "/api/copilot/",
+  "/api/agent/status/sidecars",
+  "/api/agent/google/",
 ];
 
 function isPathAllowed(targetPath) {
@@ -52,6 +68,9 @@ function generateHmacSignature() {
   const signature = hmac.digest("hex");
   return `${timestamp}:${signature}`;
 }
+
+// Métodos HTTP sem body — mantidos como no fetch spec para não passar body vazio.
+const NO_BODY_METHODS = new Set(["GET", "HEAD"]);
 
 async function handleProxy(request, context) {
   const pathSegments = (await context.params)?.path || [];
@@ -77,31 +96,53 @@ async function handleProxy(request, context) {
   }
 
   // 3. Preparação dos headers e assinatura HMAC
-  const clientIp = request.headers.get("x-forwarded-for")?.split(",")[0] || request.headers.get("x-9r-real-ip") || "127.0.0.1";
+  const clientIp =
+    request.headers.get("x-forwarded-for")?.split(",")[0] ||
+    request.headers.get("x-9r-real-ip") ||
+    "127.0.0.1";
   const hmacHeader = generateHmacSignature();
 
   const proxyHeaders = new Headers();
-  proxyHeaders.set("Content-Type", request.headers.get("content-type") || "application/json");
+  // Preserva Content-Type de uploads / SSE / multipart
+  const originalCT = request.headers.get("content-type");
+  if (originalCT) proxyHeaders.set("Content-Type", originalCT);
   proxyHeaders.set("X-9R-Agent-Auth", hmacHeader);
   proxyHeaders.set("x-9r-real-ip", clientIp);
   if (request.headers.get("authorization")) {
     proxyHeaders.set("Authorization", request.headers.get("authorization"));
   }
+  // Passa apikey pro webhook Evolution (o agente valida)
+  if (request.headers.get("apikey")) {
+    proxyHeaders.set("apikey", request.headers.get("apikey"));
+  }
 
-  // 4. Execução do Proxy para o agente loopback
+  // 4. Streaming do body — NUNCA bufferizar em RAM.
+  //    request.body é ReadableStream; passamos direto ao upstream fetch.
+  //    (undici, backend do fetch do Node, aceita ReadableStream com duplex:"half".)
   const upstreamUrl = `${AGENT_LOOPBACK_URL}${fullTargetPath}`;
+  const hasBody = !NO_BODY_METHODS.has(request.method);
+
+  const fetchInit = {
+    method: request.method,
+    headers: proxyHeaders,
+    // Redirects são feitos aqui, agente é loopback trusted.
+    redirect: "manual",
+  };
+  if (hasBody && request.body) {
+    fetchInit.body = request.body;
+    fetchInit.duplex = "half";
+  }
+
   try {
-    const body = ["GET", "HEAD"].includes(request.method) ? undefined : await request.arrayBuffer();
+    const upstreamResponse = await fetch(upstreamUrl, fetchInit);
 
-    const upstreamResponse = await fetch(upstreamUrl, {
-      method: request.method,
-      headers: proxyHeaders,
-      body: body ? Buffer.from(body) : undefined,
-    });
-
+    // Preserva headers relevantes da resposta (Content-Type, Content-Length, Cache-Control, etc.)
     const responseHeaders = new Headers();
-    const contentType = upstreamResponse.headers.get("content-type");
-    if (contentType) responseHeaders.set("Content-Type", contentType);
+    const passthroughHeaders = ["content-type", "cache-control", "etag", "last-modified"];
+    for (const h of passthroughHeaders) {
+      const v = upstreamResponse.headers.get(h);
+      if (v) responseHeaders.set(h, v);
+    }
 
     return new NextResponse(upstreamResponse.body, {
       status: upstreamResponse.status,
@@ -119,4 +160,5 @@ async function handleProxy(request, context) {
 export const GET = handleProxy;
 export const POST = handleProxy;
 export const PUT = handleProxy;
+export const PATCH = handleProxy;
 export const DELETE = handleProxy;

@@ -1,7 +1,8 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { PORT, SIDECAR_ENABLED, setBaseUrl } = require("./config");
+const cfg = require("./config");
+const { PORT, SIDECAR_ENABLED, setBaseUrl, AGENT_INTERNAL_SECRET } = cfg;
 const keyrotator = require("./keyrotator");
 const models = require("./models");
 const proxy = require("./proxy");
@@ -13,17 +14,43 @@ const fileproc = require("./fileproc");
 const imagine = require("./imagine");
 const metrics = require("./metrics");
 const { processMessage, clearHistory, isMuted } = require("./orchestrator");
+const { createHmacMiddleware } = require("./hmacAuth");
+const copilotController = require("./copilot/copilotController");
+const personalityPoller = require("./personality/personalityPoller");
+const userbotAuth = require("./channels/telegram/userbotAuth");
+const aiMemoryClient = require("./memory/aiMemoryClient");
+const evolutionWebhook = require("./channels/evolution/webhookParser");
+
+// Guard: em produção o segredo interno é obrigatório.
+if (!AGENT_INTERNAL_SECRET || AGENT_INTERNAL_SECRET === "default_internal_secret") {
+  if (process.env.NODE_ENV === "production") {
+    console.error("[FATAL] AGENT_INTERNAL_SECRET não configurado em produção — abortando");
+    process.exit(1);
+  }
+  console.warn("[SEC] AGENT_INTERNAL_SECRET usando fallback fraco — só aceito em desenvolvimento");
+}
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "200mb" }));
 app.use(express.urlencoded({ limit: "200mb", extended: true }));
 
+// Middleware HMAC — todas as chamadas do proxy do Maxrouter passam assinadas.
+// Bypass apenas: /health (probes) e /api/agent/webhook/evolution (webhook público da Evolution API).
+app.use(
+  createHmacMiddleware({
+    secret: AGENT_INTERNAL_SECRET,
+    skipPrefixes: ["/health", "/api/agent/webhook/evolution"],
+  })
+);
+
 const VALID_KEYS = new Set(keyrotator.getAllKeys());
 
+// Auth opcional para rotas que aceitam API key além do HMAC do proxy.
+// Chave hardcoded histórica foi removida (2026-07-22, sessão de segurança).
 function auth(req, res, next) {
   const key = req.headers.authorization?.replace("Bearer ", "");
-  if (key && !VALID_KEYS.has(key) && key !== "sk-ea45f906b3056e8c-1bpca8-c2a94ffa") {
+  if (key && !VALID_KEYS.has(key)) {
     return res.status(401).json({ error: "Invalid API key" });
   }
   next();
@@ -164,6 +191,288 @@ app.get("/api/notion/list", async (req, res) => {
   if (!require("./notion").isConfigured()) return res.status(400).json({ error: "Notion não configurado" });
   const r = await require("./notion").queryDatabase({}, [{ property: "Criado", direction: "descending" }]);
   res.json(r);
+});
+
+// ────────────────────────────────────────────────────────────────
+// Rotas do Copilot (aprovar/rejeitar rascunhos de resposta WhatsApp/Telegram)
+// ────────────────────────────────────────────────────────────────
+app.get("/api/agent/copilot/approvals", copilotController.listApprovals);
+app.post("/api/agent/copilot/approve", copilotController.approveDraft);
+app.post("/api/agent/copilot/reject", copilotController.rejectDraft);
+
+// ────────────────────────────────────────────────────────────────
+// Personality sync (puxa Markdown do GitHub e cacheia local)
+// ────────────────────────────────────────────────────────────────
+app.post("/api/agent/personality/github", async (req, res) => {
+  try {
+    const { url, token } = req.body || {};
+    const updated = await personalityPoller.syncNow(url, token);
+    res.json({ ok: true, length: updated.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ────────────────────────────────────────────────────────────────
+// Telegram Userbot (MTProto — sessão persistida no volume)
+// ────────────────────────────────────────────────────────────────
+app.get("/api/agent/telegram/userbot/status", (req, res) => {
+  const session = userbotAuth.getSavedSession();
+  const configured = !!(cfg.TELEGRAM_API_ID && cfg.TELEGRAM_API_HASH);
+  res.json({
+    configured,
+    hasSession: !!session,
+    apiIdSet: !!cfg.TELEGRAM_API_ID,
+    apiHashSet: !!cfg.TELEGRAM_API_HASH,
+  });
+});
+
+// Placeholder — implementação real do handshake MTProto requer lib `telegram` (gramjs).
+// Retornamos 501 explicitamente até implementarmos, em vez de 404 silencioso.
+app.post("/api/agent/telegram/userbot/start-auth", async (req, res) => {
+  const { phoneNumber } = req.body || {};
+  if (!phoneNumber) return res.status(400).json({ error: "phoneNumber obrigatório" });
+  res.status(501).json({
+    error: "MTProto start-auth ainda não implementado. Configure BOT_TOKEN para usar o Bot API padrão.",
+  });
+});
+app.post("/api/agent/telegram/userbot/complete-auth", async (req, res) => {
+  res.status(501).json({ error: "MTProto complete-auth ainda não implementado." });
+});
+
+// ────────────────────────────────────────────────────────────────
+// Memória (ai-memory sidecar)
+// ────────────────────────────────────────────────────────────────
+app.get("/api/agent/memory/status", async (req, res) => {
+  // Usa o ping() do cliente MCP — faz handshake real, listTools, retorna diagnóstico completo
+  const ping = await aiMemoryClient.ping();
+  res.json({ ...ping, baseUrl: cfg.AI_MEMORY_URL || null });
+});
+
+// ────────────────────────────────────────────────────────────────
+// Webhook Evolution API (WhatsApp) — público (bypass do HMAC).
+// A Evolution assina via `apikey` header — validamos aqui.
+// ────────────────────────────────────────────────────────────────
+app.post("/api/agent/webhook/evolution", async (req, res) => {
+  const providedKey = req.headers["apikey"] || req.headers["x-api-key"];
+  if (cfg.EVOLUTION_API_KEY && providedKey !== cfg.EVOLUTION_API_KEY) {
+    return res.status(401).json({ error: "apikey inválido" });
+  }
+  const parsed = evolutionWebhook.parseWebhook(req.body);
+  if (!parsed) return res.json({ ok: true, ignored: true });
+  // Processamento assíncrono — respondemos rápido para não travar a Evolution
+  res.json({ ok: true, received: parsed.messageId });
+  try {
+    const chatId = `wa:${parsed.senderNumber}`;
+    await processMessage(chatId, parsed.messageText, parsed.pushName, {
+      channel: "whatsapp",
+    });
+  } catch (err) {
+    console.error("[EvolutionWebhook] Erro ao processar:", err.message);
+  }
+});
+
+// ────────────────────────────────────────────────────────────────
+// Health agregado dos sidecars (agente + ai-memory + google config)
+// ────────────────────────────────────────────────────────────────
+app.get("/api/agent/status/sidecars", async (req, res) => {
+  const google = {
+    configured: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    hasRefreshToken: !!process.env.GOOGLE_REFRESH_TOKEN, // Enquanto persistência SQLite não estiver ativa
+  };
+  const memoryBase = cfg.AI_MEMORY_URL;
+  let memory = { configured: !!memoryBase, reachable: false, baseUrl: memoryBase || null };
+  if (memoryBase) {
+    try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 1500);
+      const r = await fetch(`${memoryBase}/`, { signal: controller.signal }).catch(() => null);
+      clearTimeout(t);
+      memory.reachable = !!r;
+    } catch {
+      memory.reachable = false;
+    }
+  }
+  const workers = {
+    scheduler: scheduler.list().length,
+    telegramBot: !!cfg.BOT_TOKEN,
+    workersEnabled: process.env.AGENT_WORKERS !== "0" && process.env.AGENT_WORKERS !== "false",
+  };
+  res.json({
+    agent: { ok: true, port: PORT, uptime: process.uptime() },
+    memory,
+    google,
+    workers,
+    channels: {
+      whatsapp: !!cfg.EVOLUTION_API_URL,
+      telegramUserbot: !!userbotAuth.getSavedSession(),
+    },
+  });
+});
+
+// ────────────────────────────────────────────────────────────────
+// Google Workspace — OAuth + Gmail + Calendar + Drive/Docs + Chat
+// ────────────────────────────────────────────────────────────────
+const googleOauth = require("./google/oauth");
+const gmailApi = require("./google/gmail");
+const calendarApi = require("./google/calendar");
+const driveDocs = require("./google/driveDocs");
+
+app.get("/api/agent/google/status", (req, res) => {
+  try {
+    const configured = googleOauth.isConfigured();
+    const authorized = configured && googleOauth.isAuthorized();
+    const tokens = authorized ? googleOauth.loadTokens() : null;
+    res.json({
+      configured,
+      authorized,
+      email: tokens?.email || null,
+      scopes: googleOauth.SCOPES,
+      redirectUri: cfg.GOOGLE_REDIRECT_URI || null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/agent/google/auth-url", (req, res) => {
+  try {
+    const { redirectAfter } = req.query;
+    const { url } = googleOauth.getAuthUrl({ redirectAfter });
+    res.json({ url });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Callback é chamado direto pelo browser do usuário no fluxo OAuth
+// (allowlist do proxy + PUBLIC_WEBHOOK_PATHS já cuidam disso).
+app.get("/api/agent/google/callback", async (req, res) => {
+  try {
+    const { code, state, error } = req.query;
+    if (error) return res.status(400).send(`OAuth Google recusado: ${error}`);
+    const result = await googleOauth.handleCallback(code, state);
+    if (!result.ok) return res.status(400).send(`Falha OAuth Google: ${result.error}`);
+    // Redireciona pro dashboard (ou pra tela pedida no state)
+    const target = result.redirectAfter || "/dashboard2?google=connected";
+    res.redirect(target);
+  } catch (err) {
+    console.error("[GoogleCallback] Erro:", err.message);
+    res.status(500).send(`Erro no callback: ${err.message}`);
+  }
+});
+
+app.post("/api/agent/google/disconnect", (req, res) => {
+  googleOauth.disconnect();
+  res.json({ ok: true });
+});
+
+// ── Gmail ──
+app.get("/api/agent/google/gmail/priority", async (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 5;
+    res.json({ emails: await gmailApi.listPriorityEmails(limit) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get("/api/agent/google/gmail/search", async (req, res) => {
+  try {
+    const q = req.query.q || "";
+    const limit = Number(req.query.limit) || 20;
+    if (!q) return res.status(400).json({ error: "q obrigatório" });
+    res.json({ emails: await gmailApi.searchEmails(q, limit) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get("/api/agent/google/gmail/:id", async (req, res) => {
+  try {
+    res.json(await gmailApi.getEmailBody(req.params.id));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/agent/google/gmail/send", async (req, res) => {
+  try {
+    const { to, subject, body, cc, bcc, replyTo } = req.body || {};
+    if (!to) return res.status(400).json({ error: "to obrigatório" });
+    res.json(await gmailApi.sendEmail(to, subject, body, { cc, bcc, replyTo }));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Calendar ──
+app.get("/api/agent/google/calendar/today", async (req, res) => {
+  try {
+    res.json({ events: await calendarApi.listTodayEvents() });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get("/api/agent/google/calendar/events", async (req, res) => {
+  try {
+    res.json({ events: await calendarApi.listEvents(req.query) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/agent/google/calendar/events", async (req, res) => {
+  try {
+    res.json({ event: await calendarApi.createEvent(req.body || {}) });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.patch("/api/agent/google/calendar/events/:id", async (req, res) => {
+  try {
+    res.json({ event: await calendarApi.updateEvent(req.params.id, req.body || {}) });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.delete("/api/agent/google/calendar/events/:id", async (req, res) => {
+  try {
+    res.json(await calendarApi.deleteEvent(req.params.id));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/agent/google/calendar/suggest", async (req, res) => {
+  try {
+    const slot = await calendarApi.suggestFirstFreeSlot(req.body || {});
+    res.json({ slot });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// ── Drive + Docs + Chat ──
+app.get("/api/agent/google/drive/files", async (req, res) => {
+  try { res.json(await driveDocs.listFiles(req.query)); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/agent/google/docs", async (req, res) => {
+  try {
+    const { title, content } = req.body || {};
+    res.json(await driveDocs.createDocument(title, content || ""));
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.get("/api/agent/google/docs/:id", async (req, res) => {
+  try { res.json(await driveDocs.readDocument(req.params.id)); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/agent/google/docs/:id/append", async (req, res) => {
+  try {
+    const { text } = req.body || {};
+    if (!text) return res.status(400).json({ error: "text obrigatório" });
+    res.json(await driveDocs.appendToDocument(req.params.id, text));
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.get("/api/agent/google/chat/spaces", async (req, res) => {
+  try { res.json({ spaces: await driveDocs.listChatSpaces(req.query) }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/agent/google/chat/send", async (req, res) => {
+  try {
+    const { spaceName, text } = req.body || {};
+    if (!spaceName || !text) return res.status(400).json({ error: "spaceName e text obrigatórios" });
+    res.json(await driveDocs.sendChatMessage(spaceName, text));
+  } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
 app.get("/dashboard2", (req, res) => {
