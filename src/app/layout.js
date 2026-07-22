@@ -52,7 +52,7 @@ export default function RootLayout({ children }) {
         <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){document.documentElement.classList.add('fonts-loaded')})}else{document.documentElement.classList.add('fonts-loaded')}`,
+            __html: `if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){document.documentElement.classList.add('fonts-loaded')})}else{document.documentElement.classList.add('fonts-loaded')};(function(){if(typeof window!=='undefined'){if(document.documentElement&&document.documentElement.innerText&&document.documentElement.innerText.indexOf('$Sreact')!==-1){if('caches'in window){caches.keys().then(function(keys){for(var i=0;i<keys.length;i++){caches.delete(keys[i]);}});}if('serviceWorker'in navigator){navigator.serviceWorker.getRegistrations().then(function(regs){for(var i=0;i<regs.length;i++){regs[i].unregister();}});}window.location.reload(true);}}})();`,
           }}
         />
       </head>
