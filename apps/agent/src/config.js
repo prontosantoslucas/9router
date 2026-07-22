@@ -8,7 +8,10 @@ const cfg = {
   PORT: parseInt(process.env.AGENT_PORT) || 3717,
   MAX_HISTORY: parseInt(process.env.MAX_HISTORY) || 20,
   QUOTA_RETRY_SEC: parseInt(process.env.QUOTA_RETRY_SEC) || 120,
-  MODEL_RANKING: (process.env.MODEL_RANKING || "").split(",").map((m) => m.trim()).filter(Boolean),
+  MODEL_RANKING: (process.env.MODEL_RANKING || "opencode/gemini-2.5-flash,opencode/claude-3-5-haiku,opencode/gpt-4o-mini,mimo-free/mimo-v1,gemini-2.5-flash,gpt-4o-mini,gpt-4o,claude-3-5-sonnet,deepseek-chat")
+    .split(",")
+    .map((m) => m.trim())
+    .filter(Boolean),
   SUPERBRAIN_B64: process.env.SUPERBRAIN_B64 || "",
   GITHUB_TOKEN: process.env.GITHUB_TOKEN || "",
   GITHUB_PERSONALITY_URL: process.env.GITHUB_PERSONALITY_URL || "",

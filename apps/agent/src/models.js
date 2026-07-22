@@ -8,7 +8,20 @@ const openai = new OPENAI({
   apiKey: keyrotator.getKey() || "dummy_internal_key",
 });
 
-const RANKING = (process.env.MODEL_RANKING || "").split(",").map((m) => m.trim()).filter(Boolean);
+const DEFAULT_RANKING = [
+  "opencode/gemini-2.5-flash",
+  "opencode/claude-3-5-haiku",
+  "opencode/gpt-4o-mini",
+  "mimo-free/mimo-v1",
+  "gemini-2.5-flash",
+  "gpt-4o-mini",
+  "gpt-4o",
+  "claude-3-5-sonnet",
+  "deepseek-chat",
+];
+
+const ENV_RANKING = (process.env.MODEL_RANKING || "").split(",").map((m) => m.trim()).filter(Boolean);
+const RANKING = ENV_RANKING.length > 0 ? ENV_RANKING : DEFAULT_RANKING;
 const QUOTA_RETRY_MS = (parseInt(process.env.QUOTA_RETRY_SEC) || 300) * 1000; // 5 min base
 const FETCH_INTERVAL = 5 * 60 * 1000;
 
@@ -22,19 +35,21 @@ const state = {
 async function fetchModels() {
   try {
     const list = await openai.models.list();
-    state.available = list.data.map((m) => m.id);
-    state.capabilities = {};
-    for (const m of list.data) {
-      if (m.capabilities) {
-        state.capabilities[m.id] = {
-          vision: m.capabilities.vision || false,
-          reasoning: m.capabilities.reasoning || false,
-          contextWindow: m.capabilities.contextWindow || 0,
-        };
+    if (Array.isArray(list?.data) && list.data.length > 0) {
+      state.available = list.data.map((m) => m.id);
+      state.capabilities = {};
+      for (const m of list.data) {
+        if (m.capabilities) {
+          state.capabilities[m.id] = {
+            vision: m.capabilities.vision || false,
+            reasoning: m.capabilities.reasoning || false,
+            contextWindow: m.capabilities.contextWindow || 0,
+          };
+        }
       }
+      state.lastFetch = Date.now();
+      console.log(`[Models] ${state.available.length} modelos disponíveis`);
     }
-    state.lastFetch = Date.now();
-    console.log(`[Models] ${state.available.length} modelos disponiveis`);
     return state.available;
   } catch (err) {
     console.error("[Models] Erro ao buscar:", err.message);
@@ -80,7 +95,7 @@ function getPriorityList(required) {
   const ranked = [];
 
   const filter = (id) => {
-    if (!state.available.includes(id) && state.available.length > 0) return false;
+    if (state.available.length > 0 && !state.available.includes(id)) return false;
     const blockExpiry = state.exhausted.get(id);
     if (blockExpiry && now < blockExpiry) return false;
     if (blockExpiry) state.exhausted.delete(id);
@@ -94,7 +109,7 @@ function getPriorityList(required) {
     ranked.push({ id: modelId, priority: idx });
   }
 
-  // Auto-incluir modelos nao-listados como fallback
+  // Auto-incluir modelos disponiveis nao-listados no ranking como fallback
   const basePriority = RANKING.length;
   for (const modelId of state.available) {
     if (RANKING.includes(modelId)) continue;
@@ -102,8 +117,24 @@ function getPriorityList(required) {
     ranked.push({ id: modelId, priority: basePriority });
   }
 
+  // Se nada passou no filtro (ex: todos do ranking bloqueados), tenta modelos disponiveis nao bloqueados
+  if (ranked.length === 0 && state.available.length > 0) {
+    for (const modelId of state.available) {
+      if (required && !hasCapability(modelId, required)) continue;
+      ranked.push({ id: modelId, priority: 999 });
+    }
+  }
+
+  // Se mesmo assim estiver vazio, retorna a lista base do DEFAULT_RANKING sem bloqueio
+  if (ranked.length === 0) {
+    for (const modelId of DEFAULT_RANKING) {
+      if (required && !hasCapability(modelId, required)) continue;
+      ranked.push({ id: modelId, priority: 999 });
+    }
+  }
+
   ranked.sort((a, b) => a.priority - b.priority);
-  return ranked.map((m) => m.id);
+  return Array.from(new Set(ranked.map((m) => m.id)));
 }
 
 function getStatus() {
