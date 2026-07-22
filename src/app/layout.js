@@ -29,6 +29,18 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+// CAUSA RAIZ do bug "/login mostra RSC cru": o Next prerenderiza páginas
+// estáticas (login, landing, callback) e as serve com `Cache-Control:
+// s-maxage=31536000`. O edge do Railway (railway-hikari) respeita esse header,
+// cacheia a variante RSC (.rsc / text/x-component) sob a chave da URL e passa a
+// servir esse payload cru para navegações HTML (não respeita `Vary: rsc`).
+// `force-dynamic` no layout raiz torna TODA rota dinâmica → o Next emite
+// `Cache-Control: private, no-cache, no-store, must-revalidate` → o edge nunca
+// mais cacheia página. É a única correção de raiz (headers no-store sozinhos
+// não bastavam porque a página continuava estática e re-assinava s-maxage).
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+
 export const metadata = {
   title: "MaxRouter - AI Router & Gateway",
   description: "One endpoint for all your AI providers. Manage keys, monitor usage, and scale effortlessly.",
