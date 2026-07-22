@@ -13,6 +13,18 @@ RUN --mount=type=cache,id=s/132e6acb-4d7c-439e-a5df-c1fc136a5855-/root/.npm,targ
   npm install
 
 COPY . ./
+
+# ────────────────────────────────────────────────────────────────
+# Instala deps do agente (workspace independente com package.json próprio).
+# Sem este passo `apps/agent/node_modules` fica vazio (o npm install do root
+# não desce em apps/*) e o processo Express crasha no boot ao fazer
+# require("googleapis") / require("@modelcontextprotocol/sdk").
+# --ignore-scripts pra evitar o `postinstall` do agente que tenta git submodule
+# update dentro do container (submodule 9router não é usado no deploy unificado).
+# ────────────────────────────────────────────────────────────────
+RUN --mount=type=cache,id=s/132e6acb-4d7c-439e-a5df-c1fc136a5855-/root/.npm,target=/root/.npm \
+  cd apps/agent && npm install --omit=dev --no-audit --no-fund --ignore-scripts
+
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
@@ -36,6 +48,7 @@ COPY --from=builder /app/open-sse ./open-sse
 COPY --from=builder /app/src/mitm ./src/mitm
 # Ensure all production node_modules (including agent workspace dependencies) are available at runtime
 COPY --from=builder /app/node_modules ./node_modules
+# Inclui apps/agent/node_modules (googleapis, google-auth-library, @modelcontextprotocol/sdk, telegram, better-sqlite3, ...)
 COPY --from=builder /app/apps/agent ./apps/agent
 COPY --from=builder /app/runner-start.sh ./runner-start.sh
 RUN chmod +x ./runner-start.sh
