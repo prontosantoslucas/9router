@@ -654,14 +654,20 @@ export async function runScan({ providers: enabledProviders, sources: enabledSou
 }
 
 export async function getScannedKeys(filters = {}) {
-  const db = await getAdapter();
-  const where = [];
-  const params = [];
-  if (filters.status) { where.push("status = ?"); params.push(filters.status); }
-  if (filters.provider) { where.push("provider = ?"); params.push(filters.provider); }
-  if (filters.source) { where.push("source LIKE ?"); params.push(`%${filters.source}%`); }
-  const sql = "SELECT * FROM scannedKeys" + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY CASE status WHEN 'valid' THEN 0 WHEN 'insufficient_quota' THEN 1 ELSE 2 END, scanDate DESC LIMIT 500";
-  return db.all(sql, params);
+  try {
+    const db = await getAdapter();
+    const where = [];
+    const params = [];
+    if (filters.status) { where.push("status = ?"); params.push(filters.status); }
+    if (filters.provider) { where.push("provider = ?"); params.push(filters.provider); }
+    if (filters.source) { where.push("source LIKE ?"); params.push(`%${filters.source}%`); }
+    const sql = "SELECT * FROM scannedKeys" + (where.length ? " WHERE " + where.join(" AND ") : "") + " ORDER BY CASE status WHEN 'valid' THEN 0 WHEN 'insufficient_quota' THEN 1 ELSE 2 END, scanDate DESC LIMIT 500";
+    return await db.all(sql, params);
+  } catch (err) {
+    if (err?.message?.includes("no such table")) return [];
+    console.error("[Scanner] Error fetching scanned keys:", err);
+    return [];
+  }
 }
 
 export async function deleteScannedKey(id) {

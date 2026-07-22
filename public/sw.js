@@ -17,7 +17,17 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   const { request } = e;
-  const url = new URL(request.url);
+  let url;
+  try {
+    url = new URL(request.url);
+  } catch {
+    return;
+  }
+
+  // Ignore non-HTTP/HTTPS schemes (e.g. chrome-extension://, moz-extension://, blob:, data:)
+  if (!url.protocol.startsWith("http")) {
+    return;
+  }
 
   // Ignore non-GET requests, API routes, and v1 endpoints
   if (request.method !== "GET" || url.pathname.startsWith("/api/") || url.pathname.startsWith("/v1/")) {
@@ -33,12 +43,12 @@ self.addEventListener("fetch", (e) => {
         .then((res) => {
           if (res.ok && res.status === 200) {
             const clone = res.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, clone));
+            caches.open(CACHE).then((cache) => cache.put(request, clone).catch(() => {})).catch(() => {});
           }
           return res;
         })
         .catch(async () => {
-          const cached = await caches.match(request);
+          const cached = await caches.match(request).catch(() => null);
           return cached || new Response("Offline", { status: 503 });
         })
     );
@@ -48,12 +58,12 @@ self.addEventListener("fetch", (e) => {
   // Stale-While-Revalidate strategy for static assets
   e.respondWith(
     (async () => {
-      const cached = await caches.match(request);
+      const cached = await caches.match(request).catch(() => null);
       const fetchPromise = fetch(request)
         .then((res) => {
           if (res.ok && res.status === 200) {
             const clone = res.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, clone));
+            caches.open(CACHE).then((cache) => cache.put(request, clone).catch(() => {})).catch(() => {});
           }
           return res;
         })
