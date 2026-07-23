@@ -177,7 +177,22 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 14: Correção de Persistência do Status das APIs e Toggles de Módulos (`/dashboard2`)
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  1. **Reset do Status Visual de Conexão**: O frontend ([`Dashboard2Client.jsx`](file:///c:/Users/user/Documents/GitHub/9router/src/app/dashboard2/Dashboard2Client.jsx)) utilizava estados React locais temporários (`tgConnected` e `waConnected`, ambos inicializados como `false`). Ao atualizar a página F5, esses estados voltavam para `false`, fazendo os cards do Telegram Userbot e WhatsApp exibirem "Desconectado" e "Aguardando QR Code", **ignorando os valores reais retornados pelo backend no endpoint `/api/agent/status/sidecars`** (`sidecars.channels.telegramUserbot` e `sidecars.channels.whatsapp`).
+  2. **Desmarcar de Módulos (Auto-Copilot)**: A função `handleToggleModule` aplicava a alteração local na memória React, mas não tratava a resposta HTTP da requisição `POST /api/agent/modules`. Caso a requisição falhasse ou sofria um recarregamento, o estado padrão (`copilotMode: false`) era restaurado do backend.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Cálculo de Conexão Real Derivado**: No [`Dashboard2Client.jsx`](file:///c:/Users/user/Documents/GitHub/9router/src/app/dashboard2/Dashboard2Client.jsx), criados os seletores derivados `isTgUserbotConnected = tgConnected || !!sidecars?.channels?.telegramUserbot` e `isWaConnected = waConnected || !!sidecars?.channels?.whatsapp`.
+  2. **Card Visual Conectado**: Atualizada a renderização dos cards do Telegram Userbot e do WhatsApp para exibirem a badge verde de status "Conectado", mensagem de confirmação e botão de desconexão funcional sempre que `sidecars` confirmar a sessão salva.
+  3. **Endpoints de Desconexão**: Adicionados os endpoints `POST /api/telegram/userbot/disconnect` e `POST /api/evolution/disconnect` no [`index.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/index.js) para permitir encerrar sessões pelo painel.
+  4. **Validação de Erros nos Toggles**: Ajustada a função `handleToggleModule` para verificar `res.ok` e reverter o toggle apenas se o backend reportar erro.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
 
 
 
