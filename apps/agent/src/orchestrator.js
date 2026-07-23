@@ -197,15 +197,18 @@ async function processMessage(chatId, text, userName, ctx = {}) {
   const activePrimaryId = usePrimary ? primaryId : "lucas";
   const activePrimary = getAgent(activePrimaryId);
 
+  // Check se é o primeiro turno da sessão para resgatar o handoff
+  const isFirstTurn = session.msgs.length <= 1;
+
   session.msgs.push({ role: "user", content: text });
 
   // 1. Carregar Personalidade do GitHub (ou fallback local)
   const { getActivePersonality } = require("./personality/personalityPoller");
   const githubPersonality = getActivePersonality();
 
-  // 2. Recuperar Contexto Relevante do ai-memory (obrigatório)
+  // 2. Recuperar Contexto Relevante do ai-memory (inclui handoff de sessão no primeiro turno)
   const { retrieveContext } = require("./memory/contextRetriever");
-  const memoryContext = await retrieveContext(text, chatId);
+  const memoryContext = await retrieveContext(text, chatId, { isFirstTurn });
 
   const systemPrompt = `${agentSystem(activePrimary, userName)}\n\n## Diretrizes de Personalidade:\n${githubPersonality}${memoryContext}`;
 

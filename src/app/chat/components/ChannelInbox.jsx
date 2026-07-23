@@ -52,11 +52,11 @@ export function ChannelInbox({ onSelectPrompt }) {
           setIsOpen(!isOpen);
           if (!isOpen) fetchUnread();
         }}
-        className="relative flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text-muted hover:border-brand-500 hover:text-text-main transition-colors"
+        className="relative flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-text-muted hover:border-brand-500 hover:text-text-main transition-colors sm:px-3"
         title="Inbox de Canais (WhatsApp / Telegram)"
       >
         <span className="material-symbols-outlined text-sm text-brand-500">inbox</span>
-        <span>Canais</span>
+        <span className="hidden sm:inline">Canais</span>
         {unreadCount > 0 && (
           <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] font-bold text-white">
             {unreadCount}
@@ -65,7 +65,7 @@ export function ChannelInbox({ onSelectPrompt }) {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-10 z-50 w-80 rounded-xl border border-border bg-surface p-4 shadow-2xl space-y-3 dark:bg-surface-2 animate-in fade-in zoom-in-95">
+        <div className="absolute right-0 top-11 z-50 w-[calc(100vw-1.5rem)] max-w-80 rounded-xl border border-border bg-surface p-4 shadow-2xl space-y-3 dark:bg-surface-2 animate-in fade-in zoom-in-95">
           <div className="flex items-center justify-between border-b border-border pb-2">
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-base text-brand-500">inbox</span>

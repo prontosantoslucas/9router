@@ -180,22 +180,26 @@ async function recordMemory(content, metadata = {}) {
 /**
  * Handoff — busca o "bloco de resumo" da última sessão para injetar no prompt inicial.
  */
-async function getSessionHandoff({ workspaceId, projectId } = {}) {
-  if (!endpoint()) return null;
-  try {
-    const tools = await listTools();
-    const t = tools.find((x) =>
-      ["memory_handoff_accept", "session_handoff", "get_handoff"].includes(x.name)
-    );
-    if (!t) return null;
-    const result = await callTool(t.name, { workspace_id: workspaceId, project_id: projectId });
-    if (result?.structuredContent?.handoff) return result.structuredContent.handoff;
-    if (result?.content?.[0]?.text) return result.content[0].text;
-    return null;
-  } catch (err) {
-    console.warn(`[ai-memory] getSessionHandoff fallback (${err.message})`);
-    return null;
+async function getSessionHandoff({ workspaceId, projectId, chatId } = {}) {
+  if (endpoint()) {
+    try {
+      const tools = await listTools();
+      const t = tools.find((x) =>
+        ["memory_handoff_accept", "session_handoff", "get_handoff"].includes(x.name)
+      );
+      if (t) {
+        const result = await callTool(t.name, { workspace_id: workspaceId, project_id: projectId });
+        if (result?.structuredContent?.handoff) return result.structuredContent.handoff;
+        if (result?.content?.[0]?.text) return result.content[0].text;
+      }
+    } catch (err) {
+      console.warn(`[ai-memory] getSessionHandoff fallback (${err.message})`);
+    }
   }
+
+  // Fallback: busca trechos de resumo recentes no Superbrain
+  const recent = superbrain.searchMemoryInMarkdown("resumo sessão histórico", 1);
+  return recent.length > 0 ? recent[0].content : null;
 }
 
 /**

@@ -80,29 +80,9 @@ function ChatShell() {
     return () => clearInterval(interval);
   }, [fetchDrafts]);
 
-  // Notificações de canais (Telegram/WhatsApp): avisa no chat quando chega mensagem nova.
-  const fetchChannelNotifs = useCallback(async () => {
-    try {
-      const res = await fetch("/api/agent/channels/notifications");
-      if (!res.ok) return;
-      const data = await res.json();
-      for (const n of data.notifications || []) {
-        const canal = n.channel === "whatsapp" ? "WhatsApp" : "Telegram";
-        const origem = n.isGroup ? `no grupo "${n.chatName}"` : `de ${n.senderName || n.chatName}`;
-        showToast({
-          kind: "info",
-          text: `📩 ${canal}: nova mensagem ${origem}. Peça "resume" ou "responde".`,
-          ttlMs: 8000,
-        });
-      }
-    } catch {}
-  }, [showToast]);
-
-  useEffect(() => {
-    fetchChannelNotifs();
-    const id = setInterval(fetchChannelNotifs, 20000);
-    return () => clearInterval(id);
-  }, [fetchChannelNotifs]);
+  // Notificações de canais (Telegram/WhatsApp) são gerenciadas pelo <ChannelInbox> no header,
+  // que faz peek (não-destrutivo) e só marca como lido quando o usuário abre/limpa o painel.
+  // O poller de toast foi removido porque consumia (marcava lido) as mensagens antes do inbox vê-las.
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -207,13 +187,13 @@ function ChatShell() {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="relative flex h-screen w-full flex-col bg-bg text-text-main"
+      className="relative flex h-screen h-[100dvh] w-full flex-col overflow-hidden bg-bg text-text-main"
     >
       <DropOverlay isDragging={isDragging} />
 
       {/* Header */}
-      <header className="flex h-16 items-center justify-between border-b border-border bg-surface px-6 shadow-soft dark:bg-surface-2">
-        <div className="flex items-center gap-3">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border bg-surface px-3 shadow-soft [padding-left:max(0.75rem,env(safe-area-inset-left))] [padding-right:max(0.75rem,env(safe-area-inset-right))] sm:h-16 sm:px-6 dark:bg-surface-2">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => {
@@ -223,37 +203,39 @@ function ChatShell() {
                 router.push("/dashboard");
               }
             }}
-            className="flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:bg-bg-alt hover:text-text-main"
+            className="flex shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:bg-bg-alt hover:text-text-main sm:px-3"
             title="Voltar ao Painel"
           >
             <span className="material-symbols-outlined text-sm text-brand-500">arrow_back</span>
-            <span>{t("Voltar")}</span>
+            <span className="hidden sm:inline">{t("Voltar")}</span>
           </button>
-          <AgentBadge agentId="lucas" size="md" />
+          <div className="min-w-0 truncate">
+            <AgentBadge agentId="lucas" size="md" />
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <ChannelInbox onSelectPrompt={(prompt) => handleSend(prompt)} />
 
           <button
             onClick={clearSession}
-            className="flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:bg-bg-alt hover:text-danger"
+            className="flex shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:bg-bg-alt hover:text-danger sm:px-3"
             title={i18nLabels.headerClearTitle}
           >
             <span className="material-symbols-outlined text-sm">delete</span>
-            <span>{i18nLabels.headerClearChat}</span>
+            <span className="hidden sm:inline">{i18nLabels.headerClearChat}</span>
           </button>
         </div>
       </header>
 
       {/* Mensagens */}
-      <main className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-6">
+      <main className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6">
         <div className="mx-auto max-w-4xl space-y-4">
           {copilotDrafts.length > 0 && (
             <div className="mb-6 space-y-3">
               <h4 className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-500">
                 <span className="material-symbols-outlined text-sm">verified_user</span>
-                <span>{t.copilotHeading(copilotDrafts.length)}</span>
+                <span>{i18nLabels.copilotHeading(copilotDrafts.length)}</span>
               </h4>
               {copilotDrafts.map((draft) => (
                 <CopilotApprovalCard
@@ -269,8 +251,8 @@ function ChatShell() {
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <AgentBadge agentId="lucas" size="md" />
-              <h2 className="mt-4 text-xl font-extrabold text-text-main">{t.emptyGreeting}</h2>
-              <p className="mt-2 max-w-md text-sm text-text-muted">{t.emptySubtitle}</p>
+              <h2 className="mt-4 text-xl font-extrabold text-text-main">{i18nLabels.emptyGreeting}</h2>
+              <p className="mt-2 max-w-md text-sm text-text-muted">{i18nLabels.emptySubtitle}</p>
             </div>
           ) : (
             messages.map((msg) => (
@@ -286,7 +268,7 @@ function ChatShell() {
           {isSending && (
             <div className="flex items-center gap-2 text-xs italic text-text-muted" aria-live="polite">
               <TypingDots />
-              <span>{t.typing}</span>
+              <span>{i18nLabels.typing}</span>
             </div>
           )}
 
@@ -295,7 +277,7 @@ function ChatShell() {
       </main>
 
       {/* Composer */}
-      <footer className="border-t border-border bg-surface p-4 dark:bg-surface-2">
+      <footer className="shrink-0 border-t border-border bg-surface p-3 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 dark:bg-surface-2">
         <div className="mx-auto max-w-4xl space-y-2">
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-2 pb-2">
@@ -312,7 +294,7 @@ function ChatShell() {
           {isUploading && (
             <div className="flex items-center gap-2 text-xs text-brand-500" aria-live="polite">
               <span className="material-symbols-outlined animate-spin text-sm">sync</span>
-              <span>{t.processing}</span>
+              <span>{i18nLabels.processing}</span>
             </div>
           )}
 

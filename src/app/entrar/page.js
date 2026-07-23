@@ -43,7 +43,7 @@ export default function LoginPage() {
         clearTimeout(timeoutId);
         if (res.ok) {
           const data = await res.json();
-          if (data.requireLogin === false) { window.location.assign("/dashboard"); return; }
+          if (data.requireLogin === false) { window.location.assign("/chat"); return; }
           setHasPassword(!!data.hasPassword);
           setAuthMode(data.authMode || "password");
           setOidcConfigured(data.oidcConfigured === true);
@@ -72,7 +72,7 @@ export default function LoginPage() {
       if (res.ok) {
         const data = await res.json();
         if (data.mustChangePassword) { setMustChange(true); return; }
-        window.location.assign("/dashboard");
+        window.location.assign("/chat");
       } else {
         const data = await res.json();
         setError(data.error || "Invalid password");
@@ -93,7 +93,7 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ currentPassword: password, newPassword }),
       });
-      if (res.ok) { window.location.assign("/dashboard"); }
+      if (res.ok) { window.location.assign("/chat"); }
       else { const data = await res.json(); setError(data.error || "Failed to set password"); }
     } catch { setError("An error occurred."); }
     finally { setLoading(false); }

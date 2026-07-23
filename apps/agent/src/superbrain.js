@@ -121,13 +121,26 @@ async function appendMemory(text) {
   }
 }
 
-function searchMemoryInMarkdown(query, limit = 5) {
-  if (!currentDecoded || !query) return [];
-  const terms = query
+function tokenize(text) {
+  return String(text || "")
     .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s]/gi, " ")
     .split(/\s+/)
     .filter((w) => w.length > 2);
-  if (terms.length === 0) return [];
+}
+
+function searchMemoryInMarkdown(query, limit = 5) {
+  if (!currentDecoded || !query) return [];
+  const queryTokens = tokenize(query);
+  if (queryTokens.length === 0) return [];
+
+  // Extrai bi-gramas da query
+  const queryBigrams = [];
+  for (let i = 0; i < queryTokens.length - 1; i++) {
+    queryBigrams.push(`${queryTokens[i]} ${queryTokens[i + 1]}`);
+  }
 
   // Divide o arquivo Markdown por parágrafos/seções
   const blocks = currentDecoded
@@ -135,12 +148,56 @@ function searchMemoryInMarkdown(query, limit = 5) {
     .map((b) => b.trim())
     .filter((b) => b.length > 10);
 
+  if (blocks.length === 0) return [];
+
+  // BM25 / TF-IDF parâmetros
+  const k1 = 1.2;
+  const b = 0.75;
+  const avgDocLen = blocks.reduce((sum, block) => sum + tokenize(block).length, 0) / blocks.length || 1;
+
+  // IDF dos termos da query em relação aos blocos
+  const N = blocks.length;
+  const idf = {};
+  for (const term of queryTokens) {
+    const docCount = blocks.filter((block) => tokenize(block).includes(term)).length;
+    idf[term] = Math.log((N - docCount + 0.5) / (docCount + 0.5) + 1);
+  }
+
   const matches = [];
+
   for (const block of blocks) {
+    const blockTokens = tokenize(block);
+    const docLen = blockTokens.length;
+    if (docLen === 0) continue;
+
+    let bm25Score = 0;
+
+    // Frequência dos termos unigramas
+    const termFreqs = {};
+    for (const token of blockTokens) {
+      termFreqs[token] = (termFreqs[token] || 0) + 1;
+    }
+
+    for (const term of queryTokens) {
+      const tf = termFreqs[term] || 0;
+      if (tf > 0) {
+        const termIdf = idf[term] || 0;
+        const num = tf * (k1 + 1);
+        const den = tf + k1 * (1 - b + b * (docLen / avgDocLen));
+        bm25Score += termIdf * (num / den);
+      }
+    }
+
+    // Bônus para bi-gramas e frases exatas
     const lowerBlock = block.toLowerCase();
-    const score = terms.reduce((acc, term) => (lowerBlock.includes(term) ? acc + 1 : acc), 0);
-    if (score > 0) {
-      matches.push({ content: block, score });
+    for (const bigram of queryBigrams) {
+      if (lowerBlock.includes(bigram)) {
+        bm25Score += 2.5;
+      }
+    }
+
+    if (bm25Score > 0.05) {
+      matches.push({ content: block, score: bm25Score });
     }
   }
 

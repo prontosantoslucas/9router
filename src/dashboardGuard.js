@@ -282,12 +282,12 @@ export async function proxy(request) {
     return NextResponse.redirect(new URL("/entrar", request.url));
   }
 
-  // Redirect / to /dashboard if authenticated, otherwise show landing page
+  // Redirect / to /chat if authenticated (chat é a tela primária), senão landing page
   if (pathname === "/") {
     const token = request.cookies.get("auth_token")?.value;
     if (token) {
       if (await verifyDashboardAuthToken(token)) {
-        return NextResponse.redirect(new URL("/dashboard", request.url));
+        return NextResponse.redirect(new URL("/chat", request.url));
       }
     }
     return pageNoStore(request);
