@@ -258,7 +258,7 @@ export async function proxy(request) {
           const tunnelHost = settings.tunnelUrl ? new URL(settings.tunnelUrl).hostname.toLowerCase() : "";
           const tailscaleHost = settings.tailscaleUrl ? new URL(settings.tailscaleUrl).hostname.toLowerCase() : "";
           if ((tunnelHost && host === tunnelHost) || (tailscaleHost && host === tailscaleHost)) {
-            return NextResponse.redirect(new URL("/login", request.url));
+            return NextResponse.redirect(new URL("/entrar", request.url));
           }
         }
       }
@@ -275,11 +275,11 @@ export async function proxy(request) {
       if (await verifyDashboardAuthToken(token)) {
         return pageNoStore(request);
       } else {
-        return NextResponse.redirect(new URL("/login", request.url));
+        return NextResponse.redirect(new URL("/entrar", request.url));
       }
     }
 
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL("/entrar", request.url));
   }
 
   // Redirect / to /dashboard if authenticated, otherwise show landing page
