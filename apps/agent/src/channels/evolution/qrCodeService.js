@@ -60,7 +60,9 @@ function normalize(data) {
 async function getQrCode() {
   const b = base();
   if (!b) {
-    return { error: "EVOLUTION_API_URL não configurado. Configure o servidor Evolution API primeiro." };
+    // Alterna automaticamente para o WhatsApp Nativo embutido (Baileys)
+    const nativeClient = require("../whatsapp/nativeClient");
+    return nativeClient.getQrCode();
   }
 
   // 1. Garante que a instância existe (create devolve QR se criada agora)
@@ -88,7 +90,11 @@ async function getQrCode() {
 // Status da conexão (para o HealthDot / polling)
 async function getConnectionState() {
   const b = base();
-  if (!b) return { state: "not_configured" };
+  if (!b) {
+    const nativeClient = require("../whatsapp/nativeClient");
+    const st = nativeClient.getStatus();
+    return { state: st.connected ? "open" : st.state };
+  }
   try {
     const res = await fetch(`${b}/instance/connectionState/${INSTANCE()}`, {
       headers: { apikey: cfg.EVOLUTION_API_KEY },

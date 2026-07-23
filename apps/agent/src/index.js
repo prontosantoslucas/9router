@@ -498,7 +498,7 @@ app.get("/api/status/sidecars", async (req, res) => {
     google,
     workers,
     channels: {
-      whatsapp: !!cfg.EVOLUTION_API_URL,
+      whatsapp: !!cfg.EVOLUTION_API_URL || require("./channels/whatsapp/nativeClient").getStatus().connected,
       telegramUserbot: !!userbotAuth.getSavedSession(),
     },
   });

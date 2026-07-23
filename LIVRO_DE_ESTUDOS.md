@@ -164,7 +164,21 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 13: Integração 100% Nativa do WhatsApp (Baileys) sem Dependências Externas
+
+* **Por que foi feita essa alteração (Causa Raiz & Objetivo)**:
+  - Eliminar a necessidade obrigatória de subir um container/servidor externo da Evolution API (`EVOLUTION_API_URL` e `EVOLUTION_API_KEY`) para utilizar o WhatsApp, permitindo que a própria aplicação Node.js do Agente gerencie as conexões WhatsApp Web e gere os QR Codes nativamente no painel `/dashboard2`.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Instalação das Bibliotecas Nativas**: Instalados os pacotes `@whiskeysockets/baileys` e `qrcode` diretamente no módulo `apps/agent`.
+  2. **Criação do Cliente Nativo**: Criado o gerenciador [`nativeClient.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/channels/whatsapp/nativeClient.js) utilizando `useMultiFileAuthState` com persistência em `$DATA_DIR/agent/whatsapp-session`. Ele converte os eventos de QR Code recebidos em imagens base64 (`data:image/png;base64,...`) e escuta mensagens recebidas registrando no `channelStore`.
+  3. **Fallback Automático no Roteamento**: Atualizados os módulos [`qrCodeService.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/channels/evolution/qrCodeService.js) e [`evolutionApi.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/channels/evolution/evolutionApi.js) para que, quando `EVOLUTION_API_URL` não estiver definido, a aplicação utilize o cliente nativo Baileys de forma transparente.
+  4. **Suíte de Testes**: Criada a suíte [`tests/unit/whatsapp-native.test.js`](file:///c:/Users/user/Documents/GitHub/9router/tests/unit/whatsapp-native.test.js) (82 testes de unidade passando ao todo).
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
 
 
 

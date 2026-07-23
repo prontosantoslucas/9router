@@ -7,8 +7,8 @@ const cfg = require("../../config");
 async function sendTextMessage(to, text) {
   const baseUrl = cfg.EVOLUTION_API_URL;
   if (!baseUrl) {
-    console.log("[EvolutionAPI] EVOLUTION_API_URL não configurado. Simulação de envio.");
-    return { ok: true, simulated: true };
+    const nativeClient = require("../whatsapp/nativeClient");
+    return nativeClient.sendTextMessage(to, text);
   }
 
   const instance = cfg.EVOLUTION_INSTANCE_NAME || "lucas";
