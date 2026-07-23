@@ -523,7 +523,33 @@ app.use((req, res) => {
 });
 
 async function start() {
-  await models.init();
+  // Sobe o HTTP server PRIMEIRO — não bloquear o listen em init de rede.
+  // Antes, `await models.init()` (que dá "Connection error" e faz retry) atrasava
+  // o app.listen, e o proxy do Next batia em 3717 antes do agente aceitar conexão
+  // → "fetch failed" no chat. Agora o servidor aceita conexões imediatamente e
+  // models.init() roda em background.
+  const server = app.listen(PORT, "127.0.0.1", () => {
+    console.log(`
+╔══════════════════════════════════════════╗
+║        Agente Lucas (Loopback)           ║
+║──────────────────────────────────────────║
+║  Host:    http://127.0.0.1:${PORT}        ║
+║  Status:  Isolado em rede privada        ║
+╚══════════════════════════════════════════╝
+    `);
+  });
+  server.on("error", (err) => {
+    console.error("[FATAL] Falha ao abrir porta do agente:", err.message);
+    process.exit(1);
+  });
+
+  // Inicializa modelos em background (não bloqueia o listen)
+  models.init()
+    .then(() => {
+      const status = models.getStatus();
+      console.log(`Modelos: ${status.available}/${status.total} disponíveis`);
+    })
+    .catch((err) => console.error("[Models] init falhou (não-fatal):", err.message));
 
   const tgBot = createBot();
   if (tgBot) {
@@ -565,19 +591,7 @@ async function start() {
     console.log("[Workers] AGENT_WORKERS desativado nesta instância.");
   }
 
-  app.listen(PORT, "127.0.0.1", () => {
-    console.log(`
-╔══════════════════════════════════════════╗
-║        Agente Lucas (Loopback)           ║
-║──────────────────────────────────────────║
-║  Host:    http://127.0.0.1:${PORT}        ║
-║  Status:  Isolado em rede privada        ║
-║  TG Bot:  ${tgBot ? "✅ Ativo" : "⏹️  Desativado"}                ║
-╚══════════════════════════════════════════╝
-    `);
-    const status = models.getStatus();
-    console.log(`Modelos: ${status.available}/${status.total} disponíveis`);
-  });
+  console.log(`[Agent] TG Bot: ${tgBot ? "ativo" : "desativado"} · Workers: ${enableWorkers ? "on" : "off"}`);
 }
 
 start().catch((err) => {

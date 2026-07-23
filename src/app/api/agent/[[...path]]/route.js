@@ -159,21 +159,24 @@ async function handleProxy(request, context) {
     proxyHeaders.set("apikey", request.headers.get("apikey"));
   }
 
-  // 4. Streaming do body — NUNCA bufferizar em RAM.
-  //    request.body é ReadableStream; passamos direto ao upstream fetch.
-  //    (undici, backend do fetch do Node, aceita ReadableStream com duplex:"half".)
+  // 4. Body BUFFERIZADO (não streaming).
+  //    Streaming com `duplex: "half"` para o loopback do agente é frágil no
+  //    undici e estoura "fetch failed" intermitente (ECONNRESET) — foi o que
+  //    quebrou o chat. O corpo do chat é JSON pequeno e o upload é base64 JSON
+  //    (limite 50MB), então bufferizar é seguro e robusto.
   const upstreamUrl = `${AGENT_LOOPBACK_URL}${fullTargetPath}`;
   const hasBody = !NO_BODY_METHODS.has(request.method);
 
   const fetchInit = {
     method: request.method,
     headers: proxyHeaders,
-    // Redirects são feitos aqui, agente é loopback trusted.
     redirect: "manual",
   };
-  if (hasBody && request.body) {
-    fetchInit.body = request.body;
-    fetchInit.duplex = "half";
+  if (hasBody) {
+    const bodyBuf = await request.arrayBuffer();
+    if (bodyBuf && bodyBuf.byteLength > 0) {
+      fetchInit.body = Buffer.from(bodyBuf);
+    }
   }
 
   try {
