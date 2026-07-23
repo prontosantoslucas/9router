@@ -152,7 +152,20 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 12: Resolução do Erro Runtime `userbotAuth.saveSession is not a function`
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - No fluxo de conclusão de autenticação do Telegram Userbot (`userbotAuthFlow.js`), após a validação do código OTP e senha 2FA, a função `userbotAuth.saveSession` era invocada para persistir as credenciais em disco. No entanto, a função `saveSession` não estava exportada na interface do módulo [`userbotAuth.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/channels/telegram/userbotAuth.js) (apenas `saveCredentials` estava exportada), ocasionando o erro de execução `TypeError: userbotAuth.saveSession is not a function` mesmo com a conexão concluída no servidor do Telegram.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Criação da Função `saveSession`**: Implementada a função `saveSession(sessionString, opts)` no [`userbotAuth.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/channels/telegram/userbotAuth.js), que aceita a string de sessão e as credenciais (`apiId`, `apiHash`, `phone`), delegando para `saveCredentials` com mesclagem segura de parâmetros.
+  2. **Exportação no Módulo**: Adicionada a função `saveSession` no `module.exports` do `userbotAuth.js`.
+  3. **Ajuste no Chamador**: Atualizado o [`userbotAuthFlow.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/channels/telegram/userbotAuthFlow.js) para passar as opções `{ apiId, apiHash, phone }` na gravação da sessão.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
 
 
 
