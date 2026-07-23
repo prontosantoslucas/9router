@@ -72,9 +72,12 @@ export async function createDeal(data) {
   const db = await getAdapter();
   const now = new Date().toISOString();
   const id = uuidv4();
+  const stage = data.stage || "lead";
+  const valueCents = data.valueCents || 0;
+  const currency = data.currency || "USD";
   db.run(`INSERT INTO crmDeals(id, contactId, title, valueCents, currency, stage, source, notes, createdAt, updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?)`,
-    [id, data.contactId, data.title, data.valueCents || 0, data.currency || "USD", data.stage || "lead", data.source || null, data.notes || null, now, now]);
-  return { id, ...data, createdAt: now, updatedAt: now };
+    [id, data.contactId, data.title, valueCents, currency, stage, data.source || null, data.notes || null, now, now]);
+  return { id, ...data, stage, valueCents, currency, createdAt: now, updatedAt: now };
 }
 
 export async function updateDealStage(id, stage) {

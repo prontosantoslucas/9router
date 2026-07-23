@@ -61,6 +61,9 @@ RUN mkdir -p /app/data /app/data/agent && chown -R node:node /app && \
 RUN apk --no-cache add python3 py3-pip && \
   (pip3 install --no-cache-dir --break-system-packages "headroom-ai[proxy]" || echo "headroom install skipped")
 
+# ffmpeg — usado pelo agente para processar vídeo (extrair áudio p/ STT e frames p/ visão).
+RUN apk --no-cache add ffmpeg || echo "ffmpeg install skipped"
+
 # Fix permissions at runtime (handles mounted volumes)
 RUN apk --no-cache upgrade && apk --no-cache add su-exec && \
   printf '#!/bin/sh\nchown -R node:node /app/data /app/data-home 2>/dev/null\nexec su-exec node "$@"\n' > /entrypoint.sh && \

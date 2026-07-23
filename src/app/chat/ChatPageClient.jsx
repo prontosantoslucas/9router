@@ -13,23 +13,25 @@ import { useChatSession } from "./hooks/useChatSession";
 import { useFileUpload } from "./hooks/useFileUpload";
 import { useNotionSave } from "./hooks/useNotionSave";
 
-// i18n leve — dicionário local. Migrar para RuntimeI18nProvider é follow-up.
-const t = {
-  headerClearChat: "Limpar chat",
-  headerClearTitle: "Limpar histórico da sessão",
-  emptyGreeting: "Olá! Eu sou o Lucas.",
-  emptySubtitle: "Estou pronto para ajudar no WhatsApp, Telegram e aqui na Web. Como posso ajudar hoje?",
-  typing: "Lucas está digitando...",
-  processing: "Processando arquivo...",
-  copilotHeading: (n) => `Mensagens pendentes do modo Co-Piloto (${n})`,
-  uploadFailed: (m) => `Falha no upload: ${m}`,
-  notionSaved: "Salvo no Notion.",
-  notionFailed: (m) => `Falha ao salvar no Notion: ${m}`,
-  copilotApproved: "Rascunho aprovado e enviado.",
-  copilotRejected: "Rascunho rejeitado.",
-  copilotApproveFailed: (m) => `Erro ao aprovar rascunho: ${m}`,
-  copilotRejectFailed: (m) => `Erro ao rejeitar rascunho: ${m}`,
-  copilotLoadFailed: "Não consegui carregar rascunhos.",
+import { ChannelInbox } from "./components/ChannelInbox";
+import { translate as t } from "@/i18n/runtime";
+
+const i18nLabels = {
+  headerClearChat: t("Limpar chat"),
+  headerClearTitle: t("Limpar histórico da sessão"),
+  emptyGreeting: t("Olá! Eu sou o Lucas."),
+  emptySubtitle: t("Estou pronto para ajudar no WhatsApp, Telegram e aqui na Web. Como posso ajudar hoje?"),
+  typing: t("Lucas está digitando..."),
+  processing: t("Processando arquivo..."),
+  copilotHeading: (n) => `${t("Mensagens pendentes do modo Co-Piloto")} (${n})`,
+  uploadFailed: (m) => `${t("Falha no upload")}: ${m}`,
+  notionSaved: t("Salvo no Notion."),
+  notionFailed: (m) => `${t("Falha ao salvar no Notion")}: ${m}`,
+  copilotApproved: t("Rascunho aprovado e enviado."),
+  copilotRejected: t("Rascunho rejeitado."),
+  copilotApproveFailed: (m) => `${t("Erro ao aprovar rascunho")}: ${m}`,
+  copilotRejectFailed: (m) => `${t("Erro ao rejeitar rascunho")}: ${m}`,
+  copilotLoadFailed: t("Não consegui carregar rascunhos."),
 };
 
 const COPILOT_POLL_INTERVAL_MS = 15000;
@@ -52,6 +54,7 @@ function ChatShell() {
   const [isDragging, setIsDragging] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [copilotDrafts, setCopilotDrafts] = useState([]);
+  const [promptText, setPromptText] = useState("");
   const messagesEndRef = useRef(null);
 
   // Auto-scroll ao receber novas mensagens
@@ -67,16 +70,39 @@ function ChatShell() {
       const data = await res.json();
       setCopilotDrafts(data.drafts || []);
     } catch (err) {
-      // Só notifica se foi o primeiro fetch — polling silencia
       console.warn("[Copilot] fetch falhou:", err.message);
     }
   }, []);
 
   useEffect(() => {
-    fetchDrafts(); // primeiro fetch
+    fetchDrafts();
     const interval = setInterval(fetchDrafts, COPILOT_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [fetchDrafts]);
+
+  // Notificações de canais (Telegram/WhatsApp): avisa no chat quando chega mensagem nova.
+  const fetchChannelNotifs = useCallback(async () => {
+    try {
+      const res = await fetch("/api/agent/channels/notifications");
+      if (!res.ok) return;
+      const data = await res.json();
+      for (const n of data.notifications || []) {
+        const canal = n.channel === "whatsapp" ? "WhatsApp" : "Telegram";
+        const origem = n.isGroup ? `no grupo "${n.chatName}"` : `de ${n.senderName || n.chatName}`;
+        showToast({
+          kind: "info",
+          text: `📩 ${canal}: nova mensagem ${origem}. Peça "resume" ou "responde".`,
+          ttlMs: 8000,
+        });
+      }
+    } catch {}
+  }, [showToast]);
+
+  useEffect(() => {
+    fetchChannelNotifs();
+    const id = setInterval(fetchChannelNotifs, 20000);
+    return () => clearInterval(id);
+  }, [fetchChannelNotifs]);
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -95,22 +121,42 @@ function ChatShell() {
   const handleUpload = async (file) => {
     try {
       const result = await uploadFile(file);
-      if (result) {
+      if (!result) return;
+      if (result.isImage) {
+        setAttachments((prev) => [
+          ...prev,
+          { name: result.filename || file.name, isImage: true, base64: result.base64, mimeType: result.mimeType },
+        ]);
+      } else if (result.isVideo) {
+        const parts = [];
+        if (result.transcript) parts.push(`[Vídeo: ${result.filename} — transcrição do áudio]\n${result.transcript}`);
+        setAttachments((prev) => [
+          ...prev,
+          ...(parts.length ? [{ name: result.filename, text: parts.join("\n") }] : []),
+          ...(result.frames || []).map((fr, i) => ({
+            name: `${result.filename} (frame ${i + 1})`, isImage: true, base64: fr.base64, mimeType: fr.mimeType,
+          })),
+        ]);
+      } else {
         setAttachments((prev) => [...prev, { name: file.name, text: result.text }]);
       }
     } catch (err) {
-      showToast({ kind: "error", text: t.uploadFailed(err.message) });
+      showToast({ kind: "error", text: i18nLabels.uploadFailed(err.message) });
     }
   };
 
   const handleSend = (text) => {
+    const images = attachments.filter((a) => a.isImage).map((a) => ({ base64: a.base64, mimeType: a.mimeType }));
+    const docs = attachments.filter((a) => !a.isImage);
+
     let fullText = text;
-    if (attachments.length > 0) {
-      const fileContext = attachments.map((a) => `[Anexo: ${a.name}]\n${a.text}`).join("\n\n");
+    if (docs.length > 0) {
+      const fileContext = docs.map((a) => `[Anexo: ${a.name}]\n${a.text}`).join("\n\n");
       fullText = `${fileContext}\n\n${text}`;
-      setAttachments([]);
     }
-    sendMessage(fullText);
+    if (attachments.length > 0) setAttachments([]);
+
+    sendMessage(fullText, images.length > 0 ? { images } : undefined);
   };
 
   const handleSaveNotion = async (message) => {
@@ -120,9 +166,9 @@ function ChatShell() {
         content: message.content,
         tags: ["LucasAgent", "WebChat"],
       });
-      showToast({ kind: "success", text: t.notionSaved });
+      showToast({ kind: "success", text: i18nLabels.notionSaved });
     } catch (err) {
-      showToast({ kind: "error", text: t.notionFailed(err.message) });
+      showToast({ kind: "error", text: i18nLabels.notionFailed(err.message) });
     }
   };
 
@@ -135,9 +181,9 @@ function ChatShell() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setCopilotDrafts((prev) => prev.filter((d) => d.id !== draftId));
-      showToast({ kind: "success", text: t.copilotApproved });
+      showToast({ kind: "success", text: i18nLabels.copilotApproved });
     } catch (err) {
-      showToast({ kind: "error", text: t.copilotApproveFailed(err.message) });
+      showToast({ kind: "error", text: i18nLabels.copilotApproveFailed(err.message) });
     }
   };
 
@@ -150,9 +196,9 @@ function ChatShell() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setCopilotDrafts((prev) => prev.filter((d) => d.id !== draftId));
-      showToast({ kind: "info", text: t.copilotRejected });
+      showToast({ kind: "info", text: i18nLabels.copilotRejected });
     } catch (err) {
-      showToast({ kind: "error", text: t.copilotRejectFailed(err.message) });
+      showToast({ kind: "error", text: i18nLabels.copilotRejectFailed(err.message) });
     }
   };
 
@@ -181,19 +227,21 @@ function ChatShell() {
             title="Voltar ao Painel"
           >
             <span className="material-symbols-outlined text-sm text-brand-500">arrow_back</span>
-            <span>Voltar</span>
+            <span>{t("Voltar")}</span>
           </button>
           <AgentBadge agentId="lucas" size="md" />
         </div>
 
         <div className="flex items-center gap-3">
+          <ChannelInbox onSelectPrompt={(prompt) => handleSend(prompt)} />
+
           <button
             onClick={clearSession}
             className="flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:bg-bg-alt hover:text-danger"
-            title={t.headerClearTitle}
+            title={i18nLabels.headerClearTitle}
           >
             <span className="material-symbols-outlined text-sm">delete</span>
-            <span>{t.headerClearChat}</span>
+            <span>{i18nLabels.headerClearChat}</span>
           </button>
         </div>
       </header>

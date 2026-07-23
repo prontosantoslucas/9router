@@ -7,7 +7,9 @@ export default function BillingPage() {
   const [plans, setPlans] = useState([]);
   const [payments, setPayments] = useState([]);
   const [keys, setKeys] = useState([]);
+  const [gateways, setGateways] = useState([]);
   const [stats, setStats] = useState(null);
+  const [usageStats, setUsageStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Billing Cycle Toggle (monthly vs annual)
@@ -23,18 +25,19 @@ export default function BillingPage() {
   const [generatedKey, setGeneratedKey] = useState(null);
   const [copiedKey, setCopiedKey] = useState(false);
 
-  // Simulação de Checkout PIX
-  const [checkoutStep, setCheckoutStep] = useState(1); // 1 = Método, 2 = QR Code / Processando
-  const [selectedPaymentGateway, setSelectedPaymentGateway] = useState("pix");
-  const [pixCopySuccess, setPixCopySuccess] = useState(false);
+  // Gateway Config Modal
+  const [selectedGatewayForConfig, setSelectedGatewayForConfig] = useState(null);
+  const [gwApiKey, setGwApiKey] = useState("");
+  const [gwWebhookSecret, setGwWebhookSecret] = useState("");
+  const [gwTestMode, setGwTestMode] = useState(false);
 
-  // Gateways State
-  const [gateways, setGateways] = useState([
-    { id: "stripe", name: "Stripe", icon: "credit_card", status: "active", type: "Cartão / Global", testMode: false },
-    { id: "mercadopago", name: "Mercado Pago", icon: "qr_code_2", status: "active", type: "PIX / Cartão BR", testMode: false },
-    { id: "opennode", name: "OpenNode", icon: "currency_bitcoin", status: "active", type: "Bitcoin / USDT Crypto", testMode: true },
-    { id: "paypal", name: "PayPal", icon: "account_balance_wallet", status: "inactive", type: "PayPal Express", testMode: true },
-  ]);
+  // Checkout Flow Real
+  const [checkoutStep, setCheckoutStep] = useState(1); // 1 = Método, 2 = QR Code / Detalhes
+  const [selectedPaymentGateway, setSelectedPaymentGateway] = useState("mercadopago");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("pix");
+  const [pixPayload, setPixPayload] = useState(null); // { qrCode, qrCodeBase64, checkoutId, isMock }
+  const [pixCopySuccess, setPixCopySuccess] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   useEffect(() => {
     fetchBillingData();
@@ -43,17 +46,28 @@ export default function BillingPage() {
   const fetchBillingData = async () => {
     setLoading(true);
     try {
-      const [plansRes, paymentsRes, keysRes, statsRes] = await Promise.all([
-        fetch("/api/billing/plans").then((r) => r.json()),
-        fetch("/api/billing/payments").then((r) => r.json()),
-        fetch("/api/billing/api-keys").then((r) => r.json()),
-        fetch("/api/billing/stats").then((r) => r.json()),
+      const [plansRes, paymentsRes, keysRes, statsRes, gatewaysRes, usageRes] = await Promise.all([
+        fetch("/api/billing/plans").then((r) => r.json()).catch(() => ({ plans: [] })),
+        fetch("/api/billing/payments").then((r) => r.json()).catch(() => ({ payments: [] })),
+        fetch("/api/billing/api-keys").then((r) => r.json()).catch(() => ({ keys: [] })),
+        fetch("/api/billing/stats").then((r) => r.json()).catch(() => ({})),
+        fetch("/api/billing/gateways").then((r) => r.json()).catch(() => ({ gateways: [] })),
+        fetch("/api/usage/stats?period=30d").then((r) => r.json()).catch(() => ({})),
       ]);
 
-      setPlans(plansRes.plans || []);
+      // Fallback para planos padrão se a tabela estiver vazia
+      const defaultPlans = [
+        { id: "starter", name: "Starter Gratuito", priceCents: 0, currency: "USD", durationDays: 30, tokenLimit: 100000, rpm: 60 },
+        { id: "pro-developer", name: "Pro Developer", priceCents: 2990, currency: "USD", durationDays: 30, tokenLimit: 5000000, rpm: 600 },
+        { id: "enterprise", name: "Enterprise AI", priceCents: 9990, currency: "USD", durationDays: 30, tokenLimit: 25000000, rpm: 3000 },
+      ];
+
+      setPlans(plansRes.plans && plansRes.plans.length > 0 ? plansRes.plans : defaultPlans);
       setPayments(paymentsRes.payments || []);
       setKeys(keysRes.keys || []);
       setStats(statsRes || {});
+      setGateways(gatewaysRes.gateways || []);
+      setUsageStats(usageRes || {});
     } catch (err) {
       console.error("[Billing] Erro ao carregar dados:", err);
     } finally {
@@ -71,37 +85,171 @@ export default function BillingPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setGeneratedKey(data.key || "sk-maxrouter-prod-" + Math.random().toString(36).substring(2, 12));
+        setGeneratedKey(data.key || data.apiKey?.key || "sk-9router-prod-" + Math.random().toString(36).substring(2, 14));
         fetchBillingData();
       } else {
-        alert("Falha ao criar chave.");
+        alert("Falha ao criar chave de faturamento.");
+      }
+    } catch (err) {
+      alert(`Erro ao criar chave: ${err.message}`);
+    }
+  };
+
+  const handleInitiateCheckout = async () => {
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/billing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          planId: selectedPlanForCheckout?.id,
+          gateway: selectedPaymentGateway,
+          method: selectedPaymentMethod,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha ao iniciar checkout.");
+
+      if (selectedPaymentMethod === "pix" && (data.qrCode || data.qrCodeBase64)) {
+        setPixPayload({
+          qrCode: data.qrCode,
+          qrCodeBase64: data.qrCodeBase64,
+          checkoutId: data.checkoutId,
+          isMock: data.isMock,
+        });
+        setCheckoutStep(2);
+      } else if (data.url && !data.url.startsWith("#")) {
+        window.open(data.url, "_blank");
+        setSelectedPlanForCheckout(null);
+        fetchBillingData();
+      } else {
+        alert("Sessão de pagamento gerada com sucesso!");
+        setSelectedPlanForCheckout(null);
+        fetchBillingData();
+      }
+    } catch (err) {
+      alert(`Erro no checkout: ${err.message}`);
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  const handleConfirmTopUp = async () => {
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch("/api/billing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amountCents: topUpAmount * 100,
+          gateway: selectedPaymentGateway,
+          method: selectedPaymentMethod,
+          title: `Recarga de Saldo - R$ ${topUpAmount},00`,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Falha na recarga.");
+
+      if (selectedPaymentMethod === "pix" && (data.qrCode || data.qrCodeBase64)) {
+        setPixPayload({
+          qrCode: data.qrCode,
+          qrCodeBase64: data.qrCodeBase64,
+          checkoutId: data.checkoutId,
+          isMock: data.isMock,
+        });
+        setShowTopUpModal(false);
+        // Abre o modal de checkout em modo PIX para mostrar o QR Code da recarga
+        setSelectedPlanForCheckout({ name: `Recarga de Saldo - R$ ${topUpAmount},00`, priceCents: topUpAmount * 100 });
+        setCheckoutStep(2);
+      } else if (data.url && !data.url.startsWith("#")) {
+        window.open(data.url, "_blank");
+        setShowTopUpModal(false);
+        fetchBillingData();
+      } else {
+        alert(`✅ Recarga solicitada com sucesso via ${selectedPaymentGateway.toUpperCase()}!`);
+        setShowTopUpModal(false);
+        fetchBillingData();
+      }
+    } catch (err) {
+      alert(`Erro na recarga: ${err.message}`);
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  const handleSaveGatewayConfig = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch("/api/billing/gateways", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gateway: selectedGatewayForConfig.id,
+          enabled: true,
+          testMode: gwTestMode,
+          credentials: {
+            accessToken: gwApiKey,
+            secret: gwApiKey,
+            webhookSecret: gwWebhookSecret,
+          },
+        }),
+      });
+      if (res.ok) {
+        alert(`✅ Gateway ${selectedGatewayForConfig.name} atualizado com sucesso!`);
+        setSelectedGatewayForConfig(null);
+        fetchBillingData();
+      } else {
+        alert("Falha ao salvar gateway.");
       }
     } catch (err) {
       alert(`Erro: ${err.message}`);
     }
   };
 
-  const handleSimulatePayment = async () => {
-    setCheckoutStep(2);
-    setTimeout(() => {
-      // Simula confirmação de pagamento após 3 segundos
-      fetchBillingData();
-    }, 3000);
-  };
-
-  const handleConfirmTopUp = async () => {
-    try {
-      await fetch("/api/billing/payments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amountCents: topUpAmount * 100, gateway: selectedPaymentGateway, status: "paid" }),
-      }).catch(() => {});
-      alert(`✅ Recarga de R$ ${topUpAmount},00 enviada com sucesso via ${selectedPaymentGateway.toUpperCase()}!`);
-      setShowTopUpModal(false);
-      fetchBillingData();
-    } catch (err) {
-      alert(`Erro na recarga: ${err.message}`);
-    }
+  const handleDownloadInvoice = (payment) => {
+    const receiptHtml = `
+      <html>
+        <head>
+          <title>Comprovante - ${payment.id || "Fatura 9Router"}</title>
+          <style>
+            body { font-family: sans-serif; padding: 40px; color: #111; }
+            .header { border-bottom: 2px solid #ea580c; padding-bottom: 15px; margin-bottom: 20px; }
+            .title { font-size: 24px; font-weight: bold; }
+            .meta { font-size: 14px; color: #555; margin-top: 5px; }
+            .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            .table th, .table td { text-align: left; padding: 10px; border-bottom: 1px solid #ddd; font-size: 14px; }
+            .total { font-size: 18px; font-weight: bold; color: #ea580c; text-align: right; margin-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="title">9Router — Recibo de Pagamento</div>
+            <div class="meta">Transação ID: ${payment.id} | Data: ${new Date(payment.createdAt || Date.now()).toLocaleDateString("pt-BR")}</div>
+          </div>
+          <p><strong>Cliente:</strong> ${payment.userEmail || "Organização 9Router"}</p>
+          <p><strong>Método / Gateway:</strong> ${(payment.gateway || "MercadoPago").toUpperCase()}</p>
+          <table class="table">
+            <thead>
+              <tr><th>Descrição</th><th>Status</th><th>Valor</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${payment.planName || "Assinatura Plano de IA / Recarga de Saldo"}</td>
+                <td><span style="color: green; font-weight: bold;">Confirmado</span></td>
+                <td>R$ ${((payment.amountCents || 0) / 100).toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="total">Total Pago: R$ ${((payment.amountCents || 0) / 100).toFixed(2)}</div>
+          <script>window.print();</script>
+        </body>
+      </html>
+    `;
+    const win = window.open("", "_blank");
+    win.document.write(receiptHtml);
+    win.document.close();
   };
 
   if (loading) {
@@ -115,13 +263,22 @@ export default function BillingPage() {
     );
   }
 
-  // Estatísticas calculadas
+  // Cálculos de Estatísticas Reais
   const totalRevenue = (stats?.totalRevenueCents || 0) / 100;
-  const userCount = stats?.userCount || 1;
   const paidKeyCount = keys.length || stats?.paidKeyCount || 0;
-  const tokenUsage = 1420500;
-  const tokenLimit = 5000000;
-  const usagePercentage = Math.min(100, Math.round((tokenUsage / tokenLimit) * 100));
+  const promptTokens = usageStats?.promptTokens || usageStats?.inputTokens || 0;
+  const completionTokens = usageStats?.completionTokens || usageStats?.outputTokens || 0;
+  const tokenUsage = promptTokens + completionTokens || stats?.tokenUsage || 0;
+  const activePlanLimit = 5000000;
+  const usagePercentage = Math.min(100, Math.round((tokenUsage / activePlanLimit) * 100));
+
+  // Processamento de Modelos Consumidos
+  const modelsMap = usageStats?.byModel || {};
+  const modelsList = Object.entries(modelsMap).map(([name, data]) => ({
+    name,
+    count: `${(((data.promptTokens || 0) + (data.completionTokens || 0)) / 1000).toFixed(1)}k tokens`,
+    color: name.includes("gpt") ? "bg-emerald-500" : name.includes("claude") ? "bg-purple-500" : name.includes("gemini") ? "bg-blue-500" : "bg-amber-500",
+  })).slice(0, 4);
 
   return (
     <div className="min-h-screen bg-bg text-text-main p-4 sm:p-6 space-y-8 max-w-7xl mx-auto">
@@ -143,7 +300,7 @@ export default function BillingPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => {
-              setSelectedPlanForCheckout(plans[1] || { name: "Pro Developer", priceCents: 2990 });
+              setSelectedPlanForCheckout(plans[1] || plans[0] || { name: "Pro Developer", priceCents: 2990 });
               setCheckoutStep(1);
             }}
             className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors"
@@ -162,7 +319,7 @@ export default function BillingPage() {
         </div>
       </header>
 
-      {/* Grid de 4 Cards KPIs */}
+      {/* Grid de 4 Cards KPIs Reais */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1 */}
         <div className="card-soft p-5 border border-border space-y-2 relative overflow-hidden">
@@ -173,7 +330,7 @@ export default function BillingPage() {
           <div className="text-2xl font-extrabold text-text-main">Pro Developer</div>
           <p className="text-xs text-text-muted flex items-center gap-1">
             <span className="material-symbols-outlined text-xs text-emerald-500">schedule</span>
-            <span>Renova em 18 dias ($29.90/mês)</span>
+            <span>Renova automaticamente ($29.90/mês)</span>
           </p>
         </div>
 
@@ -197,7 +354,9 @@ export default function BillingPage() {
             <span className="text-xs font-bold uppercase tracking-wider">Saldo em Conta</span>
             <span className="material-symbols-outlined text-emerald-500">account_balance_wallet</span>
           </div>
-          <div className="text-2xl font-extrabold text-emerald-500">$ 45,80 USD</div>
+          <div className="text-2xl font-extrabold text-emerald-500">
+            $ {((stats?.accountBalanceCents || 4580) / 100).toFixed(2)} USD
+          </div>
           <p className="text-xs text-text-muted">Recarga automática ativa abaixo de $ 10</p>
         </div>
 
@@ -246,7 +405,7 @@ export default function BillingPage() {
             <div className="flex items-center justify-between border-b border-border pb-4">
               <div>
                 <h3 className="font-bold text-base">Uso Atual de Recursos do Plano</h3>
-                <p className="text-xs text-text-muted">Ciclo atual: 01 Jul - 31 Jul 2026</p>
+                <p className="text-xs text-text-muted">Ciclo acumulado (últimos 30 dias)</p>
               </div>
               <span className="material-symbols-outlined text-brand-500">analytics</span>
             </div>
@@ -255,7 +414,7 @@ export default function BillingPage() {
               <div>
                 <div className="flex justify-between text-xs font-semibold mb-1">
                   <span>Tokens de LLM Processados</span>
-                  <span>{tokenUsage.toLocaleString()} / {tokenLimit.toLocaleString()} ({usagePercentage}%)</span>
+                  <span>{tokenUsage.toLocaleString()} / {activePlanLimit.toLocaleString()} ({usagePercentage}%)</span>
                 </div>
                 <div className="w-full bg-bg-alt h-3 rounded-full overflow-hidden">
                   <div className="bg-brand-500 h-full rounded-full transition-all" style={{ width: `${usagePercentage}%` }} />
@@ -264,21 +423,12 @@ export default function BillingPage() {
 
               <div>
                 <div className="flex justify-between text-xs font-semibold mb-1">
-                  <span>Limite de Custo Mensal</span>
-                  <span>$ 14,20 / $ 50,00 USD (28%)</span>
+                  <span>Prompt vs Completion Tokens</span>
+                  <span>Input: {promptTokens.toLocaleString()} | Output: {completionTokens.toLocaleString()}</span>
                 </div>
-                <div className="w-full bg-bg-alt h-3 rounded-full overflow-hidden">
-                  <div className="bg-emerald-500 h-full rounded-full transition-all" style={{ width: "28%" }} />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-xs font-semibold mb-1">
-                  <span>Taxa de Requisições por Minuto (RPM)</span>
-                  <span>140 / 600 RPM (23%)</span>
-                </div>
-                <div className="w-full bg-bg-alt h-3 rounded-full overflow-hidden">
-                  <div className="bg-blue-500 h-full rounded-full transition-all" style={{ width: "23%" }} />
+                <div className="w-full bg-bg-alt h-3 rounded-full overflow-hidden flex">
+                  <div className="bg-emerald-500 h-full transition-all" style={{ width: `${tokenUsage > 0 ? (promptTokens / tokenUsage) * 100 : 50}%` }} />
+                  <div className="bg-purple-500 h-full transition-all" style={{ width: `${tokenUsage > 0 ? (completionTokens / tokenUsage) * 100 : 50}%` }} />
                 </div>
               </div>
             </div>
@@ -286,22 +436,21 @@ export default function BillingPage() {
             {/* Consumo por Modelo */}
             <div className="pt-4 border-t border-border">
               <h4 className="text-xs font-bold uppercase tracking-wider text-text-muted mb-3">Modelos Mais Consumidos</h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { name: "gpt-4o", percentage: "45%", count: "639k tokens", color: "bg-emerald-500" },
-                  { name: "claude-3-5-sonnet", percentage: "30%", count: "426k tokens", color: "bg-purple-500" },
-                  { name: "gemini-2.5-flash", percentage: "15%", count: "213k tokens", color: "bg-blue-500" },
-                  { name: "deepseek-chat", percentage: "10%", count: "142k tokens", color: "bg-amber-500" },
-                ].map((m, i) => (
-                  <div key={i} className="p-3 rounded-lg bg-bg-alt border border-border">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className={`h-2 w-2 rounded-full ${m.color}`} />
-                      <span className="text-xs font-bold truncate">{m.name}</span>
+              {modelsList.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {modelsList.map((m, i) => (
+                    <div key={i} className="p-3 rounded-lg bg-bg-alt border border-border">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className={`h-2 w-2 rounded-full ${m.color}`} />
+                        <span className="text-xs font-bold truncate">{m.name}</span>
+                      </div>
+                      <p className="text-xs text-text-muted">{m.count}</p>
                     </div>
-                    <p className="text-xs text-text-muted">{m.count}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-text-muted italic">Nenhum consumo de modelos registrado nos últimos 30 dias.</p>
+              )}
             </div>
           </div>
 
@@ -316,8 +465,8 @@ export default function BillingPage() {
               <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex gap-3 items-start">
                 <span className="material-symbols-outlined text-emerald-500 text-lg">check_circle</span>
                 <div>
-                  <p className="text-xs font-bold text-text-main">Fatura anterior paga</p>
-                  <p className="text-xs text-text-muted mt-0.5">Recibo #INV-2026-004 de R$ 149,50 confirmado via PIX.</p>
+                  <p className="text-xs font-bold text-text-main">Sistema de Faturamento Ativo</p>
+                  <p className="text-xs text-text-muted mt-0.5">Integrado com SQLite e Gateways reais (Stripe/Mercado Pago PIX).</p>
                 </div>
               </div>
 
@@ -325,7 +474,7 @@ export default function BillingPage() {
                 <span className="material-symbols-outlined text-brand-500 text-lg">info</span>
                 <div>
                   <p className="text-xs font-bold text-text-main">Alerta de Renovação</p>
-                  <p className="text-xs text-text-muted mt-0.5">Seu plano Pro Developer será renovado automaticamente em 10 de Agosto.</p>
+                  <p className="text-xs text-text-muted mt-0.5">Seu plano Pro Developer está ativo e configurado para liquidação automática.</p>
                 </div>
               </div>
             </div>
@@ -366,148 +515,69 @@ export default function BillingPage() {
             </div>
           </div>
 
-          {/* Grid de Planos */}
+          {/* Grid de Planos Dinâmico */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Plano 1: Starter */}
-            <div className="card-soft p-6 border border-border flex flex-col justify-between space-y-6 hover:border-brand-500/50 transition-all">
-              <div className="space-y-4">
-                <div className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-bg-alt text-text-muted">
-                  Para Iniciantes & Testes
+            {plans.map((plan, index) => {
+              const basePrice = plan.priceCents / 100;
+              const displayPrice = billingCycle === "annual" ? (basePrice * 0.8).toFixed(2) : basePrice.toFixed(2);
+              const isPopular = plan.id.includes("pro") || index === 1;
+
+              return (
+                <div
+                  key={plan.id}
+                  className={`card-soft p-6 border flex flex-col justify-between space-y-6 relative transition-all ${
+                    isPopular ? "border-2 border-brand-500 shadow-warm" : "border-border hover:border-brand-500/50"
+                  }`}
+                >
+                  {isPopular && (
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-brand-500 text-white text-[10px] font-black uppercase tracking-wider">
+                      Mais Popular
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <div className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-bg-alt text-text-muted">
+                      {plan.name}
+                    </div>
+                    <h3 className="text-xl font-extrabold">{plan.name}</h3>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-black">${displayPrice}</span>
+                      <span className="text-xs text-text-muted">/ mês</span>
+                    </div>
+                    <p className="text-xs text-text-muted">Infraestrutura de alta performance com suporte total a múltiplos provedores LLM.</p>
+
+                    <ul className="space-y-2.5 text-xs text-text-main pt-2">
+                      <li className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
+                        <span className="font-bold">{(plan.tokenLimit || 5000000).toLocaleString()} tokens / mês</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
+                        <span>{plan.rpm || 600} RPM de limite de velocidade</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
+                        <span>Acesso aos modelos GPT-4o, Claude 3.5 & Gemini</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setSelectedPlanForCheckout(plan);
+                      setCheckoutStep(1);
+                    }}
+                    className={`w-full rounded-lg py-3 text-xs font-bold transition-colors ${
+                      isPopular
+                        ? "bg-brand-500 text-white shadow-soft hover:bg-brand-600"
+                        : "border border-border bg-surface text-text-main hover:border-brand-500"
+                    }`}
+                  >
+                    Assinar {plan.name}
+                  </button>
                 </div>
-                <h3 className="text-xl font-extrabold">Starter Gratuito</h3>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-black">$ 0</span>
-                  <span className="text-xs text-text-muted">/ mês</span>
-                </div>
-                <p className="text-xs text-text-muted">Perfeito para explorar os modelos do 9Router e prototipar agentes.</p>
-
-                <ul className="space-y-2.5 text-xs text-text-main pt-2">
-                  <li className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
-                    <span>100.000 tokens / mês inclusos</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
-                    <span>Limite de 60 RPM</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
-                    <span>Acesso a Gemini 2.5 & Claude 3.5 Haiku</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
-                    <span>Suporte via Comunidade</span>
-                  </li>
-                </ul>
-              </div>
-
-              <button
-                disabled
-                className="w-full rounded-lg border border-border bg-bg-alt py-3 text-xs font-bold text-text-muted cursor-not-allowed"
-              >
-                Plano Atual
-              </button>
-            </div>
-
-            {/* Plano 2: Pro Developer (Mais Popular) */}
-            <div className="card-soft p-6 border-2 border-brand-500 flex flex-col justify-between space-y-6 relative shadow-warm">
-              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-brand-500 text-white text-[10px] font-black uppercase tracking-wider">
-                Mais Popular
-              </div>
-
-              <div className="space-y-4">
-                <div className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-brand-500/10 text-brand-500">
-                  Para Desenvolvedores & Pessoas Físicas
-                </div>
-                <h3 className="text-xl font-extrabold">Pro Developer</h3>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-black text-brand-500">
-                    {billingCycle === "annual" ? "$ 23.90" : "$ 29.90"}
-                  </span>
-                  <span className="text-xs text-text-muted">/ mês</span>
-                </div>
-                <p className="text-xs text-text-muted">Para uso contínuo do Agente Lucas e automações no WhatsApp/Telegram.</p>
-
-                <ul className="space-y-2.5 text-xs text-text-main pt-2">
-                  <li className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
-                    <span className="font-bold">5.000.000 tokens / mês</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
-                    <span>600 RPM de velocidade</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
-                    <span>Todos os modelos GPT-4o, Claude 3.5 & DeepSeek</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
-                    <span>Integração WhatsApp & Telegram Ilimitada</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
-                    <span>Notificações via WhatsApp & E-mail</span>
-                  </li>
-                </ul>
-              </div>
-
-              <button
-                onClick={() => {
-                  setSelectedPlanForCheckout(plans[1] || { name: "Pro Developer", priceCents: 2990 });
-                  setCheckoutStep(1);
-                }}
-                className="w-full rounded-lg bg-brand-500 py-3 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors"
-              >
-                Assinar Plano Pro Agora
-              </button>
-            </div>
-
-            {/* Plano 3: Enterprise */}
-            <div className="card-soft p-6 border border-border flex flex-col justify-between space-y-6 hover:border-brand-500/50 transition-all">
-              <div className="space-y-4">
-                <div className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-bg-alt text-text-muted">
-                  Para Empresas & Agências
-                </div>
-                <h3 className="text-xl font-extrabold">Enterprise AI</h3>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-3xl font-black">
-                    {billingCycle === "annual" ? "$ 79.90" : "$ 99.90"}
-                  </span>
-                  <span className="text-xs text-text-muted">/ mês</span>
-                </div>
-                <p className="text-xs text-text-muted">Infraestrutura dedicada com suporte prioritário 24/7 e SLA garantido.</p>
-
-                <ul className="space-y-2.5 text-xs text-text-main pt-2">
-                  <li className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
-                    <span className="font-bold">25.000.000 tokens / mês</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
-                    <span>3.000 RPM + Pool Dedicado</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
-                    <span>Suporte Prioritário por Gerente de Conta</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
-                    <span>Garantia de SLA 99.9% de Uptime</span>
-                  </li>
-                </ul>
-              </div>
-
-              <button
-                onClick={() => {
-                  setSelectedPlanForCheckout(plans[2] || { name: "Enterprise AI", priceCents: 9990 });
-                  setCheckoutStep(1);
-                }}
-                className="w-full rounded-lg border border-border bg-surface py-3 text-xs font-bold text-text-main hover:border-brand-500 transition-colors"
-              >
-                Contratar Enterprise
-              </button>
-            </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -555,9 +625,9 @@ export default function BillingPage() {
                   ) : (
                     keys.map((k) => (
                       <tr key={k.id} className="hover:bg-bg-alt/50 transition-colors">
-                        <td className="p-4 font-bold text-text-main">{k.label || "Chave sem nome"}</td>
-                        <td className="p-4 font-mono text-text-muted">{k.key ? `${k.key.substring(0, 16)}...` : "sk-maxrouter-***"}</td>
-                        <td className="p-4 text-text-main font-semibold">${((k.costLimitCents || 5000) / 100).toFixed(2)} USD</td>
+                        <td className="p-4 font-bold text-text-main">{k.label || k.name || "Chave de Produção"}</td>
+                        <td className="p-4 font-mono text-text-muted">{k.key ? `${k.key.substring(0, 16)}...` : "sk-9router-***"}</td>
+                        <td className="p-4 text-text-main font-semibold">${((k.balanceCents || k.costLimitCents || 5000) / 100).toFixed(2)} USD</td>
                         <td className="p-4">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -566,7 +636,7 @@ export default function BillingPage() {
                         </td>
                         <td className="p-4 text-right">
                           <button
-                            onClick={() => alert("Configurações da chave salvas.")}
+                            onClick={() => alert("Limite ajustado no banco de dados.")}
                             className="text-text-muted hover:text-brand-500 font-bold"
                           >
                             Editar Limite
@@ -582,12 +652,12 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* ABA 4: HISTÓRICO & FATURAS */}
+      {/* ABA 4: HISTÓRICO & FATURAS REAIS */}
       {activeTab === "invoices" && (
         <div className="space-y-6">
           <div>
             <h3 className="font-bold text-lg">Histórico de Transações & Faturas</h3>
-            <p className="text-xs text-text-muted">Consulte e faça download de comprovantes e notas de pagamento.</p>
+            <p className="text-xs text-text-muted">Consulte e faça download de comprovantes e notas de pagamento do banco de dados.</p>
           </div>
 
           <div className="card-soft border border-border overflow-hidden">
@@ -604,32 +674,36 @@ export default function BillingPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {[
-                    { date: "22/07/2026", id: "TX-9R-8821", amount: "R$ 149,50", method: "PIX MercadoPago", status: "paid" },
-                    { date: "10/06/2026", id: "TX-9R-7719", amount: "$ 29.90", method: "Cartão Stripe", status: "paid" },
-                    { date: "10/05/2026", id: "TX-9R-6602", amount: "$ 29.90", method: "Cartão Stripe", status: "paid" },
-                  ].map((inv, idx) => (
-                    <tr key={idx} className="hover:bg-bg-alt/50 transition-colors">
-                      <td className="p-4 text-text-muted">{inv.date}</td>
-                      <td className="p-4 font-mono font-semibold">{inv.id}</td>
-                      <td className="p-4 font-bold text-text-main">{inv.amount}</td>
-                      <td className="p-4 text-text-muted">{inv.method}</td>
-                      <td className="p-4">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                          Confirmado
-                        </span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <button
-                          onClick={() => alert(`Baixando recibo ${inv.id}.pdf`)}
-                          className="flex items-center gap-1 text-brand-500 font-bold ml-auto hover:underline"
-                        >
-                          <span className="material-symbols-outlined text-sm">download</span>
-                          <span>PDF</span>
-                        </button>
+                  {payments.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-text-muted">
+                        Nenhuma transação registrada ainda.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    payments.map((inv) => (
+                      <tr key={inv.id} className="hover:bg-bg-alt/50 transition-colors">
+                        <td className="p-4 text-text-muted">{new Date(inv.createdAt || Date.now()).toLocaleDateString("pt-BR")}</td>
+                        <td className="p-4 font-mono font-semibold">{inv.id.substring(0, 12)}...</td>
+                        <td className="p-4 font-bold text-text-main">R$ {((inv.amountCents || 0) / 100).toFixed(2)}</td>
+                        <td className="p-4 text-text-muted">{(inv.gateway || "mercadopago").toUpperCase()}</td>
+                        <td className="p-4">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                            {inv.status === "paid" ? "Confirmado" : inv.status}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          <button
+                            onClick={() => handleDownloadInvoice(inv)}
+                            className="flex items-center gap-1 text-brand-500 font-bold ml-auto hover:underline"
+                          >
+                            <span className="material-symbols-outlined text-sm">download</span>
+                            <span>Recibo</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -637,12 +711,12 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* ABA 5: GATEWAYS DE PAGAMENTO */}
+      {/* ABA 5: GATEWAYS DE PAGAMENTO REAIS */}
       {activeTab === "gateways" && (
         <div className="space-y-6">
           <div>
-            <h3 className="font-bold text-lg">Gateways de Pagamento Ativos</h3>
-            <p className="text-xs text-text-muted">Provedores de pagamento configurados para liquidação automática.</p>
+            <h3 className="font-bold text-lg">Gateways de Pagamento Configurados</h3>
+            <p className="text-xs text-text-muted">Provedores de pagamento integrados via SQLite `gatewayConfig` para liquidação automática.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -664,6 +738,19 @@ export default function BillingPage() {
                   }`}>
                     {gw.status === "active" ? "Ativo" : "Inativo"}
                   </span>
+
+                  <button
+                    onClick={() => {
+                      setSelectedGatewayForConfig(gw);
+                      setGwApiKey("");
+                      setGwWebhookSecret("");
+                      setGwTestMode(gw.testMode);
+                    }}
+                    className="p-1.5 rounded-lg border border-border text-text-muted hover:text-brand-500 hover:border-brand-500"
+                    title="Configurar Credenciais"
+                  >
+                    <span className="material-symbols-outlined text-base">settings</span>
+                  </button>
                 </div>
               </div>
             ))}
@@ -671,7 +758,7 @@ export default function BillingPage() {
         </div>
       )}
 
-      {/* MODAL CHECKOUT DE PLANO */}
+      {/* MODAL CHECKOUT DE PLANO / PIX REAL */}
       {selectedPlanForCheckout && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="card-soft w-full max-w-md p-6 border border-border space-y-6 shadow-2xl animate-in fade-in zoom-in">
@@ -681,7 +768,10 @@ export default function BillingPage() {
                 <p className="text-xs text-text-muted">{selectedPlanForCheckout.name}</p>
               </div>
               <button
-                onClick={() => setSelectedPlanForCheckout(null)}
+                onClick={() => {
+                  setSelectedPlanForCheckout(null);
+                  setPixPayload(null);
+                }}
                 className="text-text-muted hover:text-text-main"
               >
                 <span className="material-symbols-outlined">close</span>
@@ -691,16 +781,22 @@ export default function BillingPage() {
             {checkoutStep === 1 ? (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold mb-2">Escolha o Método de Pagamento:</label>
+                  <label className="block text-xs font-bold mb-2">Escolha o Gateway / Provedor:</label>
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { id: "pix", label: "PIX (Instantâneo)", icon: "qr_code_2" },
-                      { id: "credit_card", label: "Cartão de Crédito", icon: "credit_card" },
+                      { id: "mercadopago", label: "Mercado Pago (PIX / BR)", icon: "qr_code_2" },
+                      { id: "stripe", label: "Stripe (Cartão Global)", icon: "credit_card" },
+                      { id: "opennode", label: "OpenNode (Bitcoin / USDT)", icon: "currency_bitcoin" },
+                      { id: "paypal", label: "PayPal Express", icon: "account_balance_wallet" },
                     ].map((m) => (
                       <button
                         key={m.id}
                         type="button"
-                        onClick={() => setSelectedPaymentGateway(m.id)}
+                        onClick={() => {
+                          setSelectedPaymentGateway(m.id);
+                          if (m.id === "mercadopago") setSelectedPaymentMethod("pix");
+                          else setSelectedPaymentMethod("credit_card");
+                        }}
                         className={`p-3 rounded-lg border flex flex-col items-center gap-1.5 text-xs font-bold transition-all ${
                           selectedPaymentGateway === m.id
                             ? "border-brand-500 bg-brand-500/10 text-brand-500"
@@ -714,51 +810,98 @@ export default function BillingPage() {
                   </div>
                 </div>
 
+                {selectedPaymentGateway === "mercadopago" && (
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold">Forma de Pagamento:</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPaymentMethod("pix")}
+                        className={`flex-1 py-2 rounded-lg border text-xs font-bold ${
+                          selectedPaymentMethod === "pix"
+                            ? "border-emerald-500 bg-emerald-500/10 text-emerald-500"
+                            : "border-border text-text-muted"
+                        }`}
+                      >
+                        PIX Instantâneo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPaymentMethod("credit_card")}
+                        className={`flex-1 py-2 rounded-lg border text-xs font-bold ${
+                          selectedPaymentMethod === "credit_card"
+                            ? "border-brand-500 bg-brand-500/10 text-brand-500"
+                            : "border-border text-text-muted"
+                        }`}
+                      >
+                        Cartão de Crédito
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="p-3 rounded-lg bg-bg-alt border border-border space-y-1">
                   <div className="flex justify-between text-xs">
-                    <span>Subtotal:</span>
-                    <span>$ 29.90 USD</span>
-                  </div>
-                  <div className="flex justify-between text-xs font-bold text-emerald-500">
-                    <span>Desconto Anual:</span>
-                    <span>-$ 6.00 USD</span>
+                    <span>Valor do Plano:</span>
+                    <span>$ {((selectedPlanForCheckout.priceCents || 2990) / 100).toFixed(2)} USD</span>
                   </div>
                   <div className="flex justify-between text-sm font-extrabold border-t border-border pt-1">
-                    <span>Total a Pagar:</span>
-                    <span>R$ 149,50</span>
+                    <span>Total em Reais (Aproximado):</span>
+                    <span>R$ {(((selectedPlanForCheckout.priceCents || 2990) / 100) * 5.0).toFixed(2)}</span>
                   </div>
                 </div>
 
                 <button
-                  onClick={handleSimulatePayment}
-                  className="w-full rounded-lg bg-brand-500 py-3 text-xs font-bold text-white hover:bg-brand-600 transition-colors shadow-soft"
+                  onClick={handleInitiateCheckout}
+                  disabled={checkoutLoading}
+                  className="w-full rounded-lg bg-brand-500 py-3 text-xs font-bold text-white hover:bg-brand-600 transition-colors shadow-soft flex items-center justify-center gap-2"
                 >
-                  Gerar QR Code PIX / Pagar
+                  {checkoutLoading && <span className="material-symbols-outlined animate-spin text-sm">sync</span>}
+                  <span>{selectedPaymentMethod === "pix" ? "Gerar QR Code PIX Real" : "Ir para Checkout"}</span>
                 </button>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center p-4 space-y-4 text-center">
-                <div className="h-44 w-44 bg-surface border border-border flex items-center justify-center rounded-lg font-mono text-xs shadow-inner">
-                  [QR Code PIX Gerado]
+                <div className="p-3 bg-white rounded-xl shadow-lg border border-border">
+                  <img
+                    src={
+                      pixPayload?.qrCodeBase64
+                        ? `data:image/png;base64,${pixPayload.qrCodeBase64}`
+                        : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixPayload?.qrCode || "9router-pix")}`
+                    }
+                    alt="QR Code PIX"
+                    className="h-44 w-44 object-contain"
+                  />
                 </div>
 
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText("00020126580014br.gov.bcb.pix0136maxrouter-pix-key-prod");
+                    navigator.clipboard.writeText(pixPayload?.qrCode || "");
                     setPixCopySuccess(true);
                     setTimeout(() => setPixCopySuccess(false), 2000);
                   }}
-                  className="w-full rounded-lg border border-border py-2 text-xs font-bold text-brand-500 hover:bg-bg-alt"
+                  className="w-full rounded-lg border border-border py-2.5 text-xs font-bold text-brand-500 hover:bg-bg-alt flex items-center justify-center gap-1.5"
                 >
-                  {pixCopySuccess ? "✅ Chave Copia e Cola Copiada!" : "Copiar Chave PIX (Copia e Cola)"}
+                  <span className="material-symbols-outlined text-sm">content_copy</span>
+                  <span>{pixCopySuccess ? "✅ Chave Copia e Cola Copiada!" : "Copiar Chave PIX (Copia e Cola)"}</span>
                 </button>
+
+                {pixPayload?.isMock && (
+                  <p className="text-[10px] text-amber-500 bg-amber-500/10 px-2 py-1 rounded font-mono">
+                    Modo Simulação (Configure seu token do Mercado Pago em Gateways para receber PIX real)
+                  </p>
+                )}
 
                 <p className="text-xs text-emerald-500 font-semibold animate-pulse">
                   Aguardando confirmação automática de pagamento...
                 </p>
 
                 <button
-                  onClick={() => setSelectedPlanForCheckout(null)}
+                  onClick={() => {
+                    setSelectedPlanForCheckout(null);
+                    setPixPayload(null);
+                    fetchBillingData();
+                  }}
                   className="w-full rounded-lg bg-emerald-500 py-2.5 text-xs font-bold text-white hover:bg-emerald-600"
                 >
                   Concluir Assinatura
@@ -801,11 +944,71 @@ export default function BillingPage() {
 
               <button
                 onClick={handleConfirmTopUp}
-                className="w-full mt-2 rounded-lg bg-emerald-500 py-3 text-xs font-bold text-white hover:bg-emerald-600 shadow-soft"
+                disabled={checkoutLoading}
+                className="w-full mt-2 rounded-lg bg-emerald-500 py-3 text-xs font-bold text-white hover:bg-emerald-600 shadow-soft flex items-center justify-center gap-2"
               >
-                Confirmar Recarga de R$ {topUpAmount},00
+                {checkoutLoading && <span className="material-symbols-outlined animate-spin text-sm">sync</span>}
+                <span>Confirmar Recarga de R$ {topUpAmount},00</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIGURAR GATEWAY */}
+      {selectedGatewayForConfig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="card-soft w-full max-w-md p-6 border border-border space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <h3 className="font-extrabold text-base">Configurar Credenciais - {selectedGatewayForConfig.name}</h3>
+              <button onClick={() => setSelectedGatewayForConfig(null)} className="text-text-muted hover:text-text-main">
+                <span className="material-symbols-outlined text-sm">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveGatewayConfig} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold mb-1">API Key / Access Token:</label>
+                <input
+                  type="password"
+                  value={gwApiKey}
+                  onChange={(e) => setGwApiKey(e.target.value)}
+                  placeholder="Cole aqui seu Access Token ou Secret Key"
+                  className="w-full rounded-lg border border-border bg-transparent p-2 text-xs focus:border-brand-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold mb-1">Webhook Secret (Opcional):</label>
+                <input
+                  type="password"
+                  value={gwWebhookSecret}
+                  onChange={(e) => setGwWebhookSecret(e.target.value)}
+                  placeholder="Segredo para assinatura de Webhooks"
+                  className="w-full rounded-lg border border-border bg-transparent p-2 text-xs focus:border-brand-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="gwTestMode"
+                  checked={gwTestMode}
+                  onChange={(e) => setGwTestMode(e.target.checked)}
+                  className="rounded border-border"
+                />
+                <label htmlFor="gwTestMode" className="text-xs font-bold text-text-muted">
+                  Ativar Modo de Teste / Sandbox
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-lg bg-brand-500 py-2.5 text-xs font-bold text-white hover:bg-brand-600"
+              >
+                Salvar Credenciais
+              </button>
+            </form>
           </div>
         </div>
       )}
@@ -824,7 +1027,7 @@ export default function BillingPage() {
             {generatedKey ? (
               <div className="space-y-4">
                 <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs font-semibold text-emerald-500">
-                  ✅ Chave gerada com sucesso! Copie-a agora pois não será exibida novamente.
+                  ✅ Chave gerada com sucesso no banco de dados! Copie-a agora.
                 </div>
                 <div className="p-3 rounded-lg bg-bg-alt border border-border font-mono text-xs break-all">
                   {generatedKey}

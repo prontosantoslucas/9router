@@ -158,13 +158,16 @@ app.post("/sync-superbrain", async (req, res) => {
 });
 
 app.post("/api/chat", async (req, res) => {
-  const { message, userName } = req.body;
-  if (!message) return res.status(400).json({ error: "message required" });
+  const { message, userName, images } = req.body;
+  // Aceita mensagem só com imagem (sem texto) para análise de visão.
+  if (!message && !(Array.isArray(images) && images.length)) {
+    return res.status(400).json({ error: "message required" });
+  }
   const chatId = req.body.chatId || "web:default";
   const name = userName || "Você";
   const ghToken = req.body.githubToken || "";
   try {
-    const result = await processMessage(chatId, message, name, { githubToken: ghToken });
+    const result = await processMessage(chatId, message || "", name, { githubToken: ghToken, images });
     if (result.formatted) delete result.formatted;
     if (result.image && result.image.startsWith("/")) {
       const proto = req.headers["x-forwarded-proto"] || req.protocol;
@@ -258,6 +261,89 @@ app.post("/api/personality/github", async (req, res) => {
   }
 });
 
+// ── Notificações de canais (mensagens novas de TG/WA para avisar no webchat) ──
+app.get("/api/channels/notifications", (req, res) => {
+  try {
+    const store = require("./channels/channelStore");
+    const pend = store.pendingNotifications(20);
+    const peek = req.query.peek === "1";
+    if (!peek && pend.length > 0) {
+      store.markNotified(pend.map((p) => p.id));
+    }
+    res.json({
+      notifications: pend.map((p) => ({
+        id: p.id,
+        channel: p.channel,
+        chatName: p.chat_name || p.chat_id,
+        senderName: p.sender_name,
+        isGroup: !!p.is_group,
+        text: p.text,
+        at: p.created_at,
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Vídeo: processa (áudio→transcrição e/ou frames→visão) ──
+// body: { base64, mode?: "audio"|"frames"|"both", frames?: n }
+app.post("/api/video/process", async (req, res) => {
+  try {
+    const { base64, mode } = req.body || {};
+    if (!base64) return res.status(400).json({ error: "base64 obrigatório" });
+    const ff = require("./video/ffmpeg");
+    if (!ff.hasFfmpeg()) return res.status(503).json({ error: "ffmpeg indisponível no servidor" });
+    const buf = Buffer.from(base64, "base64");
+    const wantMode = mode || process.env.VIDEO_MODE || "audio";
+    const out = {};
+    if (wantMode === "audio" || wantMode === "both") {
+      try {
+        const audio = await ff.extractAudio(buf);
+        const stt = require("./audio/sttService");
+        out.transcript = await stt.transcribeAudio(audio.buffer, audio.mimeType, audio.filename);
+      } catch (e) { out.audioError = e.message; }
+    }
+    if (wantMode === "frames" || wantMode === "both") {
+      try {
+        out.frames = await ff.extractFrames(buf, Number(req.body.frames) || 4);
+      } catch (e) { out.framesError = e.message; }
+    }
+    res.json(out);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Áudio: TTS (texto → voz) sob demanda. Retorna { base64, mimeType }. ──
+app.post("/api/audio/tts", async (req, res) => {
+  try {
+    const { text, voice } = req.body || {};
+    if (!text) return res.status(400).json({ error: "text obrigatório" });
+    const tts = require("./audio/ttsService");
+    const result = await tts.synthesizeSpeech(text, { voice });
+    if (!result) return res.status(503).json({ error: "TTS indisponível (provider de voz não configurado no gateway)" });
+    res.json({ base64: result.base64, mimeType: result.mimeType });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Áudio: transcrição (STT via Groq Whisper) ──
+// Recebe { base64, mimeType, filename }. Retorna { text }.
+app.post("/api/audio/transcribe", async (req, res) => {
+  try {
+    const { base64, mimeType, filename } = req.body || {};
+    if (!base64) return res.status(400).json({ error: "base64 obrigatório" });
+    const buf = Buffer.from(base64, "base64");
+    const stt = require("./audio/sttService");
+    const text = await stt.transcribeAudio(buf, mimeType || "audio/webm", filename || "audio.webm");
+    res.json({ text });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Telegram Bot (BotFather) — configurável pela UI /dashboard2 ──
 app.get("/api/telegram/bot/status", (req, res) => {
   res.json(botManager.status());
@@ -285,15 +371,30 @@ app.get("/api/telegram/userbot/status", (req, res) => {
   });
 });
 
-app.post("/api/telegram/userbot/start-auth", (req, res) => {
-  const { phoneNumber } = req.body || {};
-  if (!phoneNumber) return res.status(400).json({ error: "phoneNumber obrigatório" });
-  res.status(501).json({
-    error: "MTProto start-auth ainda não implementado. Configure BOT_TOKEN para usar o Bot API padrão.",
-  });
+app.post("/api/telegram/userbot/start-auth", async (req, res) => {
+  try {
+    // Frontend envia { apiId, apiHash, phone }. Aceita phoneNumber como alias.
+    const { apiId, apiHash, phone, phoneNumber } = req.body || {};
+    const flow = require("./channels/telegram/userbotAuthFlow");
+    const result = await flow.startAuth({ apiId, apiHash, phone: phone || phoneNumber });
+    res.json(result);
+  } catch (err) {
+    const status = err.status || (err.code === "MODULE_NOT_FOUND" ? 503 : 500);
+    console.error("[Userbot] start-auth:", err.message);
+    res.status(status).json({ error: err.message });
+  }
 });
-app.post("/api/telegram/userbot/complete-auth", (req, res) => {
-  res.status(501).json({ error: "MTProto complete-auth ainda não implementado." });
+app.post("/api/telegram/userbot/complete-auth", async (req, res) => {
+  try {
+    const { phone, phoneNumber, code, password } = req.body || {};
+    const flow = require("./channels/telegram/userbotAuthFlow");
+    const result = await flow.completeAuth({ phone: phone || phoneNumber, code, password });
+    res.json(result);
+  } catch (err) {
+    const status = err.status || 500;
+    console.error("[Userbot] complete-auth:", err.message);
+    res.status(status).json({ error: err.message, needPassword: !!err.needPassword });
+  }
 });
 
 // ── Memória (ai-memory MCP) ──
@@ -323,10 +424,21 @@ app.post("/api/webhook/evolution", async (req, res) => {
   if (!parsed) return res.json({ ok: true, ignored: true });
   res.json({ ok: true, received: parsed.messageId });
   try {
-    const chatId = `wa:${parsed.senderNumber}`;
-    await processMessage(chatId, parsed.messageText, parsed.pushName, { channel: "whatsapp" });
+    // GRAVA no buffer. Não responde sozinho — o webchat avisa e o usuário comanda.
+    const chatId = parsed.isGroup ? `wa-group:${parsed.groupId}` : `wa:${parsed.senderNumber}`;
+    const channelStore = require("./channels/channelStore");
+    channelStore.record({
+      channel: "whatsapp",
+      chatId,
+      chatName: parsed.pushName,
+      senderName: parsed.pushName,
+      isGroup: parsed.isGroup,
+      text: parsed.messageText,
+      replyTarget: parsed.replyJid,
+      direction: "in",
+    });
   } catch (err) {
-    console.error("[EvolutionWebhook] Erro ao processar:", err.message);
+    console.error("[EvolutionWebhook] Erro ao gravar mensagem:", err.message);
   }
 });
 
@@ -568,6 +680,27 @@ async function start() {
 
   // Telegram Bot gerenciado em runtime (token via env OU configurado pela UI /dashboard2)
   botManager.launch();
+
+  // Telegram Userbot (conta pessoal) — escuta grupos + privado e GRAVA no buffer.
+  // Não responde sozinho: o webchat avisa e o usuário comanda (resumir/buscar/responder).
+  const userbotClient = require("./channels/telegram/userbotClient");
+  const channelStore = require("./channels/channelStore");
+  userbotClient.start(async (uctx) => {
+    try {
+      channelStore.record({
+        channel: "telegram",
+        chatId: uctx.chatId,
+        chatName: uctx.chatName || uctx.senderName,
+        senderName: uctx.senderName,
+        isGroup: uctx.isGroup,
+        text: uctx.text,
+        replyTarget: uctx.peer,
+        direction: "in",
+      });
+    } catch (err) {
+      console.error("[Userbot] Erro ao gravar mensagem:", err.message);
+    }
+  }).catch((err) => console.error("[Userbot] start falhou (não-fatal):", err.message));
 
   // Auto-sync Superbrain: 1min após start, depois a cada 6h
   setTimeout(() => superbrain.refreshFromGitHub(), 60000);

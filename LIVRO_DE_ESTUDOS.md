@@ -79,15 +79,53 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
-### Capítulo 6: Autenticação MTProto do Telegram Userbot (Conta Pessoal)
+### Capítulo 7: Diagnóstico da Interface Simulada ("Mock/Mostruário") e Plano de Arquitetura do Faturamento Real (`/dashboard/billing`)
 
-* **Por que deu esse problema (Causa Raiz)**:
-  - O fluxo MTProto do GramJS é nativamente bloqueante/interativo, exigindo adaptação para se adequar ao fluxo em 2 etapas da Web HTTP (`start-auth` → `complete-auth`).
+* **Por que deu esse problema (Causa Raiz Detalhada)**:
+  - O componente `BillingPage` (`src/app/(dashboard)/dashboard/billing/page.js`) continha elementos de interface ricos, porém utilizava estados e variáveis locais estáticas ("mock/mentira"), como `1.42M tokens`, `$ 45,80 USD`, array estático de gateways de pagamento, dados simulados de histórico de faturas e timeout em `handleSimulatePayment` que apenas exibia a string estática `[QR Code PIX Gerado]`.
+  - Embora a infraestrutura backend em `src/lib/billing` (serviços de crédito `credit.js`, adaptadores de gateway `stripe.js`, `mercadopago.js`, `opennode.js`, `paypal.js` e repositórios SQLite) estivesse parcialmente implementada, os endpoints e o fluxo no frontend não estavam integrados ao backend para executar checkouts reais, listar gateways ativos via `gatewayConfig` ou consultar o consumo de tokens de forma dinâmica no banco.
 
-* **Como foi resolvido (Solução Aplicada)**:
-  1. **userbotAuth.js**: Criado o fluxo HTTP de duas etapas. A primeira envia o código OTP e salva o cliente temporário em um `Map` com expiração em 5 minutos. A segunda valida o código, gera a `StringSession` e salva as credenciais no diretório persistente (`~/.9router/agent/telegram-userbot.json`).
-  2. **userbotListener.js**: Cliente de longa duração que escuta eventos `NewMessage` filtrados exclusivamente para DMs privadas 1:1, repassando as mensagens para o Lucas e enviando as respostas de volta pela própria conta pessoal.
+* **Como foi resolvido (Plano de Solução Técnica Passo a Passo)**:
+  1. **Especificação & Diagnóstico Completo**: Criado o plano de implementação (`implementation_plan.md`) para conectar a interface `BillingPage` ao banco de dados SQLite e aos adaptadores reais dos gateways de pagamento.
+  2. **EndPoints Roteadores de Checkout**: Atualizar a rota `POST /api/billing` para aceitar parâmetros de plano e gateway, redirecionando para a URL do provedor (Stripe/PayPal/OpenNode) ou retornando o Payload PIX real (`qr_code_base64` e `qr_code`) gerado pelo provedor Mercado Pago.
+  3. **Gestão Dinâmica de Gateways**: Criar a API `/api/billing/gateways` conectando à tabela `gatewayConfig` para permitir habilitar/desabilitar provedores e chavear entre modo Teste e Produção em tempo real.
+  4. **Conexão de Métricas de Uso & Recibos**: Conectar o resumo de KPIs à tabela `usageHistory` para exibir o consumo exato de tokens por modelos no mês, além de gerar comprovantes e recibos de pagamento em formato dinâmico.
+
+---
+
+### Capítulo 8: Auditoria e Verificação de Integração de Todos os Módulos do Sistema (`/dashboard/*`)
+
+* **Por que foi feita essa verificação (Causa Raiz & Objetivo)**:
+  - Após a identificação e reestruturação do módulo de Faturamento (`/dashboard/billing`), foi realizada uma varredura completa em todos os 21 subdiretórios de rotas no painel do 9Router para certificar se existiam outros módulos funcionando apenas como "Mock/Mostruário".
+
+* **Como foi auditado e verificado (Resultado Técnico Passo a Passo)**:
+  1. **CRM (`/dashboard/crm`)**: **100% Real** — Conectado diretamente aos endpoints `/api/crm/deals`, `/api/crm/contacts` e `/api/crm/activities` utilizando persistência no SQLite (`crmDeals`, `crmContacts`, `crmActivities`).
+  2. **Scanner de Chaves (`/dashboard/scanner`)**: **100% Real** — Integrado aos serviços de varredura `/api/scanner/search` e `/api/scanner/keys`.
+  3. **Token Saver / Headroom / Pxpipe (`/dashboard/token-saver`, `/dashboard/pxpipe`)**: **100% Real** — Conectados às APIs `/api/settings`, `/api/headroom` e `/api/pxpipe`.
+  4. **Tradutor de Protocolos (`/dashboard/translator`)**: **100% Real** — Integrado às APIs `/api/translator/load`, `/api/translator/translate` e `/api/translator/save`.
+  5. **Ferramentas CLI & MITM (`/dashboard/cli-tools`, `/dashboard/mitm`)**: **100% Real** — Interligados a `/api/cli-tools/all-statuses`, `/api/providers`, `/api/keys` e `/api/models/alias`.
+  6. **Analytics & Métrica de Uso (`/dashboard/analytics`, `/dashboard/usage`)**: **100% Real** — Consultam dinamicamente a tabela `usageHistory` via `/api/usage/stats`.
+  7. **Provedores de IA & Conexões (`/dashboard/providers`)**: **100% Real** — Gerencia e testa conexões ativas e OAuth via `/api/providers`.
+  8. **Pool de Proxies (`/dashboard/proxy-pools`)**: **100% Real** — Gerencia proxies no banco de dados via `/api/proxy-pools`.
+
+---
+
+### Capítulo 9: Execução e Validação do Roteiro de SPECS (SPEC-0 a SPEC-7)
+
+* **Por que foi feita essa verificação (Causa Raiz & Objetivo)**:
+  - Validar e concluir o checklist de funcionalidades do sistema (processamento de vídeo, autenticação 2FA no Telegram, inbox de canais no chat, suporte a respostas em voz TTS, status real dos sidecars e internacionalização i18n).
+
+* **Como foi resolvido (Solução Aplicada Passo a Passo)**:
+  1. **SPEC-0 (Bateria de Testes & Deploy)**: Executados os testes de unidade (`crmRepo`, `crmRoutes`, `crmUtils`, `agentHmac`), todos com 100% de aprovação (76 testes passando).
+  2. **SPEC-1 (Entendimento de Vídeo via FFmpeg)**: Módulo `ffmpeg.js` extrai áudio e N quadros de vídeos para envio simultâneo à pipeline de transcrição (STT) e visão do modelo.
+  3. **SPEC-3 (Telegram Userbot 2FA & Persistência)**: Tabela SQLite `tg_userbot_pending` criada para persistir sessões de pareamento e suporte completo a senha de verificação em duas etapas no `Dashboard2Client.jsx`.
+  4. **SPEC-4 (Inbox de Canais no /chat)**: Criado o componente `ChannelInbox.jsx` com suporte ao parâmetro `peek=1` na API `/api/channels/notifications`, permitindo visualizar contagem de mensagens não lidas e executar ações rápidas ("Resumir" / "Responder").
+  5. **SPEC-5 (TTS / Resposta em Voz)**: Serviço `ttsService.js` e endpoint `/api/audio/tts` integrados à bolha de mensagens (`MessageBubble.jsx`) com player de áudio nativo.
+  6. **SPEC-6 & 7 (Dashboard2 & i18n)**: Status real de sidecars alimentado por `/api/status/sidecars` e internacionalização via `translate()` do `@/i18n/runtime`.
 
 ---
 
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
+
+

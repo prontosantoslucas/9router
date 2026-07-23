@@ -3,7 +3,8 @@ const cfg = require("../../config");
 /**
  * Cliente REST de integração com a Evolution API (evolution-go).
  */
-async function sendTextMessage(number, text) {
+// `to` pode ser um número (DM) ou um JID completo de grupo (xxx@g.us).
+async function sendTextMessage(to, text) {
   const baseUrl = cfg.EVOLUTION_API_URL;
   if (!baseUrl) {
     console.log("[EvolutionAPI] EVOLUTION_API_URL não configurado. Simulação de envio.");
@@ -12,6 +13,8 @@ async function sendTextMessage(number, text) {
 
   const instance = cfg.EVOLUTION_INSTANCE_NAME || "lucas";
   const url = `${baseUrl.replace(/\/$/, "")}/message/sendText/${instance}`;
+  // Evolution aceita o JID do grupo (…@g.us) ou o número puro no campo `number`.
+  const number = String(to);
 
   try {
     const res = await fetch(url, {

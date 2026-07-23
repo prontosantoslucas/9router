@@ -1,11 +1,10 @@
-/**
- * Emissor de respostas via Telegram Userbot MTProto (respondendo pela conta pessoal do usuário).
- */
+// Emissor de respostas via Telegram Userbot (conta pessoal) — delega ao cliente MTProto.
+const userbotClient = require("./userbotClient");
+
 async function sendUserbotMessage(chatId, messageText) {
-  console.log(`[Telegram Userbot] Enviando mensagem pela conta pessoal para ${chatId}: ${messageText}`);
-  return { ok: true, sentViaUserbot: true };
+  // chatId pode vir como "tg-user:<peer>" ou o peer cru
+  const peer = String(chatId).startsWith("tg-user:") ? String(chatId).slice("tg-user:".length) : chatId;
+  return userbotClient.sendMessage(peer, messageText);
 }
 
-module.exports = {
-  sendUserbotMessage,
-};
+module.exports = { sendUserbotMessage };

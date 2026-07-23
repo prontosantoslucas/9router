@@ -23,7 +23,9 @@ export default function Dashboard2Client() {
   const [tgApiHash, setTgApiHash] = useState("");
   const [tgPhone, setTgPhone] = useState("");
   const [tgOtpCode, setTgOtpCode] = useState("");
-  const [tgStep, setTgStep] = useState(1); // 1 = Credenciais, 2 = OTP
+  const [tg2faPassword, setTg2faPassword] = useState("");
+  const [tgNeedPassword, setTgNeedPassword] = useState(false);
+  const [tgStep, setTgStep] = useState(1); // 1 = Credenciais, 2 = OTP (+2FA)
   const [tgConnected, setTgConnected] = useState(false);
 
   // Form WhatsApp (Evolution API)
@@ -42,12 +44,24 @@ export default function Dashboard2Client() {
 
   // Integration Google Workspace
   const [googleStatus, setGoogleStatus] = useState(null);
+  // Status real dos serviços (agent/memory/google/workers/channels)
+  const [sidecars, setSidecars] = useState(null);
 
   useEffect(() => {
     fetchStats();
     fetchGoogleStatus();
     fetchBotStatus();
+    fetchSidecars();
   }, []);
+
+  const fetchSidecars = async () => {
+    try {
+      const res = await fetch("/api/agent/status/sidecars");
+      if (res.ok) setSidecars(await res.json());
+    } catch (err) {
+      console.error("[Dashboard2] Erro ao carregar status dos serviços:", err);
+    }
+  };
 
   const fetchBotStatus = async () => {
     try {
@@ -173,12 +187,15 @@ export default function Dashboard2Client() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ apiId: tgApiId, apiHash: tgApiHash, phone: tgPhone }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setTgStep(2);
-        alert("📱 Código OTP enviado para o seu aplicativo do Telegram!");
+        alert("📱 Código enviado para o seu Telegram. Digite o código recebido.");
+      } else {
+        alert(`Falha ao enviar código: ${data.error || `HTTP ${res.status}`}`);
       }
     } catch (err) {
-      alert(`Erro no envio do OTP: ${err.message}`);
+      alert(`Erro no envio do código: ${err.message}`);
     }
   };
 
@@ -188,33 +205,46 @@ export default function Dashboard2Client() {
       const res = await fetch("/api/agent/telegram/userbot/complete-auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: tgPhone, code: tgOtpCode }),
+        body: JSON.stringify({ phone: tgPhone, code: tgOtpCode, password: tg2faPassword || undefined }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setTgConnected(true);
-        alert("✅ Telegram Userbot conectado com sucesso como sua conta pessoal!");
+        setTgNeedPassword(false);
+        alert("✅ Telegram conectado como sua conta pessoal!");
+      } else if (data.needPassword) {
+        // 2FA: pede a senha de duas etapas e mantém na tela 2
+        setTgNeedPassword(true);
+        alert("🔒 Sua conta tem verificação em duas etapas. Digite a senha 2FA e confirme de novo.");
+      } else {
+        alert(`Falha ao validar: ${data.error || `HTTP ${res.status}`}`);
       }
     } catch (err) {
-      alert(`Erro na validação do OTP: ${err.message}`);
+      alert(`Erro na validação: ${err.message}`);
     }
   };
 
   const handleConnectWhatsApp = async () => {
+    setWaQrCode(null);
     try {
       const res = await fetch("/api/agent/evolution/instance", { method: "POST" });
-      if (res.ok) {
-        const data = await res.json();
-        const qrString =
-          data.base64 ||
-          data.qrcode?.base64 ||
-          (typeof data.qrcode === "string" ? data.qrcode : null) ||
-          data.code ||
-          data.pairingCode ||
-          "mock_qr_code_demo_evolution_go";
-        setWaQrCode(qrString);
-      } else {
-        alert("Falha ao se comunicar com a Evolution API.");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        alert(`WhatsApp: ${data.error || `Falha na Evolution API (HTTP ${res.status})`}`);
+        return;
       }
+      // Prioriza a imagem base64 (QR real da Evolution); senão o code (payload de pareamento).
+      const qrString = data.base64 || data.code || null;
+      if (!qrString) {
+        if (data.status && /open|connected/i.test(data.status)) {
+          setWaConnected(true);
+          alert("WhatsApp já está conectado.");
+        } else {
+          alert("A Evolution não retornou QR. A instância pode já estar conectada ou o QR expirou — tente de novo.");
+        }
+        return;
+      }
+      setWaQrCode(qrString);
     } catch (err) {
       alert(`Erro ao gerar QR Code do WhatsApp: ${err.message}`);
     }
@@ -248,8 +278,34 @@ export default function Dashboard2Client() {
         <StatCard title="Mensagens Atendidas" value={stats?.metrics?.totalRequests || "0"} icon="forum" trend="+14%" />
         <StatCard title="Sessões Ativas" value={stats?.sessionCount || "0"} icon="group" />
         <StatCard title="Chaves LLM" value={`${stats?.keys?.total || 0}`} subtitle={`${stats?.keys?.exhausted || 0} esgotadas`} icon="key" />
-        <StatCard title="Status ai-memory" value="Conectado" icon="psychology" subtitle="Wiki e Busca Ativas" />
+        <StatCard
+          title="ai-memory"
+          value={sidecars ? (sidecars.memory?.reachable ? "Conectado" : sidecars.memory?.configured ? "Offline" : "Não config.") : "…"}
+          icon="psychology"
+          subtitle={sidecars?.memory?.reachable ? "Wiki e busca ativas" : "Configure AI_MEMORY_URL"}
+        />
       </section>
+
+      {/* Status real dos serviços */}
+      {sidecars && (
+        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {[
+            { label: "Agente", ok: sidecars.agent?.ok, sub: `porta ${sidecars.agent?.port}` },
+            { label: "ai-memory", ok: sidecars.memory?.reachable, sub: sidecars.memory?.configured ? "configurado" : "sem URL" },
+            { label: "Google", ok: sidecars.google?.configured, sub: sidecars.google?.hasRefreshToken ? "conectado" : "não conectado" },
+            { label: "WhatsApp", ok: sidecars.channels?.whatsapp, sub: sidecars.channels?.whatsapp ? "Evolution on" : "off" },
+            { label: "Telegram Userbot", ok: sidecars.channels?.telegramUserbot, sub: sidecars.channels?.telegramUserbot ? "pareado" : "não pareado" },
+          ].map((s) => (
+            <div key={s.label} className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 dark:bg-surface-2">
+              <span className={`inline-block h-2.5 w-2.5 rounded-full ${s.ok ? "bg-success" : "bg-text-muted/40"}`} />
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-text-main">{s.label}</p>
+                <p className="truncate text-[10px] text-text-muted">{s.sub}</p>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       {/* Seção Principal de Configurações */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -406,7 +462,7 @@ export default function Dashboard2Client() {
           ) : (
             <form onSubmit={handleCompleteTelegramAuth} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-text-muted mb-1">Código de Verificação OTP:</label>
+                <label className="block text-xs font-semibold text-text-muted mb-1">Código de verificação (recebido no Telegram):</label>
                 <input
                   type="text"
                   value={tgOtpCode}
@@ -415,6 +471,20 @@ export default function Dashboard2Client() {
                   className="w-full rounded-lg border border-border bg-transparent p-2.5 text-xs text-text-main focus:border-brand-500 focus:outline-none"
                 />
               </div>
+
+              {tgNeedPassword && (
+                <div>
+                  <label className="block text-xs font-semibold text-warning mb-1">🔒 Senha de verificação em duas etapas (2FA):</label>
+                  <input
+                    type="password"
+                    value={tg2faPassword}
+                    onChange={(e) => setTg2faPassword(e.target.value)}
+                    placeholder="Sua senha 2FA do Telegram"
+                    autoComplete="off"
+                    className="w-full rounded-lg border border-warning/40 bg-transparent p-2.5 text-xs text-text-main focus:border-warning focus:outline-none"
+                  />
+                </div>
+              )}
 
               <div className="flex gap-2">
                 <button

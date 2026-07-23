@@ -18,9 +18,15 @@ async function approveDraft(req, res) {
 
   try {
     if (draft.channel === "whatsapp") {
-      await sendTextMessage(draft.chat_id.replace("wa:", ""), finalResponse);
+      // chat_id: "wa:<numero>" (DM) ou "wa-group:<groupId>" (grupo → JID @g.us)
+      const cid = String(draft.chat_id);
+      const target = cid.startsWith("wa-group:")
+        ? `${cid.slice("wa-group:".length)}@g.us`
+        : cid.replace(/^wa:/, "");
+      await sendTextMessage(target, finalResponse);
     } else if (draft.channel === "telegram") {
-      await sendUserbotMessage(draft.chat_id.replace("tg:", ""), finalResponse);
+      // chat_id: "tg-user:<peer>" — sendUserbotMessage já trata o prefixo
+      await sendUserbotMessage(draft.chat_id, finalResponse);
     }
 
     updateDraftStatus(draftId, "APPROVED", finalResponse);

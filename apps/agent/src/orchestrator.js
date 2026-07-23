@@ -214,6 +214,27 @@ async function processMessage(chatId, text, userName, ctx = {}) {
     ...session.msgs.slice(-20),
   ];
 
+  // VISÃO: se vieram imagens, substitui o conteúdo da última mensagem do usuário
+  // por formato multimodal (texto + image_url). O histórico (session.msgs) mantém
+  // só o texto — não guardamos base64 gigante nem reenviamos a imagem nos próximos turnos.
+  if (Array.isArray(ctx.images) && ctx.images.length > 0) {
+    const idx = msgs.length - 1;
+    if (msgs[idx] && msgs[idx].role === "user") {
+      msgs[idx] = {
+        role: "user",
+        content: [
+          { type: "text", text: text || "Analise a imagem." },
+          ...ctx.images
+            .filter((img) => img && img.base64)
+            .map((img) => ({
+              type: "image_url",
+              image_url: { url: `data:${img.mimeType || "image/jpeg"};base64,${img.base64}` },
+            })),
+        ],
+      };
+    }
+  }
+
   const primaryAnswer = await runAgentWithTools(activePrimary, msgs, chatId, ctx);
 
   // 3. Gravação Obrigatória no ai-memory

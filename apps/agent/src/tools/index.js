@@ -275,6 +275,113 @@ const NOTION_TOOLS = {
   },
 };
 
+// ── Ferramentas de canais pessoais (Telegram/WhatsApp) ──
+// O agente do webchat usa estas tools sob comando do usuário: ler, resumir,
+// buscar conversas e responder um contato/grupo.
+const CHANNEL_TOOLS = {
+  channels_list_chats: {
+    name: "channels_list_chats",
+    desc: "Lista as conversas/grupos recentes do Telegram e/ou WhatsApp (com última atividade). Use quando o usuário perguntar 'quais grupos', 'minhas conversas', etc.",
+    args: {
+      type: "object",
+      properties: {
+        channel: { type: "string", enum: ["telegram", "whatsapp"], description: "Filtrar por canal (opcional)" },
+      },
+    },
+    run: async (args) => {
+      const store = require("../channels/channelStore");
+      const chats = store.listChats({ channel: args.channel });
+      if (!chats.length) return "Nenhuma conversa registrada ainda. As mensagens aparecem aqui conforme chegam nos canais conectados.";
+      return chats.map((c) =>
+        `- [${c.channel}] ${c.chat_name || c.chat_id}${c.is_group ? " (grupo)" : ""} — ${c.msg_count} msg, última em ${c.last_at}`
+      ).join("\n");
+    },
+  },
+  channels_read: {
+    name: "channels_read",
+    desc: "Lê as últimas mensagens de uma conversa/grupo específico (por nome). Use para resumir ou entender o que rolou. Retorna o histórico recente.",
+    args: {
+      type: "object",
+      properties: {
+        chatName: { type: "string", description: "Nome (ou parte) do contato/grupo" },
+        channel: { type: "string", enum: ["telegram", "whatsapp"], description: "Canal (opcional)" },
+        limit: { type: "number", description: "Quantas mensagens (default 30)" },
+      },
+      required: ["chatName"],
+    },
+    run: async (args) => {
+      const store = require("../channels/channelStore");
+      const matches = store.findChatByName(args.chatName, { channel: args.channel });
+      if (!matches.length) return `Nenhuma conversa encontrada com "${args.chatName}".`;
+      const chat = matches[0];
+      const msgs = store.recent({ channel: chat.channel, chatId: chat.chat_id, limit: args.limit || 30 });
+      if (!msgs.length) return `Sem mensagens em "${chat.chat_name || chat.chat_id}".`;
+      const header = `Conversa: ${chat.chat_name || chat.chat_id} [${chat.channel}]\n\n`;
+      return header + msgs.map((m) =>
+        `${m.direction === "out" ? "Você" : m.sender_name || "Contato"}: ${m.text}`
+      ).join("\n");
+    },
+  },
+  channels_search: {
+    name: "channels_search",
+    desc: "Busca por um termo em todas as conversas de Telegram/WhatsApp. Use quando o usuário pedir 'procura X nas conversas', 'onde falaram de Y'.",
+    args: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Termo a buscar" },
+        channel: { type: "string", enum: ["telegram", "whatsapp"], description: "Canal (opcional)" },
+      },
+      required: ["query"],
+    },
+    run: async (args) => {
+      const store = require("../channels/channelStore");
+      const hits = store.search(args.query, { channel: args.channel });
+      if (!hits.length) return `Nenhuma mensagem encontrada com "${args.query}".`;
+      return hits.map((m) =>
+        `[${m.channel}] ${m.chat_name || m.chat_id} · ${m.sender_name || "Contato"}: ${m.text}`
+      ).join("\n");
+    },
+  },
+  channels_reply: {
+    name: "channels_reply",
+    desc: "Envia uma mensagem para um contato/grupo no Telegram ou WhatsApp. SÓ use quando o usuário pedir explicitamente para responder/enviar algo. Confirme o destinatário antes.",
+    args: {
+      type: "object",
+      properties: {
+        chatName: { type: "string", description: "Nome (ou parte) do contato/grupo destino" },
+        channel: { type: "string", enum: ["telegram", "whatsapp"], description: "Canal" },
+        message: { type: "string", description: "Texto a enviar" },
+      },
+      required: ["chatName", "message"],
+    },
+    run: async (args) => {
+      const store = require("../channels/channelStore");
+      const matches = store.findChatByName(args.chatName, { channel: args.channel });
+      if (!matches.length) return `Não achei "${args.chatName}" nas conversas. Verifique o nome.`;
+      const chat = matches[0];
+      try {
+        if (chat.channel === "telegram") {
+          const { sendUserbotMessage } = require("../channels/telegram/userbotSender");
+          const r = await sendUserbotMessage(chat.chat_id, args.message);
+          if (!r.ok) return `❌ Falha ao enviar no Telegram: ${r.error}`;
+        } else {
+          const evo = require("../channels/evolution/evolutionApi");
+          const target = chat.reply_target || chat.chat_id;
+          await evo.sendTextMessage(target, args.message);
+        }
+        store.record({
+          channel: chat.channel, chatId: chat.chat_id, chatName: chat.chat_name,
+          senderName: "Você", isGroup: chat.is_group, text: args.message,
+          replyTarget: chat.reply_target, direction: "out",
+        });
+        return `✅ Mensagem enviada para ${chat.chat_name || chat.chat_id} (${chat.channel}).`;
+      } catch (err) {
+        return `❌ Erro ao enviar: ${err.message}`;
+      }
+    },
+  },
+};
+
 const PHONE_TOOLS = {
   phone: {
     name: "phone",
@@ -319,6 +426,7 @@ const PHONE_TOOLS = {
 };
 Object.assign(TOOLS, PHONE_TOOLS);
 Object.assign(TOOLS, NOTION_TOOLS);
+Object.assign(TOOLS, CHANNEL_TOOLS);
 
 const TOOL_LIST = Object.values(TOOLS).map((t) => ({
   name: t.name,
