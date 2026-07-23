@@ -430,6 +430,25 @@ app.post("/api/telegram/userbot/complete-auth", async (req, res) => {
   }
 });
 
+app.post("/api/telegram/userbot/disconnect", (req, res) => {
+  try {
+    userbotAuth.disconnect();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/evolution/disconnect", async (req, res) => {
+  try {
+    const nativeClient = require("./channels/whatsapp/nativeClient");
+    await nativeClient.disconnect();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Memória (ai-memory MCP) ──
 app.get("/api/memory/status", async (req, res) => {
   const ping = await aiMemoryClient.ping();

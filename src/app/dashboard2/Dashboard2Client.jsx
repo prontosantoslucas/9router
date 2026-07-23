@@ -71,13 +71,18 @@ export default function Dashboard2Client() {
     const updated = { ...modules, [key]: !modules[key] };
     setModules(updated);
     try {
-      await fetch("/api/agent/modules", {
+      const res = await fetch("/api/agent/modules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ modules: updated }),
       });
+      if (!res.ok) {
+        setModules(modules);
+        console.error("Falha ao salvar módulo:", await res.text());
+      }
     } catch (err) {
       console.error("[Dashboard2] Erro ao salvar módulo:", err);
+      setModules(modules);
     }
   };
 
@@ -131,6 +136,32 @@ export default function Dashboard2Client() {
       await fetchBotStatus();
     } catch (err) {
       alert(`Erro ao desconectar: ${err.message}`);
+    }
+  };
+
+  const handleDisconnectTgUserbot = async () => {
+    if (!confirm("Desconectar o Telegram Userbot da sua conta pessoal?")) return;
+    try {
+      await fetch("/api/agent/telegram/userbot/disconnect", { method: "POST" });
+      setTgConnected(false);
+      setTgStep(1);
+      await fetchSidecars();
+      alert("Telegram Userbot desconectado.");
+    } catch (err) {
+      alert(`Erro ao desconectar: ${err.message}`);
+    }
+  };
+
+  const handleDisconnectWhatsApp = async () => {
+    if (!confirm("Desconectar a instância do WhatsApp?")) return;
+    try {
+      await fetch("/api/agent/evolution/disconnect", { method: "POST" });
+      setWaConnected(false);
+      setWaQrCode(null);
+      await fetchSidecars();
+      alert("WhatsApp desconectado com sucesso.");
+    } catch (err) {
+      alert(`Erro ao desconectar WhatsApp: ${err.message}`);
     }
   };
 
@@ -238,9 +269,9 @@ export default function Dashboard2Client() {
       if (res.ok) {
         setTgConnected(true);
         setTgNeedPassword(false);
+        await fetchSidecars();
         alert("✅ Telegram conectado como sua conta pessoal!");
       } else if (data.needPassword) {
-        // 2FA: pede a senha de duas etapas e mantém na tela 2
         setTgNeedPassword(true);
         alert("🔒 Sua conta tem verificação em duas etapas. Digite a senha 2FA e confirme de novo.");
       } else {
@@ -260,14 +291,14 @@ export default function Dashboard2Client() {
         alert(`WhatsApp: ${data.error || `Falha na Evolution API (HTTP ${res.status})`}`);
         return;
       }
-      // Prioriza a imagem base64 (QR real da Evolution); senão o code (payload de pareamento).
       const qrString = data.base64 || data.code || null;
       if (!qrString) {
         if (data.status && /open|connected/i.test(data.status)) {
           setWaConnected(true);
+          await fetchSidecars();
           alert("WhatsApp já está conectado.");
         } else {
-          alert("A Evolution não retornou QR. A instância pode já estar conectada ou o QR expirou — tente de novo.");
+          alert("Aguardando QR Code... tente novamente em alguns segundos.");
         }
         return;
       }
@@ -276,6 +307,9 @@ export default function Dashboard2Client() {
       alert(`Erro ao gerar QR Code do WhatsApp: ${err.message}`);
     }
   };
+
+  const isTgUserbotConnected = tgConnected || !!sidecars?.channels?.telegramUserbot;
+  const isWaConnected = waConnected || !!sidecars?.channels?.whatsapp;
 
   return (
     <div className="min-h-screen bg-bg text-text-main p-4 sm:p-8 space-y-8">
@@ -464,10 +498,24 @@ export default function Dashboard2Client() {
               <span className="material-symbols-outlined text-brand-500">send</span>
               <h3 className="font-bold text-base">Telegram Userbot (Conta Pessoal)</h3>
             </div>
-            <HealthDot status={tgConnected ? "ok" : "warning"} label={tgConnected ? "Conectado" : "Desconectado"} />
+            <HealthDot status={isTgUserbotConnected ? "ok" : "warning"} label={isTgUserbotConnected ? "Conectado" : "Desconectado"} />
           </div>
 
-          {tgStep === 1 ? (
+          {isTgUserbotConnected ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 p-3 text-xs font-semibold text-emerald-500 border border-emerald-500/20">
+                <span className="material-symbols-outlined text-base">check_circle</span>
+                <span>Conta Pessoal do Telegram pareada e ativa. As mensagens recebidas serão lidas pelo Lucas.</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleDisconnectTgUserbot}
+                className="w-full rounded-lg border border-border bg-surface py-2.5 text-xs font-bold text-danger hover:bg-red-500/10 transition-colors"
+              >
+                Desconectar Conta do Telegram
+              </button>
+            </div>
+          ) : tgStep === 1 ? (
             <form onSubmit={handleStartTelegramAuth} className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -556,17 +604,31 @@ export default function Dashboard2Client() {
           )}
         </div>
 
-        {/* Card 3: WhatsApp (Evolution API) */}
+        {/* Card 3: WhatsApp (Nativo / Baileys) */}
         <div className="card-soft p-6 border border-border space-y-4">
           <div className="flex items-center justify-between border-b border-border pb-3">
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-success">chat</span>
-              <h3 className="font-bold text-base">WhatsApp (Evolution API)</h3>
+              <h3 className="font-bold text-base">WhatsApp (Nativo / Baileys)</h3>
             </div>
-            <HealthDot status={waConnected ? "ok" : "warning"} label={waConnected ? "Conectado" : "Aguardando QR Code"} />
+            <HealthDot status={isWaConnected ? "ok" : "warning"} label={isWaConnected ? "Conectado" : waQrCode ? "Aguardando Leitura" : "Aguardando QR Code"} />
           </div>
 
-          {waQrCode ? (
+          {isWaConnected ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 rounded-lg bg-emerald-500/10 p-3 text-xs font-semibold text-emerald-500 border border-emerald-500/20">
+                <span className="material-symbols-outlined text-base">check_circle</span>
+                <span>WhatsApp pareado e ativo. As mensagens recebidas serão atendidas pelo Lucas.</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleDisconnectWhatsApp}
+                className="w-full rounded-lg border border-border bg-surface py-2.5 text-xs font-bold text-danger hover:bg-red-500/10 transition-colors"
+              >
+                Desconectar Instância do WhatsApp
+              </button>
+            </div>
+          ) : waQrCode ? (
             <div className="flex flex-col items-center justify-center p-4 bg-bg-alt rounded-lg space-y-3">
               <img
                 src={
