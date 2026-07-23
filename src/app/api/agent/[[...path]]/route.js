@@ -196,7 +196,7 @@ async function handleProxy(request, context) {
 
     // Preserva headers relevantes da resposta (Content-Type, Content-Length, Cache-Control, etc.)
     const responseHeaders = new Headers();
-    const passthroughHeaders = ["content-type", "cache-control", "etag", "last-modified"];
+    const passthroughHeaders = ["content-type", "cache-control", "etag", "last-modified", "location", "set-cookie"];
     for (const h of passthroughHeaders) {
       const v = upstreamResponse.headers.get(h);
       if (v) responseHeaders.set(h, v);

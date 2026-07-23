@@ -568,7 +568,22 @@ app.get("/api/google/callback", async (req, res) => {
     const result = await googleOauth.handleCallback(code, state);
     if (!result.ok) return res.status(400).send(`Falha OAuth Google: ${result.error}`);
     const target = result.redirectAfter || "/dashboard2?google=connected";
-    res.redirect(target);
+    
+    res.setHeader("Location", target);
+    res.status(302).send(`<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="refresh" content="0;url=${target}" />
+  <title>Conectado ao Google</title>
+</head>
+<body style="background:#111;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+  <div style="text-align:center;">
+    <h2>✅ Conta Google Conectada com Sucesso!</h2>
+    <p>Redirecionando para o painel de controle...</p>
+    <script>window.location.href = ${JSON.stringify(target)};</script>
+  </div>
+</body>
+</html>`);
   } catch (err) {
     console.error("[GoogleCallback] Erro:", err.message);
     res.status(500).send(`Erro no callback: ${err.message}`);
