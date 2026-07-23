@@ -138,7 +138,22 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 11: Refino de Layout (Glassmorphism) e Persistência Dinâmica de Módulos Avançados
+
+* **Por que foi feita essa alteração (Causa Raiz & Objetivo)**:
+  - Auditar todos os elementos do Chat (`/chat`) e do Painel do Agente (`/dashboard2`), garantindo que 100% das opções e toggles de módulos fossem reais e persistidos no banco SQLite (eliminando dados mock), além de aplicar um design moderno com glassmorphism, transparências e gradientes.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Persistência de Módulos em SQLite**: Criada a tabela `agent_settings` no banco do agente (`db.js`) e implementados os endpoints `GET /api/agent/modules` e `POST /api/agent/modules` (liberados no proxy Next.js), permitindo salvar o estado dos toggles (ex: Modo Co-Piloto, Áudio STT/TTS, Briefing Diário).
+  2. **Refino de Layout com Glassmorphism**:
+     - No `ChatPageClient.jsx`: Aplicado header fixo com `backdrop-blur-md bg-surface/90 dark:bg-surface-2/90` e suporte nativo a `safe-area-inset`.
+     - No `Dashboard2Client.jsx`: Aplicada tipografia gradiente no título, botões de atualização em lote de todos os sidecars e cards de status reais.
+  3. **Verificação de Funcionalidades**: Confirmado que todos os 6 cards do painel (Personalidade GitHub, BotFather Telegram, Telegram Userbot 2FA, WhatsApp Evolution API, Google Workspace OAuth e Módulos Avançados) possuem integração real e persistência.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
 
 
 
