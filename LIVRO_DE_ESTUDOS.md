@@ -191,7 +191,20 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 15: Resolução da Mensagem `Found. Redirecting to /dashboard2?google=connected` no Google OAuth
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - Ao concluir a autenticação do Google OAuth, a aplicação Express enviava uma resposta HTTP 302 de redirecionamento (`res.redirect("/dashboard2?google=connected")`). O proxy Next.js ([`route.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/agent/[[...path]]/route.js)) repassava a resposta para o navegador, porém o cabeçalho HTTP `Location` não estava na lista `passthroughHeaders`.
+  - Como o navegador recebia um status HTTP 302 sem o cabeçalho `Location`, ele não executava o redirecionamento automático e exibia no corpo da página o texto puro gerado pelo Express: `Found. Redirecting to /dashboard2?google=connected`.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Preservação de Cabeçalhos no Proxy**: Adicionados os cabeçalhos `"location"` e `"set-cookie"` à constante `passthroughHeaders` no proxy Next.js ([`route.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/agent/[[...path]]/route.js)), garantindo a cópia de redirecionamentos HTTP 302 do loopback.
+  2. **Página de Redirecionamento Híbrida**: Atualizada a rota `app.get("/api/google/callback")` no [`index.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/index.js) para incluir, além do cabeçalho `Location`, uma página HTML estilizada com `<meta http-equiv="refresh">` e `window.location.href` em JavaScript. Assim, a transição é instantânea e o usuário nunca fica preso em tela de texto.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
 
 
 
