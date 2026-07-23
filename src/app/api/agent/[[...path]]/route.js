@@ -84,6 +84,8 @@ const ALLOWED_PATHS = [
   "/api/evolution/",
   "/api/agent/telegram/userbot/",
   "/api/telegram/userbot/",
+  "/api/agent/telegram/bot",
+  "/api/telegram/bot",
   "/api/agent/copilot/",
   "/api/copilot/",
   "/api/agent/status",

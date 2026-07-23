@@ -6,7 +6,7 @@ const { PORT, SIDECAR_ENABLED, setBaseUrl } = cfg;
 const keyrotator = require("./keyrotator");
 const models = require("./models");
 const proxy = require("./proxy");
-const { createBot } = require("./telegram");
+const botManager = require("./botManager");
 const superbrain = require("./superbrain");
 const scheduler = require("./scheduler");
 const farejador = require("./farejador");
@@ -256,6 +256,21 @@ app.post("/api/personality/github", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Telegram Bot (BotFather) — configurável pela UI /dashboard2 ──
+app.get("/api/telegram/bot/status", (req, res) => {
+  res.json(botManager.status());
+});
+app.post("/api/telegram/bot", (req, res) => {
+  const { botToken } = req.body || {};
+  if (!botToken) return res.status(400).json({ error: "botToken obrigatório" });
+  const result = botManager.saveAndLaunch(botToken);
+  if (!result.ok) return res.status(400).json(result);
+  res.json(result);
+});
+app.post("/api/telegram/bot/disconnect", (req, res) => {
+  res.json(botManager.disconnect());
 });
 
 // ── Telegram Userbot (MTProto) — status + placeholders 501 ──
@@ -551,13 +566,8 @@ async function start() {
     })
     .catch((err) => console.error("[Models] init falhou (não-fatal):", err.message));
 
-  const tgBot = createBot();
-  if (tgBot) {
-    tgBot.launch().catch((err) => {
-      console.error("[Telegram] Erro no launch:", err.message);
-      console.log("[Telegram] Bot desativado — servidor continua rodando.");
-    });
-  }
+  // Telegram Bot gerenciado em runtime (token via env OU configurado pela UI /dashboard2)
+  botManager.launch();
 
   // Auto-sync Superbrain: 1min após start, depois a cada 6h
   setTimeout(() => superbrain.refreshFromGitHub(), 60000);
@@ -569,8 +579,9 @@ async function start() {
     console.log("[Workers] Inicializando farejador e scheduler...");
     farejador.start(async (chatId, msg) => {
       console.log(`[Farejador] Notificando ${chatId}`);
-      if (tgBot) {
-        await tgBot.telegram.sendMessage(chatId, msg, { parse_mode: "Markdown" }).catch(() => {});
+      const bot = botManager.getBot();
+      if (bot) {
+        await bot.telegram.sendMessage(chatId, msg, { parse_mode: "Markdown" }).catch(() => {});
       }
     });
 
@@ -580,8 +591,9 @@ async function start() {
       if (!chatId) return;
       try {
         const result = await processMessage(chatId, task.label, "Scheduler");
-        if (tgBot) {
-          await tgBot.telegram.sendMessage(chatId, result.content, { parse_mode: "Markdown" }).catch(() => {});
+        const bot = botManager.getBot();
+        if (bot) {
+          await bot.telegram.sendMessage(chatId, result.content, { parse_mode: "Markdown" }).catch(() => {});
         }
       } catch (err) {
         console.error(`[Scheduler] Erro ao processar tarefa: ${err.message}`);
@@ -591,7 +603,7 @@ async function start() {
     console.log("[Workers] AGENT_WORKERS desativado nesta instância.");
   }
 
-  console.log(`[Agent] TG Bot: ${tgBot ? "ativo" : "desativado"} · Workers: ${enableWorkers ? "on" : "off"}`);
+  console.log(`[Agent] TG Bot: ${botManager.status().running ? "ativo" : "desativado"} · Workers: ${enableWorkers ? "on" : "off"}`);
 }
 
 start().catch((err) => {

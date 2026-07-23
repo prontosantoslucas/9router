@@ -6,6 +6,10 @@ const crypto = require("crypto");
 const db = require("../db");
 
 const SCOPES = [
+  // openid + email: permitem saber de qual conta Google é a conexão (userinfo/id_token).
+  "openid",
+  "https://www.googleapis.com/auth/userinfo.email",
+  // Workspace P0
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/gmail.modify",
@@ -91,17 +95,30 @@ async function handleCallback(code, stateEncoded) {
 
   const client = newOAuthClient();
   const { tokens } = await client.getToken(code);
-  // tokens: { access_token, refresh_token, scope, token_type, expiry_date }
+  // tokens: { access_token, refresh_token, scope, token_type, expiry_date, id_token }
 
-  // Busca email para exibir de qual conta veio
   client.setCredentials(tokens);
   let email = null;
-  try {
-    const oauth2 = google.oauth2({ version: "v2", auth: client });
-    const info = await oauth2.userinfo.get();
-    email = info.data?.email || null;
-  } catch (err) {
-    console.warn("[GoogleOAuth] Não consegui recuperar email:", err.message);
+
+  // 1. Preferido: extrair email do id_token (JWT) — não faz chamada de rede,
+  //    disponível quando o escopo `openid`/`email` foi concedido.
+  if (tokens.id_token) {
+    try {
+      const payloadB64 = tokens.id_token.split(".")[1];
+      const payload = JSON.parse(Buffer.from(payloadB64, "base64").toString("utf8"));
+      email = payload.email || null;
+    } catch { /* ignora */ }
+  }
+
+  // 2. Fallback: userinfo endpoint (só funciona com escopo userinfo.email).
+  if (!email) {
+    try {
+      const oauth2 = google.oauth2({ version: "v2", auth: client });
+      const info = await oauth2.userinfo.get();
+      email = info.data?.email || null;
+    } catch (err) {
+      console.warn("[GoogleOAuth] email não recuperado (não-fatal, tokens salvos):", err.message);
+    }
   }
 
   saveTokens(tokens, email);

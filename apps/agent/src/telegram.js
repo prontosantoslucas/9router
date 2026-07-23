@@ -7,13 +7,14 @@ const { popNotifies } = require("./tools");
 const farejador = require("./farejador");
 const notion = require("./notion");
 
-function createBot() {
-  if (!BOT_TOKEN) {
+function createBot(tokenOverride) {
+  const token = tokenOverride || BOT_TOKEN;
+  if (!token) {
     console.log("[Telegram] BOT_TOKEN não configurado — bot desativado");
     return null;
   }
 
-  const bot = new Telegraf(BOT_TOKEN);
+  const bot = new Telegraf(token);
 
   // Envia notificações pendentes a cada 10s
   setInterval(async () => {

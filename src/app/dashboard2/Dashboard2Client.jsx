@@ -13,6 +13,11 @@ export default function Dashboard2Client() {
   const [githubPat, setGithubPat] = useState("");
   const [savingPersonality, setSavingPersonality] = useState(false);
 
+  // Telegram Bot (BotFather)
+  const [botToken, setBotToken] = useState("");
+  const [botStatus, setBotStatus] = useState(null); // { configured, running, source }
+  const [savingBot, setSavingBot] = useState(false);
+
   // Form Telegram Userbot MTProto
   const [tgApiId, setTgApiId] = useState("");
   const [tgApiHash, setTgApiHash] = useState("");
@@ -41,7 +46,52 @@ export default function Dashboard2Client() {
   useEffect(() => {
     fetchStats();
     fetchGoogleStatus();
+    fetchBotStatus();
   }, []);
+
+  const fetchBotStatus = async () => {
+    try {
+      const res = await fetch("/api/agent/telegram/bot/status");
+      if (res.ok) setBotStatus(await res.json());
+    } catch (err) {
+      console.error("[Dashboard2] Erro ao carregar status do Bot:", err);
+    }
+  };
+
+  const handleSaveBot = async (e) => {
+    e.preventDefault();
+    if (!botToken.trim()) return;
+    setSavingBot(true);
+    try {
+      const res = await fetch("/api/agent/telegram/bot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ botToken: botToken.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setBotToken("");
+        await fetchBotStatus();
+        alert("✅ Bot do Telegram conectado e iniciado!");
+      } else {
+        alert(`Falha ao conectar o bot: ${data.error || `HTTP ${res.status}`}`);
+      }
+    } catch (err) {
+      alert(`Erro ao salvar o token: ${err.message}`);
+    } finally {
+      setSavingBot(false);
+    }
+  };
+
+  const handleDisconnectBot = async () => {
+    if (!confirm("Desconectar o bot do Telegram? O token salvo será removido.")) return;
+    try {
+      await fetch("/api/agent/telegram/bot/disconnect", { method: "POST" });
+      await fetchBotStatus();
+    } catch (err) {
+      alert(`Erro ao desconectar: ${err.message}`);
+    }
+  };
 
   const fetchGoogleStatus = async () => {
     try {
@@ -241,6 +291,63 @@ export default function Dashboard2Client() {
               {savingPersonality ? "Sincronizando..." : "Sincronizar Personalidade Agora"}
             </button>
           </form>
+        </div>
+
+        {/* Card: Telegram Bot (BotFather) */}
+        <div className="card-soft p-6 border border-border space-y-4">
+          <div className="flex items-center justify-between border-b border-border pb-3">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-brand-500">smart_toy</span>
+              <h3 className="font-bold text-base">Telegram Bot (BotFather)</h3>
+            </div>
+            <HealthDot
+              status={botStatus?.running ? "ok" : botStatus?.configured ? "warning" : "warning"}
+              label={botStatus?.running ? "Rodando" : botStatus?.configured ? "Configurado" : "Desconectado"}
+            />
+          </div>
+
+          <p className="text-xs text-text-muted">
+            Cole o token do seu bot (obtido com o <strong>@BotFather</strong> no Telegram, comando <code>/newbot</code>).
+            O bot inicia na hora, sem reiniciar o servidor.
+          </p>
+
+          {botStatus?.source === "env" ? (
+            <p className="text-xs text-warning">
+              Token definido por variável de ambiente (BOT_TOKEN). Para trocar pela UI, remova a env no Railway.
+            </p>
+          ) : (
+            <form onSubmit={handleSaveBot} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-text-muted mb-1">Token do Bot:</label>
+                <input
+                  type="password"
+                  value={botToken}
+                  onChange={(e) => setBotToken(e.target.value)}
+                  placeholder="123456789:AAE...seu-token-do-BotFather"
+                  className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text-main focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={savingBot || !botToken.trim()}
+                  className="flex-1 rounded-lg bg-brand-500 py-2.5 text-xs font-bold text-white shadow-soft hover:bg-brand-600 transition-colors disabled:opacity-50"
+                >
+                  {savingBot ? "Conectando..." : botStatus?.configured ? "Atualizar token" : "Conectar bot"}
+                </button>
+                {botStatus?.configured && (
+                  <button
+                    type="button"
+                    onClick={handleDisconnectBot}
+                    className="rounded-lg border border-border px-3 py-2.5 text-xs font-semibold text-text-muted hover:text-danger hover:bg-bg-alt transition-colors"
+                  >
+                    Desconectar
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
         </div>
 
         {/* Card 2: Telegram Userbot (MTProto Conta Pessoal) */}
