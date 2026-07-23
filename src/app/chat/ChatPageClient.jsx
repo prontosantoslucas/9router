@@ -191,8 +191,8 @@ function ChatShell() {
     >
       <DropOverlay isDragging={isDragging} />
 
-      {/* Header */}
-      <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border bg-surface px-3 shadow-soft [padding-left:max(0.75rem,env(safe-area-inset-left))] [padding-right:max(0.75rem,env(safe-area-inset-right))] sm:h-16 sm:px-6 dark:bg-surface-2">
+      {/* Header com Glassmorphism */}
+      <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border/80 bg-surface/90 backdrop-blur-md px-3 shadow-soft [padding-left:max(0.75rem,env(safe-area-inset-left))] [padding-right:max(0.75rem,env(safe-area-inset-right))] sm:h-16 sm:px-6 dark:bg-surface-2/90">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button
             type="button"

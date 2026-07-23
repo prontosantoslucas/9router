@@ -282,12 +282,14 @@ export async function proxy(request) {
     return NextResponse.redirect(new URL("/entrar", request.url));
   }
 
-  // Redirect / to /chat if authenticated (chat é a tela primária), senão landing page
+  // Redirect / to /dashboard if authenticated, otherwise show landing page.
+  // (A raiz continua levando ao app completo; o "cair no chat" acontece só no
+  //  redirect PÓS-LOGIN em /entrar — chat é a 1ª tela ao logar, sem esconder o resto.)
   if (pathname === "/") {
     const token = request.cookies.get("auth_token")?.value;
     if (token) {
       if (await verifyDashboardAuthToken(token)) {
-        return NextResponse.redirect(new URL("/chat", request.url));
+        return NextResponse.redirect(new URL("/dashboard", request.url));
       }
     }
     return pageNoStore(request);

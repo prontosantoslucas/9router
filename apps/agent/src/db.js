@@ -108,9 +108,14 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS google_oauth_state (
-    -- state gerado no auth-url, consumido uma única vez no callback (proteção CSRF)
     state TEXT PRIMARY KEY,
     created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS agent_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT DEFAULT (datetime('now'))
   );
 `);
 

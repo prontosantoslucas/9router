@@ -52,7 +52,34 @@ export default function Dashboard2Client() {
     fetchGoogleStatus();
     fetchBotStatus();
     fetchSidecars();
+    fetchModules();
   }, []);
+
+  const fetchModules = async () => {
+    try {
+      const res = await fetch("/api/agent/modules");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.modules) setModules(data.modules);
+      }
+    } catch (err) {
+      console.error("[Dashboard2] Erro ao carregar módulos:", err);
+    }
+  };
+
+  const handleToggleModule = async (key) => {
+    const updated = { ...modules, [key]: !modules[key] };
+    setModules(updated);
+    try {
+      await fetch("/api/agent/modules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modules: updated }),
+      });
+    } catch (err) {
+      console.error("[Dashboard2] Erro ao salvar módulo:", err);
+    }
+  };
 
   const fetchSidecars = async () => {
     try {
@@ -251,25 +278,33 @@ export default function Dashboard2Client() {
   };
 
   return (
-    <div className="min-h-screen bg-bg text-text-main p-6 space-y-8">
-      {/* Header */}
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-6">
+    <div className="min-h-screen bg-bg text-text-main p-4 sm:p-8 space-y-8">
+      {/* Header com estilo premium */}
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-6">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-extrabold">Painel de Controle — Agente Lucas</h1>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-text-main via-text-main to-brand-500 bg-clip-text text-transparent">
+              Painel de Controle — Agente Lucas
+            </h1>
             <HealthDot status="ok" label="Agente Online" />
           </div>
-          <p className="text-sm text-text-muted mt-1">
-            Gerencie o comportamento, personalidades do GitHub, memória e canais do Lucas.
+          <p className="text-xs sm:text-sm text-text-muted mt-1">
+            Gerencie o comportamento, personalidades do GitHub, memória de longo prazo e canais de atendimento do Lucas.
           </p>
         </div>
 
         <button
-          onClick={fetchStats}
-          className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-xs font-bold hover:bg-bg-alt transition-colors"
+          onClick={() => {
+            fetchStats();
+            fetchSidecars();
+            fetchBotStatus();
+            fetchGoogleStatus();
+            fetchModules();
+          }}
+          className="flex items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 text-xs font-bold shadow-soft hover:bg-bg-alt hover:border-brand-500/50 transition-all dark:bg-surface-2"
         >
-          <span className="material-symbols-outlined text-base">refresh</span>
-          <span>Atualizar Dados</span>
+          <span className="material-symbols-outlined text-base text-brand-500">refresh</span>
+          <span>Atualizar Todos os Serviços</span>
         </button>
       </header>
 
@@ -611,7 +646,7 @@ export default function Dashboard2Client() {
                 <input
                   type="checkbox"
                   checked={val}
-                  onChange={() => setModules((prev) => ({ ...prev, [key]: !prev[key] }))}
+                  onChange={() => handleToggleModule(key)}
                   className="h-4 w-4 rounded accent-brand-500 cursor-pointer"
                 />
               </div>

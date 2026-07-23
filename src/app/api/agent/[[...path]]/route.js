@@ -100,6 +100,8 @@ const ALLOWED_PATHS = [
   "/api/status",
   "/api/agent/google/",
   "/api/google/",
+  "/api/agent/modules",
+  "/api/modules",
 ];
 
 function isPathAllowed(targetPath) {

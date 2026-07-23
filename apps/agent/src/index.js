@@ -187,6 +187,39 @@ app.post("/api/chat/new", (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Toggles dos Módulos Avançados ──
+app.get("/api/modules", (req, res) => {
+  try {
+    const row = db.prepare("SELECT value FROM agent_settings WHERE key = 'modules'").get();
+    const defaults = {
+      audioSttTts: true,
+      copilotMode: false,
+      dailyBriefing: true,
+      webBrowsing: true,
+      codeInterpreter: true,
+      autonomousInteractions: true,
+    };
+    if (!row) return res.json({ modules: defaults });
+    res.json({ modules: { ...defaults, ...JSON.parse(row.value) } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/modules", (req, res) => {
+  try {
+    const { modules } = req.body || {};
+    if (!modules) return res.status(400).json({ error: "modules obrigatório" });
+    db.prepare(`
+      INSERT INTO agent_settings (key, value, updated_at) VALUES ('modules', ?, datetime('now'))
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+    `).run(JSON.stringify(modules));
+    res.json({ ok: true, modules });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/api/upload", async (req, res) => {
   const { base64, mimeType, filename } = req.body;
   if (!base64 || !filename) return res.status(400).json({ error: "base64 e filename são obrigatórios" });

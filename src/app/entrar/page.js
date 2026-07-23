@@ -43,7 +43,7 @@ export default function LoginPage() {
         clearTimeout(timeoutId);
         if (res.ok) {
           const data = await res.json();
-          if (data.requireLogin === false) { window.location.assign("/chat"); return; }
+          if (data.requireLogin === false) { window.location.assign("/dashboard"); return; }
           setHasPassword(!!data.hasPassword);
           setAuthMode(data.authMode || "password");
           setOidcConfigured(data.oidcConfigured === true);
