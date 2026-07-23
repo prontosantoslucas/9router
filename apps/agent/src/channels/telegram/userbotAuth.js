@@ -54,6 +54,16 @@ function getSavedSession() {
   return creds?.sessionString || "";
 }
 
+function saveSession(sessionString, opts = {}) {
+  const existing = getSavedCredentials() || {};
+  return saveCredentials({
+    sessionString,
+    apiId: opts.apiId || existing.apiId || "",
+    apiHash: opts.apiHash || existing.apiHash || "",
+    phone: opts.phone || existing.phone || "",
+  });
+}
+
 // ────────────────────────────────────────────────────────────────
 // Etapa 1: start-auth — Envia código OTP via MTProto
 // ────────────────────────────────────────────────────────────────
@@ -209,6 +219,7 @@ function mapTelegramError(err) {
 // Exporta internals para testes
 module.exports = {
   getSavedSession,
+  saveSession,
   getSavedCredentials,
   saveCredentials,
   deleteCredentials,

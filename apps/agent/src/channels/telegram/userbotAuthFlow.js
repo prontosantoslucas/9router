@@ -110,7 +110,7 @@ async function completeAuth({ phone, code, password }) {
   }
 
   const sessionStr = client.session.save();
-  userbotAuth.saveSession(sessionStr);
+  userbotAuth.saveSession(sessionStr, { apiId: pend.api_id, apiHash: pend.api_hash, phone });
   try { await client.disconnect(); } catch {}
   liveClients.delete(String(phone));
   clearPending(String(phone));
