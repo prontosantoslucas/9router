@@ -125,7 +125,21 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 10: Memória Própria Integrada ao GitHub (`nortelucas/meueulucas`)
+
+* **Por que foi feita essa alteração (Causa Raiz & Objetivo)**:
+  - Permitir que o agente utilize o próprio repositório GitHub do usuário (`nortelucas/meueulucas/Superbrain-Lucas.md`) como provedor nativo de memória de longo prazo (**ai-memory**), eliminando a dependência obrigatória de um servidor MCP externo.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Busca Semântica / Leitura**: Implementada a função `searchMemoryInMarkdown` no `superbrain.js`, dividindo o arquivo `Superbrain-Lucas.md` por seções/parágrafos e pontuando correspondências com os termos pesquisados.
+  2. **Gravação via Commit**: Integrado o método `appendMemory` no `aiMemoryClient.js`. Quando a URL de um servidor MCP não está configurada, cada nova memória ou fato gravado pelo Lucas gera um commit automático via GitHub API (`PUT /repos/nortelucas/meueulucas/contents/Superbrain-Lucas.md`).
+  3. **Status em Tempo Real no Painel**: Atualizado o `Dashboard2Client.jsx` e o endpoint `/api/status/sidecars` para sinalizarem **GitHub Active (Repo: nortelucas/meueulucas)** quando em execução no modo nativo GitHub.
+  4. **Testes de Unidade**: Criado a suíte `tests/unit/github-memory.test.js` cobrindo a busca por palavras-chave e o fallback de status (78 testes passando ao todo).
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
 
 
 

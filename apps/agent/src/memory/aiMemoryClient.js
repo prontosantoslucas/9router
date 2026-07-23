@@ -112,71 +112,76 @@ async function callTool(name, args = {}) {
 
 // ── API pública (mesma shape do cliente antigo — non-breaking) ──────
 
+const superbrain = require("../superbrain");
+
 /**
- * Busca semântica na memória. Aceita tools MCP nomeadas
- * `memory_recall`, `search_memory` ou `recall` — o que o servidor expor.
+ * Busca semântica na memória. Tenta MCP server primeiro.
+ * Se o MCP não estiver configurado/ativo, usa o GitHub Superbrain (nortelucas/meueulucas).
  */
 async function searchMemory(query, limit = 5) {
-  try {
-    const tools = await listTools();
-    const searchTool = tools.find((t) =>
-      ["memory_recall", "search_memory", "recall", "search"].includes(t.name)
-    );
-    if (!searchTool) {
-      console.warn("[ai-memory] Nenhuma tool de busca encontrada no servidor MCP");
-      return [];
-    }
-    const result = await callTool(searchTool.name, { query, limit, max_results: limit });
-    // MCP `tools/call` retorna { content: [{type:"text", text}...], structuredContent? }
-    if (result?.structuredContent?.results) return result.structuredContent.results;
-    if (Array.isArray(result?.structuredContent)) return result.structuredContent;
-    if (result?.content?.[0]?.text) {
-      try {
-        const parsed = JSON.parse(result.content[0].text);
-        return Array.isArray(parsed) ? parsed : parsed.results || [];
-      } catch {
-        // texto puro — retorna como um único "resultado"
-        return [{ text: result.content[0].text }];
+  if (endpoint()) {
+    try {
+      const tools = await listTools();
+      const searchTool = tools.find((t) =>
+        ["memory_recall", "search_memory", "recall", "search"].includes(t.name)
+      );
+      if (searchTool) {
+        const result = await callTool(searchTool.name, { query, limit, max_results: limit });
+        if (result?.structuredContent?.results) return result.structuredContent.results;
+        if (Array.isArray(result?.structuredContent)) return result.structuredContent;
+        if (result?.content?.[0]?.text) {
+          try {
+            const parsed = JSON.parse(result.content[0].text);
+            return Array.isArray(parsed) ? parsed : parsed.results || [];
+          } catch {
+            return [{ text: result.content[0].text }];
+          }
+        }
       }
+    } catch (err) {
+      console.warn(`[ai-memory] searchMemory MCP error (${err.message}) — tentando GitHub Superbrain fallback`);
     }
-    return [];
-  } catch (err) {
-    console.warn(`[ai-memory] searchMemory fallback (${err.message})`);
-    return [];
   }
+
+  // GitHub Superbrain fallback
+  return superbrain.searchMemoryInMarkdown(query, limit);
 }
 
 /**
- * Grava fato / interação na memória. Aceita tools `memory_write`, `write_memory`, `remember`, `write_page`.
+ * Grava fato / interação na memória. Tenta MCP server primeiro.
+ * Se o MCP não estiver ativo, faz commit direto no GitHub (nortelucas/meueulucas).
  */
 async function recordMemory(content, metadata = {}) {
-  try {
-    const tools = await listTools();
-    const writeTool = tools.find((t) =>
-      ["memory_write", "write_memory", "remember", "write_page", "record"].includes(t.name)
-    );
-    if (!writeTool) {
-      console.warn("[ai-memory] Nenhuma tool de escrita encontrada no servidor MCP");
-      return false;
+  if (endpoint()) {
+    try {
+      const tools = await listTools();
+      const writeTool = tools.find((t) =>
+        ["memory_write", "write_memory", "remember", "write_page", "record"].includes(t.name)
+      );
+      if (writeTool) {
+        await callTool(writeTool.name, {
+          content,
+          text: content,
+          metadata,
+          timestamp: Date.now(),
+        });
+        return true;
+      }
+    } catch (err) {
+      console.warn(`[ai-memory] recordMemory MCP error (${err.message}) — tentando GitHub Superbrain commit`);
     }
-    await callTool(writeTool.name, {
-      content,
-      text: content,        // alguns servidores usam `text`
-      metadata,
-      timestamp: Date.now(),
-    });
-    return true;
-  } catch (err) {
-    console.warn(`[ai-memory] recordMemory fallback (${err.message})`);
-    return false;
   }
+
+  // GitHub Superbrain fallback (commit no repositório do usuário)
+  const result = await superbrain.appendMemory(content);
+  return result.ok;
 }
 
 /**
  * Handoff — busca o "bloco de resumo" da última sessão para injetar no prompt inicial.
- * Muitos MCPs de memória expõem uma tool `memory_handoff_accept` ou `session_handoff`.
  */
 async function getSessionHandoff({ workspaceId, projectId } = {}) {
+  if (!endpoint()) return null;
   try {
     const tools = await listTools();
     const t = tools.find((x) =>
@@ -194,16 +199,28 @@ async function getSessionHandoff({ workspaceId, projectId } = {}) {
 }
 
 /**
- * Health check simples para o `/api/agent/memory/status`.
+ * Health check para `/api/agent/memory/status` e `/api/status/sidecars`.
  */
 async function ping() {
-  if (!endpoint()) return { configured: false };
-  try {
-    const tools = await listTools();
-    return { configured: true, reachable: true, tools: tools.length };
-  } catch (err) {
-    return { configured: true, reachable: false, error: err.message };
+  if (endpoint()) {
+    try {
+      const tools = await listTools();
+      return { configured: true, reachable: true, mode: "mcp", tools: tools.length };
+    } catch (err) {
+      // Se MCP falhar, informa modo GitHub ativo
+    }
   }
+
+  const superbrainContent = superbrain.getContent();
+  return {
+    configured: true,
+    reachable: true,
+    mode: "github",
+    repo: "nortelucas/meueulucas",
+    file: "Superbrain-Lucas.md",
+    hasContent: !!superbrainContent,
+    length: superbrainContent.length,
+  };
 }
 
 /**

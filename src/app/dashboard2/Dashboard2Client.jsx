@@ -280,9 +280,21 @@ export default function Dashboard2Client() {
         <StatCard title="Chaves LLM" value={`${stats?.keys?.total || 0}`} subtitle={`${stats?.keys?.exhausted || 0} esgotadas`} icon="key" />
         <StatCard
           title="ai-memory"
-          value={sidecars ? (sidecars.memory?.reachable ? "Conectado" : sidecars.memory?.configured ? "Offline" : "Não config.") : "…"}
+          value={
+            sidecars?.memory?.reachable
+              ? sidecars.memory?.mode === "github"
+                ? "GitHub Active"
+                : "Conectado"
+              : "Offline"
+          }
           icon="psychology"
-          subtitle={sidecars?.memory?.reachable ? "Wiki e busca ativas" : "Configure AI_MEMORY_URL"}
+          subtitle={
+            sidecars?.memory?.mode === "github"
+              ? "Repo: nortelucas/meueulucas"
+              : sidecars?.memory?.reachable
+              ? "MCP Server ativo"
+              : "Memória desativada"
+          }
         />
       </section>
 
@@ -291,7 +303,11 @@ export default function Dashboard2Client() {
         <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {[
             { label: "Agente", ok: sidecars.agent?.ok, sub: `porta ${sidecars.agent?.port}` },
-            { label: "ai-memory", ok: sidecars.memory?.reachable, sub: sidecars.memory?.configured ? "configurado" : "sem URL" },
+            {
+              label: "ai-memory",
+              ok: sidecars.memory?.reachable,
+              sub: sidecars.memory?.mode === "github" ? "GitHub (meueulucas)" : sidecars.memory?.configured ? "MCP on" : "off",
+            },
             { label: "Google", ok: sidecars.google?.configured, sub: sidecars.google?.hasRefreshToken ? "conectado" : "não conectado" },
             { label: "WhatsApp", ok: sidecars.channels?.whatsapp, sub: sidecars.channels?.whatsapp ? "Evolution on" : "off" },
             { label: "Telegram Userbot", ok: sidecars.channels?.telegramUserbot, sub: sidecars.channels?.telegramUserbot ? "pareado" : "não pareado" },

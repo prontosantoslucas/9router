@@ -121,4 +121,36 @@ async function appendMemory(text) {
   }
 }
 
-module.exports = { getContent, refreshFromGitHub, refreshFromEnv, appendMemory };
+function searchMemoryInMarkdown(query, limit = 5) {
+  if (!currentDecoded || !query) return [];
+  const terms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 2);
+  if (terms.length === 0) return [];
+
+  // Divide o arquivo Markdown por parágrafos/seções
+  const blocks = currentDecoded
+    .split(/\n\s*\n/)
+    .map((b) => b.trim())
+    .filter((b) => b.length > 10);
+
+  const matches = [];
+  for (const block of blocks) {
+    const lowerBlock = block.toLowerCase();
+    const score = terms.reduce((acc, term) => (lowerBlock.includes(term) ? acc + 1 : acc), 0);
+    if (score > 0) {
+      matches.push({ content: block, score });
+    }
+  }
+
+  matches.sort((a, b) => b.score - a.score);
+  return matches.slice(0, limit).map((m) => ({ content: m.content }));
+}
+
+function setContent(text) {
+  currentDecoded = text || "";
+  currentBase64 = Buffer.from(currentDecoded, "utf-8").toString("base64");
+}
+
+module.exports = { getContent, setContent, refreshFromGitHub, refreshFromEnv, appendMemory, searchMemoryInMarkdown };
