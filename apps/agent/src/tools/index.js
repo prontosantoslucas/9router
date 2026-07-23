@@ -424,9 +424,186 @@ const PHONE_TOOLS = {
     },
   },
 };
+const GOOGLE_TOOLS = {
+  gmail_list: {
+    name: "gmail_list",
+    desc: "Lista e-mails não lidos ou prioritários no Gmail. Use quando o usuário perguntar 'ver meus e-mails', 'tem e-mail novo?', etc.",
+    args: {
+      type: "object",
+      properties: {
+        limit: { type: "number", description: "Quantidade de e-mails para listar (default 5)" },
+      },
+    },
+    run: async (args) => {
+      try {
+        const oauth = require("../google/oauth");
+        if (!oauth.isAuthorized()) return "❌ Google Workspace não autorizado. Conecte sua conta do Google no /dashboard2.";
+        const gmail = require("../google/gmail");
+        const list = await gmail.listPriorityEmails(args.limit || 5);
+        if (!list.length) return "Nenhum e-mail não lido encontrado.";
+        return list.map((m, i) =>
+          `${i + 1}. **De:** ${m.from || "Desconhecido"}\n   **Assunto:** ${m.subject}\n   **Snippet:** ${m.snippet}\n   **ID:** \`${m.id}\``
+        ).join("\n\n");
+      } catch (err) {
+        return `❌ Erro no Gmail: ${err.message}`;
+      }
+    },
+  },
+  gmail_search: {
+    name: "gmail_search",
+    desc: "Busca e-mails no Gmail usando termos ou operadores de busca (ex: from:joao, subject:reunião).",
+    args: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Termo ou filtro de busca do Gmail" },
+        limit: { type: "number", description: "Quantidade máxima de resultados (default 10)" },
+      },
+      required: ["query"],
+    },
+    run: async (args) => {
+      try {
+        const oauth = require("../google/oauth");
+        if (!oauth.isAuthorized()) return "❌ Google Workspace não autorizado. Conecte sua conta do Google no /dashboard2.";
+        const gmail = require("../google/gmail");
+        const list = await gmail.searchEmails(args.query, args.limit || 10);
+        if (!list.length) return `Nenhum e-mail encontrado para "${args.query}".`;
+        return list.map((m, i) =>
+          `${i + 1}. **De:** ${m.from || "?"} → **Para:** ${m.to || "?"}\n   **Assunto:** ${m.subject}\n   **Snippet:** ${m.snippet}\n   **ID:** \`${m.id}\``
+        ).join("\n\n");
+      } catch (err) {
+        return `❌ Erro ao buscar e-mails: ${err.message}`;
+      }
+    },
+  },
+  gmail_read: {
+    name: "gmail_read",
+    desc: "Lê o conteúdo completo de um e-mail específico pelo ID obtido no gmail_list ou gmail_search.",
+    args: {
+      type: "object",
+      properties: {
+        messageId: { type: "string", description: "ID da mensagem no Gmail" },
+      },
+      required: ["messageId"],
+    },
+    run: async (args) => {
+      try {
+        const oauth = require("../google/oauth");
+        if (!oauth.isAuthorized()) return "❌ Google Workspace não autorizado. Conecte sua conta do Google no /dashboard2.";
+        const gmail = require("../google/gmail");
+        const res = await gmail.getEmailBody(args.messageId);
+        return `**Mensagem ID:** \`${res.id}\`\n\n${res.body.slice(0, 4000)}`;
+      } catch (err) {
+        return `❌ Erro ao ler e-mail: ${err.message}`;
+      }
+    },
+  },
+  gmail_send: {
+    name: "gmail_send",
+    desc: "Envia um e-mail via Gmail. Use quando o usuário solicitar o envio de uma mensagem por e-mail.",
+    args: {
+      type: "object",
+      properties: {
+        to: { type: "string", description: "E-mail do destinatário" },
+        subject: { type: "string", description: "Assunto do e-mail" },
+        body: { type: "string", description: "Conteúdo do e-mail" },
+      },
+      required: ["to", "subject", "body"],
+    },
+    run: async (args) => {
+      try {
+        const oauth = require("../google/oauth");
+        if (!oauth.isAuthorized()) return "❌ Google Workspace não autorizado. Conecte sua conta do Google no /dashboard2.";
+        const gmail = require("../google/gmail");
+        const r = await gmail.sendEmail(args.to, args.subject, args.body);
+        return `✅ E-mail enviado com sucesso para ${args.to} (ID: \`${r.id}\`).`;
+      } catch (err) {
+        return `❌ Erro ao enviar e-mail: ${err.message}`;
+      }
+    },
+  },
+  calendar_list: {
+    name: "calendar_list",
+    desc: "Lista compromissos e eventos na Agenda do Google (Google Calendar). Use para ver a programação de hoje ou de datas específicas.",
+    args: {
+      type: "object",
+      properties: {
+        timeMin: { type: "string", description: "Data/hora inicial ISO (ex: 2026-07-23T00:00:00Z, padrão: início de hoje)" },
+        timeMax: { type: "string", description: "Data/hora final ISO (ex: 2026-07-23T23:59:59Z, padrão: fim de hoje)" },
+        q: { type: "string", description: "Termo de busca na agenda (opcional)" },
+      },
+    },
+    run: async (args) => {
+      try {
+        const oauth = require("../google/oauth");
+        if (!oauth.isAuthorized()) return "❌ Google Workspace não autorizado. Conecte sua conta do Google no /dashboard2.";
+        const calendar = require("../google/calendar");
+        const events = args.timeMin || args.timeMax || args.q
+          ? await calendar.listEvents({ timeMin: args.timeMin, timeMax: args.timeMax, q: args.q })
+          : await calendar.listTodayEvents();
+        if (!events.length) return "Nenhum compromisso encontrado para o período informado na sua Agenda.";
+        return events.map((e, i) =>
+          `${i + 1}. **${e.title}**\n   ⏰ Início: ${e.start} | Fim: ${e.end}\n   📍 Local: ${e.location || "N/A"}\n   📝 ID: \`${e.id}\``
+        ).join("\n\n");
+      } catch (err) {
+        return `❌ Erro na Agenda: ${err.message}`;
+      }
+    },
+  },
+  calendar_create: {
+    name: "calendar_create",
+    desc: "Cria um novo evento na Agenda do Google.",
+    args: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Título do evento" },
+        start: { type: "string", description: "Data/hora de início em ISO 8601 (ex: 2026-07-24T15:00:00-03:00) ou YYYY-MM-DD para dia inteiro" },
+        end: { type: "string", description: "Data/hora de término em ISO 8601 ou YYYY-MM-DD" },
+        description: { type: "string", description: "Descrição ou pauta da reunião (opcional)" },
+        location: { type: "string", description: "Local ou link de reunião (opcional)" },
+        attendees: { type: "array", items: { type: "string" }, description: "Lista de e-mails dos convidados (opcional)" },
+      },
+      required: ["title", "start", "end"],
+    },
+    run: async (args) => {
+      try {
+        const oauth = require("../google/oauth");
+        if (!oauth.isAuthorized()) return "❌ Google Workspace não autorizado. Conecte sua conta do Google no /dashboard2.";
+        const calendar = require("../google/calendar");
+        const ev = await calendar.createEvent(args);
+        return `✅ Evento "${ev.title}" criado com sucesso na Agenda!\n⏰ ${ev.start} até ${ev.end}\n🔗 [Ver no Google Calendar](${ev.htmlLink})`;
+      } catch (err) {
+        return `❌ Erro ao criar evento na Agenda: ${err.message}`;
+      }
+    },
+  },
+  calendar_delete: {
+    name: "calendar_delete",
+    desc: "Remove um evento da Agenda do Google pelo ID.",
+    args: {
+      type: "object",
+      properties: {
+        eventId: { type: "string", description: "ID do evento obtido via calendar_list" },
+      },
+      required: ["eventId"],
+    },
+    run: async (args) => {
+      try {
+        const oauth = require("../google/oauth");
+        if (!oauth.isAuthorized()) return "❌ Google Workspace não autorizado. Conecte sua conta do Google no /dashboard2.";
+        const calendar = require("../google/calendar");
+        await calendar.deleteEvent(args.eventId);
+        return `✅ Evento removido da Agenda com sucesso.`;
+      } catch (err) {
+        return `❌ Erro ao remover evento: ${err.message}`;
+      }
+    },
+  },
+};
+
 Object.assign(TOOLS, PHONE_TOOLS);
 Object.assign(TOOLS, NOTION_TOOLS);
 Object.assign(TOOLS, CHANNEL_TOOLS);
+Object.assign(TOOLS, GOOGLE_TOOLS);
 
 const TOOL_LIST = Object.values(TOOLS).map((t) => ({
   name: t.name,

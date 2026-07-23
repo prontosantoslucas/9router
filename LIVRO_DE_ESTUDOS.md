@@ -203,7 +203,24 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 16: Registro e Conectividade das Ferramentas de E-mail e Agenda do Google Workspace
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - O projeto possuía a integração OAuth 2.0 e os clientes REST em `gmail.js` e `calendar.js`, mas nenhuma ferramenta (*function calling*) do Google estava registrada na lista global `TOOLS` ([`tools/index.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/tools/index.js)) nem em `COMMON_TOOLS` ([`agents.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/agents.js)).
+  - Quando o usuário pedia ao Lucas ou a outros agentes para ler e-mails ("veja meus e-mails") ou consultar/agendar compromissos ("o que tenho na agenda?"), os modelos de linguagem não tinham declarações de funções para interagir com o Gmail ou Google Calendar.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Criação de `GOOGLE_TOOLS`**: No [`tools/index.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/tools/index.js), foram implementadas as ferramentas:
+     - `gmail_list`, `gmail_search`, `gmail_read`, `gmail_send` (leitura, busca e envio de e-mails via Gmail API v1).
+     - `calendar_list`, `calendar_create`, `calendar_delete` (listagem, agendamento e remoção de compromissos via Calendar API v3).
+  2. **Inclusão em `COMMON_TOOLS`**: No [`agents.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/agents.js), as ferramentas do Google foram injetadas no array `COMMON_TOOLS`, tornando-as disponíveis para todos os agentes principais (Lucas, Escritor, Dev, etc.).
+  3. **Validação de Autorização**: Cada ferramenta verifica se o Google OAuth está autorizado antes da execução, retornando aviso amigável orientado a ações no painel `/dashboard2` se a conta não estiver conectada.
+  4. **Suíte de Testes**: Criado o teste [`tests/unit/google-tools.test.js`](file:///c:/Users/user/Documents/GitHub/9router/tests/unit/google-tools.test.js) (84 testes de unidade passando ao todo).
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
 
 
 

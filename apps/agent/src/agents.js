@@ -1,6 +1,26 @@
 const superbrain = require("./superbrain");
 
-const COMMON_TOOLS = ["web_search", "web_fetch", "notify", "schedule", "phone", "save_memory", "search_memory", "github_api"];
+const GOOGLE_TOOL_NAMES = [
+  "gmail_list",
+  "gmail_search",
+  "gmail_read",
+  "gmail_send",
+  "calendar_list",
+  "calendar_create",
+  "calendar_delete",
+];
+
+const COMMON_TOOLS = [
+  "web_search",
+  "web_fetch",
+  "notify",
+  "schedule",
+  "phone",
+  "save_memory",
+  "search_memory",
+  "github_api",
+  ...GOOGLE_TOOL_NAMES,
+];
 
 const HUMANIZE = `Você é humano, não um robô. Tom natural de conversa real.
 
