@@ -219,7 +219,21 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 17: Reversão de Código para Estado Estável Funcional (Commit 9dc8649)
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - Durante o refatoramento do frontend [`Dashboard2Client.jsx`](file:///c:/Users/user/Documents/GitHub/9router/src/app/dashboard2/Dashboard2Client.jsx) para o bloco de formulários de integrações adicionais, a declaração de estado `const [sidecars, setSidecars] = useState(null)` foi omitida acidentalmente.
+  - Isso gerou a exceção de runtime `ReferenceError: sidecars is not defined` no Next.js durante a renderização do lado do servidor (SSR) no Railway.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Rollback Seguro via Git**: Efetuada a reversão (`git reset --hard 9dc8649`) para o commit funcional `9dc8649` (`feat(tools): add google workspace tools for gmail and calendar function calling`), restaurando com 100% de integridade o estado em que a aplicação funcionava perfeitamente.
+  2. **Atualização no Repositório Remoto**: Executado `git push origin master --force` para atualizar a implantação em produção no Railway.
+  3. **Suíte de Testes**: Suíte de testes (84 testes de unidade) totalmente aprovada.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
 
 
 
