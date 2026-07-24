@@ -256,7 +256,24 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 19: Persistência de Conexões de Usuário (Supabase & GitHub) no Banco de Dados Turso / SQLite
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - As credenciais e conexões do módulo Coder (URL do Supabase, Anon Key, Token do GitHub, Repositório e Branch) estavam armazenadas apenas no `localStorage` do navegador e no estado da página.
+  - Ao fazer um commit ou recarregar a aplicação, as conexões eram perdidas, exigindo que o usuário reconfigurasse todas as credenciais do Supabase e do GitHub novamente.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Persistência Centralizada no Banco de Dados (Turso / SQLite)**:
+     - Criada a nova rota `/api/coder/connections` ([`route.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/coder/connections/route.js)) que utiliza `getSettings()` e `updateSettings()` do modelo do 9Router para gravar as conexões no banco SQLite (com suporte nativo ao Turso via `TURSO_DATABASE_URL` e `TURSO_AUTH_TOKEN`).
+  2. **Refatoração dos Módulos Cliente**:
+     - Atualizados `supabaseClient.js`, `githubCommit.js`, `SupabaseModal.jsx` e `GitHubCommitModal.jsx` para buscar e salvar automaticamente as conexões no banco de dados na inicialização e em cada ação de salvamento.
+  3. **Commit Git**:
+     - Registrado o commit Git `feat(coder): persist Supabase and GitHub connections in SQLite/Turso DB` (commit `a9f6e07`).
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
 
 
 
