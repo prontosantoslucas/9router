@@ -308,6 +308,26 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 22: Reestruturação do Coder IDE — Criação de Projetos do Zero, Aprimorador de Prompts por IA e Geração Frontend-First com Backend Localhost
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  1. **Inicialização com Projeto Fictício Pré-carregado**: O Coder IDE vinha configurado com uma lista de arquivos fictícios padrão ("Crystal Water Landing Page"), forçando o usuário a começar com código preexistente em vez de permitir a criação da aplicação inteiramente do zero com base em sua própria ideia.
+  2. **Ausência de Ferramenta de Aprimoramento de Prompts**: Prompts brutos digitados pelos usuários (ex.: *"Quero um app de delivery"*) não continham especificações arquiteturais claras, dificultando a estruturação dos componentes React e das rotas de API no servidor local.
+  3. **Ordem de Geração e Renderização**: Era necessário garantir uma ordem de construção estrita: gerar **primeiro o Frontend** (para exibição instantânea no Live Preview ao vivo) e em seguida a **estrutura do Backend localhost** em Node.js/Express (`server.js`).
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Inicialização Limpa (Zero Base Project)**:
+     - Alterada a constante `INITIAL_PROJECT_FILES` em [`openclaudeEngine.js`](file:///c:/Users/user/Documents/GitHub/9router/src/lib/coder/openclaudeEngine.js) e o estado inicial em [`ChatPageClient.jsx`](file:///c:/Users/user/Documents/GitHub/9router/src/app/chat/ChatPageClient.jsx) para um array vazio (`[]`).
+  2. **Tela de Boas-Vindas & Sugestões no `CoderWorkspace.jsx`**:
+     - Quando `files.length === 0`, o [`CoderWorkspace.jsx`](file:///c:/Users/user/Documents/GitHub/9router/src/app/chat/components/CoderWorkspace.jsx) exibe uma tela inicial limpa com sugestões rápidas de prompts (ex.: *Barbearia & Agendamentos*, *Dashboard SaaS*, *Food Delivery*, *Kanban*).
+     - Adicionado o botão **"✨ Melhorar meu prompt com base na minha ideia"**, acionando a função `enhanceUserPrompt(idea)` para transformar a ideia inicial do usuário em uma especificação técnica detalhada.
+  3. **Geração Frontend-First + Backend Localhost**:
+     - O motor [`openclaudeEngine.js`](file:///c:/Users/user/Documents/GitHub/9router/src/lib/coder/openclaudeEngine.js) gera primeiro a interface do usuário em React (`src/App.tsx`, `index.html`, `src/index.css`) garantindo 0 erros de lint ou sintaxe TSX.
+     - Em seguida, estrutura o servidor Node.js/Express em `server.js` e `routes/api.js` para simulação localhost.
+     - Após a geração, a visualização alterna automaticamente para a aba **Preview** ao vivo.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 

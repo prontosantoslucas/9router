@@ -1,212 +1,364 @@
 /**
  * OpenClaude / Free-Claude-Code Engine for Coder
- * Simulates coding agent workflows, prompt processing, file generation, and terminal command execution.
+ * Simulates coding agent workflows, prompt enhancement, file generation, and terminal command execution.
  */
 
-export const INITIAL_PROJECT_FILES = [
-  {
-    path: "src/App.tsx",
-    content: `export default function App() {
+// Inicialização vazia por padrão (o usuário cria a aplicação do zero)
+export const INITIAL_PROJECT_FILES = [];
+
+/**
+ * Aprimora o prompt bruto do usuário com base na sua ideia,
+ * adicionando especificações técnicas detalhadas de Frontend e Backend.
+ */
+export function enhanceUserPrompt(rawIdea = "") {
+  const idea = rawIdea.trim();
+  if (!idea) return "";
+
+  return `[ESPECIFICAÇÃO DE APLICAÇÃO - OPENCLAUDE CODER]
+Objetivo: Criar uma aplicação web completa, responsiva e moderna com base na ideia: "${idea}".
+
+--- ESTRUTURA E ARQUITETURA ---
+1. FRONTEND (Construir Primeiro):
+   - Criar interface responsiva em React (src/App.tsx) utilizando Tailwind CSS e componentes modernos.
+   - Incluir menu de navegação, cards interativos, tabelas de dados, formulários com estados React (useState) e badges de status.
+   - Design System impecável com gradientes, suporte a tema escuro/claro e visual elegante sem placeholders genéricos.
+
+2. BACKEND LOCALHOST:
+   - Estruturar o servidor Node.js/Express (server.js) para simulação em localhost.
+   - Incluir rotas API de leitura/gravação (GET/POST /api/data) para integração com o frontend.
+
+3. VISUALIZAÇÃO INSTANTÂNEA:
+   - Garantir renderização imediata no Live Preview do Coder IDE.`;
+}
+
+export async function processOpenClaudePrompt({
+  prompt,
+  currentFiles = [],
+  onStreamMessage,
+  onTerminalLog,
+  onUpdateFiles,
+}) {
+  if (onTerminalLog) {
+    onTerminalLog({ type: "info", text: `$ openclaude agent --prompt "${prompt.substring(0, 50)}..."` });
+  }
+
+  if (onStreamMessage) {
+    onStreamMessage("1/3 Criando interface Frontend (React + Tailwind)...");
+  }
+
+  await new Promise((r) => setTimeout(r, 400));
+
+  if (onTerminalLog) {
+    onTerminalLog({ type: "command", text: "⚙ Gerando arquivos do Frontend (src/App.tsx, index.html, src/index.css)..." });
+  }
+
+  const pLower = prompt.toLowerCase();
+
+  // Detecta o tema/tipo da aplicação para personalizar o código do Frontend
+  let appTitle = "Minha Aplicação Web";
+  let appSubtitle = "Aplicação criada do zero pelo Agente Lucas Coder";
+  let appIcon = "rocket_launch";
+
+  if (pLower.includes("barber") || pLower.includes("barbearia") || pLower.includes("agendamento")) {
+    appTitle = "BarberCraft — Agendamentos Premium";
+    appSubtitle = "Sistema de agendamento online de cortes e barba em tempo real.";
+    appIcon = "content_cut";
+  } else if (pLower.includes("finance") || pLower.includes("finança") || pLower.includes("carteira") || pLower.includes("banco")) {
+    appTitle = "FinControl — Gestão Financeira";
+    appSubtitle = "Painel de controle financeiro com fluxo de caixa, receitas e relatórios.";
+    appIcon = "account_balance_wallet";
+  } else if (pLower.includes("delivery") || pLower.includes("comida") || pLower.includes("restaurante") || pLower.includes("food")) {
+    appTitle = "FoodExpress — Pedidos & Delivery";
+    appSubtitle = "Plataforma de pedidos online com cardápio digital e acompanhamento de entrega.";
+    appIcon = "restaurant";
+  } else if (pLower.includes("task") || pLower.includes("tarefa") || pLower.includes("kanban") || pLower.includes("projeto")) {
+    appTitle = "TaskFlow — Gestão de Projetos & Kanban";
+    appSubtitle = "Organizador de tarefas inteligentes com quadros Kanban e prioridades.";
+    appIcon = "check_box";
+  } else if (pLower.includes("saas") || pLower.includes("dashboard") || pLower.includes("painel")) {
+    appTitle = "SaaS Metrics — Analytics Dashboard";
+    appSubtitle = "Dashboard de acompanhamento de MRR, retenção de usuários e conversão.";
+    appIcon = "insights";
+  }
+
+  // Code generation: FRONTEND FIRST (src/App.tsx)
+  const appTsxContent = `import React, { useState } from "react";
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState("overview");
+  const [items, setItems] = useState([
+    { id: 1, name: "Item Exemplo #1", status: "Ativo", date: "Hoje, 14:30", category: "Principal" },
+    { id: 2, name: "Item Exemplo #2", status: "Concluído", date: "Ontem, 09:15", category: "Secundário" },
+    { id: 3, name: "Item Exemplo #3", status: "Pendente", date: "Há 2 dias", category: "Urgente" },
+  ]);
+  const [newItemName, setNewItemName] = useState("");
+
+  const handleAddItem = (e) => {
+    e.preventDefault();
+    if (!newItemName.trim()) return;
+    setItems([
+      ...items,
+      { id: Date.now(), name: newItemName.trim(), status: "Ativo", date: "Agora", category: "Geral" },
+    ]);
+    setNewItemName("");
+  };
+
   return (
-    <div className="min-h-screen bg-[#0F0F11] text-white flex flex-col items-center justify-center p-8 font-sans">
-      <div className="max-w-xl text-center space-y-4">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs font-mono">
-          <span>⚡ Coder Powered by OpenClaude</span>
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+      {/* Header Bar */}
+      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500">
+            <span className="material-symbols-outlined text-[20px]">${appIcon}</span>
+          </div>
+          <div>
+            <h1 className="font-bold text-base text-white tracking-tight">${appTitle}</h1>
+            <p className="text-xs text-slate-400 font-mono">${appSubtitle}</p>
+          </div>
         </div>
-        <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
-          Crystal Water Landing Page
-        </h1>
-        <p className="text-slate-400 text-sm leading-relaxed">
-          Digite seu prompt no chat para ver a mágica acontecer! O Coder irá gerar o código, atualizar os arquivos e executar comandos em tempo real.
-        </p>
-        <div className="pt-4 flex items-center justify-center gap-3">
-          <button className="px-5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm transition-all shadow-lg shadow-blue-500/20">
-            Começar Agora
-          </button>
-          <button className="px-5 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 font-medium text-sm transition-all">
-            Ver Documentação
-          </button>
+
+        <div className="flex items-center gap-2">
+          <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Localhost Server Active</span>
+          </span>
         </div>
-      </div>
+      </header>
+
+      {/* Main Body */}
+      <main className="flex-1 p-6 max-w-6xl mx-auto w-full space-y-6">
+        {/* KPI Summary Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+            <span className="text-xs text-slate-400 font-medium">Total de Registros</span>
+            <div className="text-2xl font-bold text-white">{items.length}</div>
+            <p className="text-[11px] text-emerald-400">✓ Sincronizado via Localhost API</p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+            <span className="text-xs text-slate-400 font-medium">Status Ativos</span>
+            <div className="text-2xl font-bold text-amber-400">
+              {items.filter((i) => i.status === "Ativo").length}
+            </div>
+            <p className="text-[11px] text-slate-400">Em processamento</p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+            <span className="text-xs text-slate-400 font-medium">Concluídos</span>
+            <div className="text-2xl font-bold text-emerald-400">
+              {items.filter((i) => i.status === "Concluído").length}
+            </div>
+            <p className="text-[11px] text-slate-400">Finalizados com sucesso</p>
+          </div>
+        </div>
+
+        {/* Action & Table Section */}
+        <div className="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <span className="material-symbols-outlined text-amber-500 text-sm">list_alt</span>
+              <span>Painel Principal</span>
+            </h2>
+
+            <form onSubmit={handleAddItem} className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Novo item na aplicação..."
+                value={newItemName}
+                onChange={(e) => setNewItemName(e.target.value)}
+                className="bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+              />
+              <button
+                type="submit"
+                className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition-colors flex items-center gap-1"
+              >
+                <span>+ Adicionar</span>
+              </button>
+            </form>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs font-sans">
+              <thead className="border-b border-slate-800 text-slate-400 uppercase text-[10px]">
+                <tr>
+                  <th className="py-2 px-3">Item</th>
+                  <th className="py-2 px-3">Categoria</th>
+                  <th className="py-2 px-3">Data</th>
+                  <th className="py-2 px-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {items.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="py-2.5 px-3 font-semibold text-white">{item.name}</td>
+                    <td className="py-2.5 px-3 text-slate-400 font-mono">{item.category}</td>
+                    <td className="py-2.5 px-3 text-slate-400">{item.date}</td>
+                    <td className="py-2.5 px-3">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        {item.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
-`,
-  },
-  {
-    path: "src/index.css",
-    content: `@import "tailwindcss";
+`;
 
-body {
-  margin: 0;
-  background-color: #0d0d0e;
-  color: #f3f4f6;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-}
-`,
-  },
-  {
-    path: "src/main.tsx",
-    content: `import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App'
-import './index.css'
-
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
-`,
-  },
-  {
-    path: "package.json",
-    content: JSON.stringify(
-      {
-        name: "crystal-water-landing-page",
-        private: true,
-        version: "1.0.0",
-        type: "module",
-        scripts: {
-          dev: "vite",
-          build: "tsc && vite build",
-          preview: "vite preview",
-        },
-        dependencies: {
-          react: "^19.0.0",
-          "react-dom": "^19.0.0",
-          "lucide-react": "^0.475.0",
-        },
-        devDependencies: {
-          "@types/react": "^19.0.0",
-          "@types/react-dom": "^19.0.0",
-          "@vitejs/plugin-react": "^4.3.0",
-          typescript: "^5.6.0",
-          vite: "^6.0.0",
-        },
-      },
-      null,
-      2
-    ),
-  },
-  {
-    path: "index.html",
-    content: `<!DOCTYPE html>
-<html lang="en">
+  // FRONTEND CONFIG (index.html, src/index.css, src/main.tsx, package.json, vite.config.ts)
+  const indexHtmlContent = `<!DOCTYPE html>
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Crystal Water Landing Page</title>
+    <title>${appTitle}</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
-</html>
-`,
-  },
-  {
-    path: "vite.config.ts",
-    content: `import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+</html>`;
+
+  const indexCssContent = `@import "tailwindcss";
+
+body {
+  margin: 0;
+  background-color: #020617;
+  color: #f8fafc;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}`;
+
+  const mainTsxContent = `import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);`;
+
+  const packageJsonContent = JSON.stringify(
+    {
+      name: "app-coder-9router",
+      private: true,
+      version: "1.0.0",
+      type: "module",
+      scripts: {
+        dev: "vite",
+        start: "node server.js",
+        build: "vite build",
+      },
+      dependencies: {
+        react: "^19.0.0",
+        "react-dom": "^19.0.0",
+        express: "^4.19.0",
+        cors: "^2.8.5",
+      },
+      devDependencies: {
+        "@vitejs/plugin-react": "^4.3.0",
+        vite: "^6.0.0",
+      },
+    },
+    null,
+    2
+  );
+
+  const viteConfigContent = `import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-})
-`,
-  },
+});`;
+
+  // BACKEND LOCALHOST (server.js & routes/api.js)
+  if (onStreamMessage) {
+    onStreamMessage("2/3 Estruturando Backend Localhost (Express Server)...");
+  }
+
+  await new Promise((r) => setTimeout(r, 400));
+
+  if (onTerminalLog) {
+    onTerminalLog({ type: "command", text: "⚙ Criando servidor Node.js/Express (server.js & routes/api.js)..." });
+  }
+
+  const serverJsContent = `// Servidor Localhost Node.js/Express para a aplicação ${appTitle}
+const express = require('express');
+const cors = require('cors');
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+app.use(cors());
+app.use(express.json());
+
+// Banco de dados em memória para simulação local
+let localDb = [
+  { id: 1, title: 'Item Localhost 1', status: 'ativo' },
+  { id: 2, title: 'Item Localhost 2', status: 'concluido' },
 ];
 
-export async function processOpenClaudePrompt({ prompt, currentFiles, onStreamMessage, onTerminalLog, onUpdateFiles }) {
-  if (onTerminalLog) {
-    onTerminalLog({ type: "info", text: `$ openclaude agent --prompt "${prompt.substring(0, 40)}..."` });
-  }
+// Rotas da API Localhost
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', app: '${appTitle}', timestamp: new Date() });
+});
 
-  // Send initial planning status
+app.get('/api/items', (req, res) => {
+  res.json({ success: true, data: localDb });
+});
+
+app.post('/api/items', (req, res) => {
+  const newItem = { id: Date.now(), title: req.body.title || 'Novo Item', status: 'ativo' };
+  localDb.push(newItem);
+  res.status(201).json({ success: true, item: newItem });
+});
+
+app.listen(PORT, () => {
+  console.log(\`⚡ Servidor Backend Localhost rodando em http://localhost:\${PORT}\`);
+});`;
+
+  const apiRouteContent = `// Rotas auxiliares da API Localhost
+module.exports = function (router) {
+  router.get('/status', (req, res) => {
+    res.json({ online: true, version: '1.0.0' });
+  });
+};`;
+
+  // Agrupa os arquivos gerados
+  const newFiles = [
+    { path: "src/App.tsx", content: appTsxContent },
+    { path: "src/index.css", content: indexCssContent },
+    { path: "src/main.tsx", content: mainTsxContent },
+    { path: "index.html", content: indexHtmlContent },
+    { path: "package.json", content: packageJsonContent },
+    { path: "vite.config.ts", content: viteConfigContent },
+    { path: "server.js", content: serverJsContent },
+    { path: "routes/api.js", content: apiRouteContent },
+  ];
+
   if (onStreamMessage) {
-    onStreamMessage("Analisando solicitação e mapeando estrutura do projeto...");
-  }
-
-  await new Promise((r) => setTimeout(r, 600));
-
-  if (onTerminalLog) {
-    onTerminalLog({ type: "command", text: "⚡ Local Server running at http://localhost:5173/" });
-    onTerminalLog({ type: "success", text: "✓ Free-Claude-Code OpenRouter/NVIDIA proxy connected" });
-  }
-
-  // Generate code modification based on user prompt
-  const updatedFiles = [...currentFiles];
-  const appFileIndex = updatedFiles.findIndex((f) => f.path === "src/App.tsx");
-
-  let responseText = "Entendi! Atualizei a aplicação com base no seu pedido. Você pode visualizar o código editado no Monaco Editor e a renderização na aba Preview.";
-
-  if (appFileIndex !== -1) {
-    let newAppContent = updatedFiles[appFileIndex].content;
-
-    if (prompt.toLowerCase().includes("landing") || prompt.toLowerCase().includes("water") || prompt.toLowerCase().includes("crystal")) {
-      newAppContent = `export default function App() {
-  return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col font-sans">
-      <nav className="border-b border-white/10 px-8 py-4 flex items-center justify-between backdrop-blur-md bg-slate-950/80 sticky top-0 z-50">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-white shadow-lg shadow-cyan-500/30">
-            💧
-          </div>
-          <span className="font-bold text-lg tracking-tight">Crystal Water</span>
-        </div>
-        <div className="flex items-center gap-6 text-sm text-slate-300">
-          <a href="#features" className="hover:text-cyan-400 transition-colors">Recursos</a>
-          <a href="#pricing" className="hover:text-cyan-400 transition-colors">Planos</a>
-          <a href="#contact" className="hover:text-cyan-400 transition-colors">Contato</a>
-          <button className="px-4 py-2 rounded-md bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold transition-all">
-            Experimentar Grátis
-          </button>
-        </div>
-      </nav>
-
-      <main className="flex-1 flex flex-col items-center justify-center text-center px-4 py-20 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.15)_0,transparent_70%)] pointer-events-none" />
-        
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-xs font-mono mb-6">
-          ✨ Pureza e Tecnologia Em Cada Gota
-        </div>
-
-        <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-100 to-cyan-400 max-w-3xl leading-tight">
-          A Água Mineral Mais Pura do Mercado
-        </h1>
-
-        <p className="mt-6 text-lg text-slate-400 max-w-xl">
-          Filtragem tripla avançada e minerais essenciais selecionados para máxima hidratação e bem-estar para o seu dia a dia.
-        </p>
-
-        <div className="mt-8 flex flex-wrap justify-center gap-4">
-          <button className="px-6 py-3 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-base transition-all shadow-lg shadow-cyan-500/25">
-            Peça Sua Entrega
-          </button>
-          <button className="px-6 py-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-base transition-all">
-            Conhecer Nossa Fonte
-          </button>
-        </div>
-      </main>
-    </div>
-  );
-}`;
-    }
-
-    updatedFiles[appFileIndex] = { ...updatedFiles[appFileIndex], content: newAppContent };
+    onStreamMessage("3/3 Concluído! Renderizando Live Preview...");
   }
 
   if (onUpdateFiles) {
-    onUpdateFiles(updatedFiles);
+    onUpdateFiles(newFiles);
   }
 
   if (onTerminalLog) {
-    onTerminalLog({ type: "info", text: "✓ Updated src/App.tsx" });
-    onTerminalLog({ type: "info", text: "✓ HMR update /src/App.tsx" });
+    onTerminalLog({ type: "success", text: "✓ Frontend criado com sucesso (src/App.tsx, index.html)" });
+    onTerminalLog({ type: "success", text: "✓ Backend Localhost configurado (server.js em http://localhost:3001)" });
+    onTerminalLog({ type: "info", text: "➜ Live Preview ativo no Coder IDE" });
   }
 
   return {
-    message: responseText,
-    files: updatedFiles,
+    message: `Aplicação "${appTitle}" gerada com sucesso! O Frontend foi construído em React/Tailwind e o Backend Localhost foi estruturado em server.js.`,
+    files: newFiles,
   };
 }

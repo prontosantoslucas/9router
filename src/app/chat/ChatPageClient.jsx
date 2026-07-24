@@ -65,10 +65,10 @@ function ChatShell() {
   const messagesEndRef = useRef(null);
 
   // Coder State
-  const [coderFiles, setCoderFiles] = useState(INITIAL_PROJECT_FILES);
-  const [coderProjectName, setCoderProjectName] = useState("Projeto 9router Coder");
+  const [coderFiles, setCoderFiles] = useState([]);
+  const [coderProjectName, setCoderProjectName] = useState("Nova Aplicação");
   const [coderLogs, setCoderLogs] = useState([
-    { type: "info", text: "Ambiente Coder inicializado com motor OpenClaude." },
+    { type: "info", text: "Ambiente Coder do zero inicializado com motor OpenClaude." },
   ]);
 
   // Sync mode with URL if changed

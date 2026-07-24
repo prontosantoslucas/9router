@@ -8,16 +8,55 @@ import TerminalPanel from "@/app/coder/components/TerminalPanel";
 import ProjectsModal from "@/app/coder/components/ProjectsModal";
 import SupabaseModal from "@/app/coder/components/SupabaseModal";
 import GitHubCommitModal from "@/app/coder/components/GitHubCommitModal";
-import { INITIAL_PROJECT_FILES } from "@/lib/coder/openclaudeEngine";
+import { enhanceUserPrompt, processOpenClaudePrompt } from "@/lib/coder/openclaudeEngine";
 import { downloadProjectAsZip } from "@/lib/coder/zipExporter";
 import { getSupabaseConfig } from "@/lib/coder/supabaseClient";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
-export function CoderWorkspace({ files, setFiles, terminalLogs, setTerminalLogs, projectName, setProjectName }) {
-  const [viewMode, setViewMode] = useState("code"); // "code" | "preview"
+const STARTER_SUGGESTIONS = [
+  {
+    icon: "content_cut",
+    title: "Barbearia & Agendamentos",
+    desc: "Sistema de agendamento de cortes e serviços em tempo real.",
+    prompt: "Criar um sistema de agendamento online de barbearia com escolha de profissional, horário e lista de serviços.",
+  },
+  {
+    icon: "insights",
+    title: "Dashboard SaaS Metrics",
+    desc: "Painel financeiro com gráficos de MRR, assinantes e churn.",
+    prompt: "Criar um dashboard SaaS completo de métricas com visão geral de receita, gráfico de crescimento e tabela de clientes.",
+  },
+  {
+    icon: "restaurant",
+    title: "Food Delivery & Cardápio",
+    desc: "App de restaurante com carrinho de compras e rastreamento.",
+    prompt: "Criar uma plataforma de delivery de comida com cardápio por categorias, carrinho de compras e acompanhamento de pedido.",
+  },
+  {
+    icon: "check_box",
+    title: "Gestor de Tarefas Kanban",
+    desc: "Organizador de projetos estilo Trello com colunas interativas.",
+    prompt: "Criar um quadro Kanban de tarefas com colunas 'A Fazer', 'Em Progresso' e 'Concluído', permitindo adicionar novos itens.",
+  },
+];
+
+export function CoderWorkspace({
+  files = [],
+  setFiles,
+  terminalLogs = [],
+  setTerminalLogs,
+  projectName = "Nova Aplicação",
+  setProjectName,
+}) {
+  const [viewMode, setViewMode] = useState("preview"); // "code" | "preview"
   const [selectedFilePath, setSelectedFilePath] = useState("src/App.tsx");
   const [isTerminalCollapsed, setIsTerminalCollapsed] = useState(false);
+
+  // Home / Prompt state
+  const [ideaInput, setIdeaInput] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [statusText, setStatusText] = useState("");
 
   // Modals state
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
@@ -30,8 +69,7 @@ export function CoderWorkspace({ files, setFiles, terminalLogs, setTerminalLogs,
     if (cfg && cfg.supabaseUrl) setSupabaseConnected(true);
   }, []);
 
-  const currentFiles = files || INITIAL_PROJECT_FILES;
-  const selectedFile = currentFiles.find((f) => f.path === selectedFilePath) || currentFiles[0];
+  const selectedFile = files.find((f) => f.path === selectedFilePath) || files[0];
 
   const handleFileChange = (newContent) => {
     if (setFiles) {
@@ -42,7 +80,7 @@ export function CoderWorkspace({ files, setFiles, terminalLogs, setTerminalLogs,
   };
 
   const handleDownloadZip = () => {
-    downloadProjectAsZip(projectName || "Projeto-9router", currentFiles);
+    downloadProjectAsZip(projectName || "Projeto-9router", files);
     if (setTerminalLogs) {
       setTerminalLogs((prev) => [
         ...prev,
@@ -51,30 +89,189 @@ export function CoderWorkspace({ files, setFiles, terminalLogs, setTerminalLogs,
     }
   };
 
+  // Recurso "Melhorar meu prompt com base na minha ideia"
+  const handleEnhancePrompt = () => {
+    if (!ideaInput.trim()) return;
+    const enhanced = enhanceUserPrompt(ideaInput);
+    setIdeaInput(enhanced);
+  };
+
+  // Gerar aplicação do zero
+  const handleGenerateApp = async (customPrompt) => {
+    const targetPrompt = customPrompt || ideaInput;
+    if (!targetPrompt.trim() || isGenerating) return;
+
+    setIsGenerating(true);
+    setStatusText("Iniciando geração...");
+
+    try {
+      await processOpenClaudePrompt({
+        prompt: targetPrompt,
+        currentFiles: files,
+        onStreamMessage: (msg) => setStatusText(msg),
+        onTerminalLog: (log) => {
+          if (setTerminalLogs) setTerminalLogs((prev) => [...prev, log]);
+        },
+        onUpdateFiles: (newFiles) => {
+          if (setFiles) setFiles(newFiles);
+          if (newFiles.length > 0) setSelectedFilePath(newFiles[0].path);
+        },
+      });
+
+      // Alterna automaticamente para o Preview ao vivo
+      setViewMode("preview");
+    } catch (err) {
+      if (setTerminalLogs) {
+        setTerminalLogs((prev) => [...prev, { type: "error", text: `Erro na geração: ${err.message}` }]);
+      }
+    } finally {
+      setIsGenerating(false);
+      setStatusText("");
+    }
+  };
+
+  // Renderiza a página em HTML para o iframe do Preview ao vivo
   const generatePreviewHTML = () => {
+    const appFile = files.find((f) => f.path === "src/App.tsx");
+    const indexCssFile = files.find((f) => f.path === "src/index.css");
+
+    if (!appFile) {
+      return `<html lang="pt-BR"><body style="background:#0f172a;color:#94a3b8;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div>Nenhum arquivo de visualização encontrado.</div></body></html>`;
+    }
+
+    // Extrai o conteúdo simulado do JSX para renderizar em HTML limpo no iframe
+    const rawJsx = appFile.content;
+    const isDark = rawJsx.includes("bg-slate-950") || rawJsx.includes("bg-slate-900");
+
     return `<!DOCTYPE html>
-<html>
+<html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
   </head>
-  <body class="bg-slate-900 text-white min-h-screen p-6 font-sans">
-    <div id="root" class="max-w-2xl mx-auto text-center space-y-4 pt-10">
-      <h1 class="text-3xl font-extrabold text-amber-500">${projectName || "Projeto 9router Coder"}</h1>
-      <p class="text-slate-400 text-sm">Pré-visualização ao vivo gerada pelo Agente Lucas</p>
-      <div class="p-6 bg-slate-800/80 border border-slate-700 rounded-xl shadow-lg mt-6">
-        <p class="text-slate-200 font-mono text-xs">Arquivo ativo: ${selectedFilePath}</p>
+  <body class="${isDark ? "bg-slate-950 text-slate-100" : "bg-slate-900 text-slate-100"} min-h-screen font-sans">
+    <div id="root">
+      <div className="p-6 text-center space-y-4">
+        <h1 className="text-2xl font-bold text-amber-500">${projectName || "Aplicação Coder"}</h1>
+        <p className="text-sm text-slate-400">Pré-visualização ao vivo gerada pelo Agente Lucas</p>
       </div>
     </div>
+    <script>
+      // Renderizador simples de JSX para Live Preview em iframe
+      try {
+        const root = document.getElementById('root');
+        if (root) {
+          root.innerHTML = \`${extractHtmlFromJsx(rawJsx)}\`;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    </script>
   </body>
 </html>`;
   };
 
+  // Se não houver arquivos gerados (Projeto do Zero), exibe a Tela de Boas-Vindas & Sugestões
+  if (files.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col h-full w-full bg-bg text-text-main overflow-y-auto p-4 sm:p-8 font-sans select-none custom-scrollbar">
+        <div className="max-w-3xl mx-auto w-full space-y-6 my-auto">
+          {/* Header da Tela Inicial */}
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-500/10 border border-brand-500/30 text-brand-500 text-xs font-bold uppercase tracking-wider">
+              <span className="material-symbols-outlined text-sm">auto_awesome</span>
+              <span>Coder IDE do Agente Lucas</span>
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-text-main tracking-tight">
+              O que você deseja construir hoje?
+            </h1>
+            <p className="text-sm text-text-muted max-w-xl mx-auto">
+              Descreva sua ideia abaixo. O Coder criará primeiro o **Frontend** em React/Tailwind e depois a estrutura do **Backend localhost**, exibindo tudo no Preview ao vivo.
+            </p>
+          </div>
+
+          {/* Prompt Form Container */}
+          <div className="bg-surface border border-border rounded-2xl p-4 sm:p-5 shadow-elevated space-y-4">
+            <textarea
+              rows={4}
+              placeholder="Ex: Quero um sistema de agendamento de barbearia com seleção de horários e lista de serviços..."
+              value={ideaInput}
+              onChange={(e) => setIdeaInput(e.target.value)}
+              className="w-full bg-bg border border-border rounded-xl p-3.5 text-xs text-text-main focus:outline-none focus:border-brand-500 placeholder-text-muted resize-none font-sans"
+            />
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <button
+                type="button"
+                onClick={handleEnhancePrompt}
+                disabled={!ideaInput.trim() || isGenerating}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-500/10 border border-brand-500/30 text-brand-500 hover:bg-brand-500/20 text-xs font-bold transition-all disabled:opacity-40"
+                title="Expande sua ideia simples em uma especificação técnica completa"
+              >
+                <span className="material-symbols-outlined text-sm">auto_fix_high</span>
+                <span>Melhorar meu prompt com base na minha ideia</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleGenerateApp()}
+                disabled={!ideaInput.trim() || isGenerating}
+                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold transition-all shadow-warm disabled:opacity-40"
+              >
+                <span className="material-symbols-outlined text-base">rocket_launch</span>
+                <span>{isGenerating ? "Gerando..." : "Gerar Aplicação"}</span>
+              </button>
+            </div>
+
+            {statusText && (
+              <div className="flex items-center gap-2 text-xs font-semibold text-brand-500 animate-pulse pt-2 border-t border-border">
+                <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+                <span>{statusText}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Cards de Sugestão de Prompts Rápidos */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted flex items-center gap-1">
+              <span className="material-symbols-outlined text-sm">lightbulb</span>
+              <span>Sugestões Rápidas para Começar</span>
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {STARTER_SUGGESTIONS.map((item, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    setIdeaInput(item.prompt);
+                    handleGenerateApp(item.prompt);
+                  }}
+                  className="p-4 rounded-xl bg-surface border border-border hover:border-brand-500/50 transition-all cursor-pointer group space-y-1.5 shadow-soft hover:shadow-warm"
+                >
+                  <div className="flex items-center gap-2 text-brand-500">
+                    <span className="material-symbols-outlined text-lg">{item.icon}</span>
+                    <h4 className="font-bold text-xs text-text-main group-hover:text-brand-500 transition-colors">
+                      {item.title}
+                    </h4>
+                  </div>
+                  <p className="text-[11px] text-text-muted leading-relaxed">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Se houver arquivos gerados, exibe o Coder IDE completo
   return (
     <div className="flex flex-col h-full w-full bg-bg text-text-main overflow-hidden font-sans border-l border-border select-none">
       {/* Coder Toolbar Header */}
       <div className="h-12 border-b border-border bg-surface px-4 flex items-center justify-between text-xs shrink-0">
-        {/* Left: Project Selector & Status */}
+        {/* Left: Project Selector */}
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => setIsProjectsOpen(true)}
@@ -153,7 +350,7 @@ export function CoderWorkspace({ files, setFiles, terminalLogs, setTerminalLogs,
           <div className="flex-1 flex flex-col h-full overflow-hidden">
             <div className="flex-1 flex overflow-hidden">
               <FileExplorer
-                files={currentFiles}
+                files={files}
                 selectedFile={selectedFilePath}
                 onSelectFile={(path) => setSelectedFilePath(path)}
               />
@@ -186,7 +383,7 @@ export function CoderWorkspace({ files, setFiles, terminalLogs, setTerminalLogs,
             </div>
 
             <TerminalPanel
-              logs={terminalLogs || []}
+              logs={terminalLogs}
               isCollapsed={isTerminalCollapsed}
               onToggleCollapse={() => setIsTerminalCollapsed((v) => !v)}
             />
@@ -206,18 +403,18 @@ export function CoderWorkspace({ files, setFiles, terminalLogs, setTerminalLogs,
       <ProjectsModal
         isOpen={isProjectsOpen}
         onClose={() => setIsProjectsOpen(false)}
-        projects={[{ id: "p1", name: projectName || "Meu Projeto Coder", filesCount: currentFiles.length }]}
+        projects={[{ id: "p1", name: projectName || "Meu Projeto Coder", filesCount: files.length }]}
         activeProjectId="p1"
         onSelectProject={() => {}}
         onCreateProject={() => {
-          if (setProjectName) setProjectName("Novo Projeto 9router");
-          if (setFiles) setFiles(INITIAL_PROJECT_FILES);
+          if (setProjectName) setProjectName("Nova Aplicação");
+          if (setFiles) setFiles([]);
         }}
       />
 
       <SupabaseModal isOpen={isSupabaseOpen} onClose={() => setIsSupabaseOpen(false)} />
 
-      <GitHubCommitModal isOpen={isGitHubOpen} onClose={() => setIsGitHubOpen(false)} files={currentFiles} />
+      <GitHubCommitModal isOpen={isGitHubOpen} onClose={() => setIsGitHubOpen(false)} files={files} />
     </div>
   );
 }
@@ -238,4 +435,17 @@ function getLanguage(filename = "") {
   if (filename.endsWith(".html")) return "html";
   if (filename.endsWith(".json")) return "json";
   return "plaintext";
+}
+
+function extractHtmlFromJsx(jsxCode = "") {
+  try {
+    const returnMatch = jsxCode.match(/return\s*\(\s*([\s\S]*?)\s*\);?\s*\}/);
+    if (returnMatch && returnMatch[1]) {
+      return returnMatch[1]
+        .replace(/className=/g, "class=")
+        .replace(/\{items\.map\([\s\S]*?\)\}/g, `<div class="p-3 bg-slate-900 border border-slate-800 rounded-lg text-slate-300 text-xs">Exemplo de item gerado dinamicamente no React</div>`)
+        .replace(/\{[\s\S]*?\}/g, "");
+    }
+  } catch {}
+  return `<div class="p-8 text-center text-slate-300">Aplicação React pronta para visualização.</div>`;
 }
