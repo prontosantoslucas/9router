@@ -344,6 +344,21 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 24: Resolução da Exceção `ReferenceError: db is not defined` no Salvamento de Módulos (`/api/agent/modules`)
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - Ao alternar os toggles de módulos avançados no painel (como o Modo Co-Piloto), o frontend enviava uma requisição `POST /api/agent/modules`.
+  - No backend Express (`apps/agent/src/index.js`), os manipuladores das rotas `GET /api/modules` e `POST /api/modules` utilizavam as chamadas SQL `db.prepare("SELECT...")` e `db.prepare("INSERT INTO agent_settings...")`.
+  - No entanto, a constante `db` não estava importada no arquivo [`index.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/index.js), disparando a exceção de runtime `ReferenceError: db is not defined`, que resultava em erro HTTP 500 (Internal Server Error) no Railway e na mensagem `"Falha ao salvar módulo: {\"error\":\"db is not defined\"}"`.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Importação do Módulo de Banco de Dados**:
+     - Adicionada a importação `const db = require("./db");` no topo do arquivo [`index.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/index.js).
+  2. **Validação com Testes de Unidade**:
+     - Criada a suíte [`tests/unit/agent-modules.test.js`](file:///c:/Users/user/Documents/GitHub/9router/tests/unit/agent-modules.test.js) para testar o salvamento e a leitura de registros na tabela `agent_settings` do SQLite, garantindo 100% de sucesso.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 

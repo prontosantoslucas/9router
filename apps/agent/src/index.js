@@ -4,6 +4,7 @@ const cors = require("cors");
 const cfg = require("./config");
 const { PORT, SIDECAR_ENABLED, setBaseUrl } = cfg;
 const keyrotator = require("./keyrotator");
+const db = require("./db");
 const models = require("./models");
 const proxy = require("./proxy");
 const botManager = require("./botManager");
