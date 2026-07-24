@@ -292,6 +292,22 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 21: Envolvimento em Suspense Boundary no Next.js App Router & Normalização do Verificador de Regressão de Testes no CI
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  1. **Falha de Build no CI (`CI / Build (next)`)**: No Next.js App Router (Next 16+), o uso de `useSearchParams()` dentro de componentes de cliente na renderização de páginas estáticas requer a presença explícita de uma barreira `<React.Suspense>`. Sem ela, o `next build` falha na compilação com exceção de *bailout CSR*.
+  2. **Falha de Regressão de Testes no CI (`CI / Tests`)**: O script de portão de regressão `verify-no-regression.mjs` assumia que o caminho dos arquivos retornados pelo `vitest` sempre conteria o prefixo `tests/`. Quando o `vitest` era executado dentro do subdiretório `tests/`, os caminhos relativos (ex.: `unit/foo.test.js`) não casavam com os registros em `known-fails.txt` (que possuem o prefixo `tests/unit/foo.test.js`), fazendo o verificador classificar falhas conhecidas de baseline como novas regressões.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Inclusão de `<React.Suspense>` em `ChatPageClient.jsx`**:
+     - Envolvido o componente `<ChatShell />` com `<React.Suspense fallback={<div className="h-screen w-full bg-bg" />}>` em [`ChatPageClient.jsx`](file:///c:/Users/user/Documents/GitHub/9router/src/app/chat/ChatPageClient.jsx), permitindo a pré-renderização estática limpa sem erros durante o `next build`.
+  2. **Normalização no `verify-no-regression.mjs`**:
+     - Atualizada a função `relPath()` em [`verify-no-regression.mjs`](file:///c:/Users/user/Documents/GitHub/9router/tests/__baseline__/verify-no-regression.mjs) para forçar que todo caminho retornado seja prefixado com `tests/` independentemente de o `vitest` ser chamado na raiz do repositório ou no diretório `tests/`.
+  3. **Validação de Build Local**:
+     - Executado `npm run build` localmente com 100% de sucesso (121 páginas estáticas renderizadas sem avisos ou exceções).
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 

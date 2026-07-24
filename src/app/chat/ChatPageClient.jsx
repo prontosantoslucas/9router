@@ -41,7 +41,9 @@ const COPILOT_POLL_INTERVAL_MS = 15000;
 export default function ChatPageClient() {
   return (
     <ToastProvider>
-      <ChatShell />
+      <React.Suspense fallback={<div className="h-screen w-full bg-bg" />}>
+        <ChatShell />
+      </React.Suspense>
     </ToastProvider>
   );
 }

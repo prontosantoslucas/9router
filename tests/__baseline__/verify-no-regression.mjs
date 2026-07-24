@@ -19,7 +19,8 @@ const r = JSON.parse(readFileSync(resultsPath, "utf8"));
 function relPath(name) {
   const norm = String(name).replace(/\\/g, "/");
   const idx = norm.lastIndexOf("tests/");
-  return idx >= 0 ? norm.slice(idx) : norm;
+  if (idx >= 0) return norm.slice(idx);
+  return norm.startsWith("tests/") ? norm : `tests/${norm.replace(/^\.\//, "")}`;
 }
 
 const nowFails = r.testResults.flatMap(f =>
