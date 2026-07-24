@@ -15,14 +15,16 @@ import { useNotionSave } from "./hooks/useNotionSave";
 
 import { ChannelInbox } from "./components/ChannelInbox";
 import { CoderWorkspace } from "./components/CoderWorkspace";
-import { INITIAL_PROJECT_FILES, processOpenClaudePrompt } from "@/lib/coder/openclaudeEngine";
+import { enhanceUserPrompt, processOpenClaudePrompt } from "@/lib/coder/openclaudeEngine";
 import { translate as t } from "@/i18n/runtime";
 
 const i18nLabels = {
   headerClearChat: t("Limpar chat"),
   headerClearTitle: t("Limpar histórico da sessão"),
   emptyGreeting: t("Olá! Eu sou o Lucas."),
-  emptySubtitle: t("Estou pronto para ajudar no WhatsApp, Telegram, no Chat e na IDE Coder. Como posso ajudar hoje?"),
+  emptySubtitle: t("Estou pronto para ajudar no WhatsApp, Telegram e aqui no Chat. Como posso ajudar hoje?"),
+  emptyCoderGreeting: t("Olá! Sou o Lucas Coder."),
+  emptyCoderSubtitle: t("O que vamos construir do zero hoje? Descreva sua ideia e eu irei gerar a interface React/Tailwind e a estrutura do Backend localhost para você."),
   typing: t("Lucas está digitando..."),
   processing: t("Processando arquivo..."),
   copilotHeading: (n) => `${t("Mensagens pendentes do modo Co-Piloto")} (${n})`,
@@ -54,7 +56,11 @@ function ChatShell() {
   const initialMode = searchParams.get("mode") === "coder" ? "coder" : "chat";
 
   const { showToast } = useToast();
-  const { messages, isSending, sendMessage, clearSession } = useChatSession("main");
+
+  // Sessões de Chat Separadas: "main" (Chat Geral) vs "coder" (Chat do Coder IDE)
+  const mainSession = useChatSession("main");
+  const coderSession = useChatSession("coder");
+
   const { uploadFile, isUploading } = useFileUpload();
   const { saveToNotion } = useNotionSave();
 
@@ -70,6 +76,10 @@ function ChatShell() {
   const [coderLogs, setCoderLogs] = useState([
     { type: "info", text: "Ambiente Coder do zero inicializado com motor OpenClaude." },
   ]);
+
+  // Seleciona a sessão de chat ativa com base no modo
+  const activeSession = activeMode === "coder" ? coderSession : mainSession;
+  const { messages, isSending, sendMessage, clearSession } = activeSession;
 
   // Sync mode with URL if changed
   useEffect(() => {
@@ -153,9 +163,10 @@ function ChatShell() {
     }
     if (attachments.length > 0) setAttachments([]);
 
+    // Registra a mensagem na sessão de chat ativa
     sendMessage(fullText, images.length > 0 ? { images } : undefined);
 
-    // Se estiver no modo Coder IDE, aciona o motor OpenClaude para atualizar arquivos se necessário
+    // Se estiver no Chat do Coder, dispara a geração/atualização de código no motor OpenClaude
     if (activeMode === "coder") {
       try {
         setCoderLogs((prev) => [...prev, { type: "command", text: `Prompt: ${text.slice(0, 50)}...` }]);
@@ -169,6 +180,12 @@ function ChatShell() {
         setCoderLogs((prev) => [...prev, { type: "error", text: `Erro Coder: ${err.message}` }]);
       }
     }
+  };
+
+  const handleEnhancePromptAction = (currentText) => {
+    const raw = currentText || "Criar uma aplicação web moderna do zero";
+    const enhanced = enhanceUserPrompt(raw);
+    handleSend(enhanced);
   };
 
   const handleSaveNotion = async (message) => {
@@ -223,7 +240,7 @@ function ChatShell() {
     >
       <DropOverlay isDragging={isDragging} />
 
-      {/* Header com Glassmorphism e Design System Nativo */}
+      {/* Header com Glassmorphism e Seletor de Modo Nativo */}
       <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border/80 bg-surface/90 backdrop-blur-md px-3 shadow-soft [padding-left:max(0.75rem,env(safe-area-inset-left))] [padding-right:max(0.75rem,env(safe-area-inset-right))] sm:h-16 sm:px-6 dark:bg-surface-2/90">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button
@@ -246,7 +263,7 @@ function ChatShell() {
             <AgentBadge agentId="lucas" size="md" />
           </div>
 
-          {/* Mode Switcher: Chat vs Coder IDE */}
+          {/* Mode Switcher: Chat Geral vs Coder IDE */}
           <div className="hidden sm:flex items-center bg-bg-alt p-1 rounded-lg border border-border ml-2">
             <button
               onClick={() => setActiveMode("chat")}
@@ -287,14 +304,14 @@ function ChatShell() {
         </div>
       </header>
 
-      {/* Main Body: Full Chat or Split Coder Workspace */}
+      {/* Main Body: Chat Column + Coder Workspace Column */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Left Column: Chat Container */}
+        {/* Left Column: Chat Container (exibe mainSession ou coderSession) */}
         <div className={`flex flex-col h-full ${activeMode === "coder" ? "w-full md:w-[420px] shrink-0 border-r border-border" : "w-full"}`}>
-          {/* Mensagens */}
+          {/* Mensagens da Sessão Ativa */}
           <main className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4">
             <div className="mx-auto max-w-4xl space-y-4">
-              {copilotDrafts.length > 0 && (
+              {copilotDrafts.length > 0 && activeMode === "chat" && (
                 <div className="mb-6 space-y-3">
                   <h4 className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-500">
                     <span className="material-symbols-outlined text-sm">verified_user</span>
@@ -314,8 +331,12 @@ function ChatShell() {
               {messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
                   <AgentBadge agentId="lucas" size="md" />
-                  <h2 className="mt-4 text-xl font-extrabold text-text-main">{i18nLabels.emptyGreeting}</h2>
-                  <p className="mt-2 max-w-md text-sm text-text-muted">{i18nLabels.emptySubtitle}</p>
+                  <h2 className="mt-4 text-xl font-extrabold text-text-main">
+                    {activeMode === "coder" ? i18nLabels.emptyCoderGreeting : i18nLabels.emptyGreeting}
+                  </h2>
+                  <p className="mt-2 max-w-md text-sm text-text-muted">
+                    {activeMode === "coder" ? i18nLabels.emptyCoderSubtitle : i18nLabels.emptySubtitle}
+                  </p>
                 </div>
               ) : (
                 messages.map((msg) => (
@@ -340,7 +361,22 @@ function ChatShell() {
           </main>
 
           {/* Composer */}
-          <footer className="shrink-0 border-t border-border bg-surface p-3 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 dark:bg-surface-2">
+          <footer className="shrink-0 border-t border-border bg-surface p-3 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 dark:bg-surface-2 space-y-2">
+            {/* No modo Coder, exibe a ação rápida de melhorar prompt */}
+            {activeMode === "coder" && (
+              <div className="flex items-center justify-between gap-2 pb-1 border-b border-border/60">
+                <button
+                  type="button"
+                  onClick={() => handleEnhancePromptAction("")}
+                  className="flex items-center gap-1.5 text-[11px] font-bold text-brand-500 hover:underline"
+                >
+                  <span className="material-symbols-outlined text-sm">auto_fix_high</span>
+                  <span>✨ Melhorar meu prompt com base na minha ideia</span>
+                </button>
+                <span className="text-[10px] text-text-muted font-mono">Coder Mode</span>
+              </div>
+            )}
+
             <div className="mx-auto max-w-4xl space-y-2">
               {attachments.length > 0 && (
                 <div className="flex flex-wrap gap-2 pb-2">
@@ -361,12 +397,17 @@ function ChatShell() {
                 </div>
               )}
 
-              <ChatComposer onSend={handleSend} onUpload={handleUpload} isSending={isSending} />
+              <ChatComposer
+                onSend={handleSend}
+                onUpload={handleUpload}
+                isSending={isSending}
+                placeholder={activeMode === "coder" ? "Descreva a aplicação ou alteração de código desejada..." : "Converse com o Lucas..."}
+              />
             </div>
           </footer>
         </div>
 
-        {/* Right Column: Coder Workspace (rendered when activeMode === "coder") */}
+        {/* Right Column: Coder Workspace (exibido no modo Coder IDE) */}
         {activeMode === "coder" && (
           <div className="hidden md:flex flex-1 h-full overflow-hidden">
             <CoderWorkspace

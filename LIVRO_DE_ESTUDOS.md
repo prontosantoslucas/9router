@@ -328,6 +328,22 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 23: Isolamento do Chat Dedicado do Coder (`useChatSession("coder")`) e Integração no Composer
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - A visualização do Coder IDE utilizava a mesma instância de histórico da conversa global do sistema (`useChatSession("main")`).
+  - Como consequência, ao alternar para a aba **Coder IDE**, o usuário visualizava o histórico do chat geral (conversas do WhatsApp/Telegram/Web) na coluna da esquerda em vez de uma conversa exclusiva focada na criação e edição do projeto de código.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Separação de Sessões no `ChatPageClient.jsx`**:
+     - Instanciadas duas sessões independentes com o hook `useChatSession`: `mainSession = useChatSession("main")` para o chat geral e `coderSession = useChatSession("coder")` para o chat do Coder IDE.
+     - A variável `activeSession` alterna dinamicamente o histórico de mensagens e o manipulador de envios dependendo do modo ativo (`chat` vs `coder`).
+  2. **Saudação e Composer Contextual do Coder**:
+     - Ao abrir o **Coder IDE**, o chat exibe a mensagem de boas-vindas exclusiva do Lucas Coder: *"Olá! Sou o Lucas Coder. O que vamos construir do zero hoje?"*.
+     - Incluído no composer do chat do Coder a barra de ação rápida **"✨ Melhorar meu prompt com base na minha ideia"**, permitindo refinar e enviar prompts reativos que alimentam o motor `processOpenClaudePrompt` e atualizam a estrutura do projeto na coluna da direita.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 
