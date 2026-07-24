@@ -12,9 +12,19 @@ const resultsPath = process.argv[2];
 if (!resultsPath) { console.error("Missing results.json path"); process.exit(2); }
 
 const r = JSON.parse(readFileSync(resultsPath, "utf8"));
+
+// Normaliza o caminho do arquivo para o mesmo formato do known-fails.txt
+// (ex.: "tests/unit/foo.test.js"), de forma independente do ambiente.
+// Antes usava split("/app/") — acoplado ao path do sandbox antigo e quebrava no CI.
+function relPath(name) {
+  const norm = String(name).replace(/\\/g, "/");
+  const idx = norm.lastIndexOf("tests/");
+  return idx >= 0 ? norm.slice(idx) : norm;
+}
+
 const nowFails = r.testResults.flatMap(f =>
   f.assertionResults.filter(a => a.status === "failed")
-    .map(a => f.name.split("/app/")[1] + " :: " + a.fullName)
+    .map(a => relPath(f.name) + " :: " + a.fullName)
 );
 
 // Regression = fail bây giờ NHƯNG không có trong baseline known-fails

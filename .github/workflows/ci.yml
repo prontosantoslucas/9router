@@ -1,0 +1,66 @@
+name: CI
+
+# Gate de qualidade a cada push/PR no master:
+#  - build: `next build` precisa passar (pega erros de compilação/SSR antes do deploy).
+#  - test:  roda a suíte vitest e falha SÓ se houver REGRESSÃO (test que passava e passou a falhar),
+#           comparando com tests/__baseline__/known-fails.txt. A suíte tem ~64 falhas de baseline
+#           conhecidas (ver CLAUDE.md), então um `vitest run` cru sempre sairia != 0 — por isso o gate
+#           é o verificador de regressão, não o exit code do vitest.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# Cancela runs antigos do mesmo ref quando um novo push chega.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (next)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false # apps/agent tem submódulo próprio; o build do Next só precisa de src/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install (root)
+        run: npm install --no-audit --no-fund
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          # Segredos de runtime não são necessários no build; valores dummy evitam warnings.
+          JWT_SECRET: "ci-dummy-jwt-secret-000000000000"
+          NODE_OPTIONS: "--max-old-space-size=4096"
+
+  test:
+    name: Tests (regressão vs baseline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      # Testes importam de src/ → precisam das deps do root primeiro.
+      - name: Install (root)
+        run: npm install --no-audit --no-fund
+      - name: Install (tests)
+        run: npm install --no-audit --no-fund
+        working-directory: tests
+      # Gera o JSON de resultados. `|| true`: vitest sai != 0 por causa dos fails de baseline;
+      # o julgamento real é o gate de regressão logo abaixo.
+      - name: Run vitest (json)
+        working-directory: tests
+        run: npx vitest run --reporter=json --outputFile=__baseline__/current.json || true
+      - name: Regression gate
+        run: node tests/__baseline__/verify-no-regression.mjs tests/__baseline__/current.json

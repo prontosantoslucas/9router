@@ -232,7 +232,32 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 18: Implementação da Interface Coder Estilo Bolt (OpenClaude + Supabase OAuth + GitHub Commit + ZIP Export)
+
+* **Por que deu esse problema (Causa Raiz / Demanda Técnica)**:
+  - O usuário solicitou a inclusão de um módulo "Coder" no ecossistema do Agente Lucas, replicando a experiência de IDE estilo Bolt (Editor Monaco + Árvore de Arquivos + Preview Ao Vivo + Terminal/Logs retrátil + divisão entre Chat e Projetos).
+  - O Coder requeria a inteligência do OpenClaude (`free-claude-code`), botão de **Commit no GitHub**, **Download ZIP** do projeto, e conexão via OAuth com o **Supabase**.
+  - **Requisito Obrigatório**: Preservar o chat existente em `/chat` 100% intacto, sem realizar qualquer refatoração no código anterior.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Módulo Isolado `/coder`**:
+     - Criada a página `src/app/coder/page.js` e o cliente principal `CoderPageClient.jsx` com o layout escuro e réplica fiel da interface Bolt.
+     - Adicionado o link "Coder do Lucas" (`/coder`) na lista `lucasItems` do menu lateral em `src/shared/components/Sidebar.js`.
+  2. **Estrutura de Componentes Coder**:
+     - `FileExplorer.jsx`: Navegador de arquivos e diretórios em árvore com suporte a busca e ícones dinâmicos.
+     - `TerminalPanel.jsx`: Painel de logs de comandos e HMR retrátil no rodapé da tela.
+     - `ProjectsModal.jsx`: Gerenciador de múltiplos workspaces/projetos do Coder.
+  3. **Integrações de Ação no Header**:
+     - **Download ZIP (`zipExporter.js`)**: Gerador de arquivo `.zip` (PKZIP) construído em JavaScript puro e executado inteiramente no navegador via Blob, permitindo download sem dependências nativas de build.
+     - **Commit no GitHub (`githubCommit.js` & `api/coder/commit/route.js`)**: Cliente e rota backend integrados à API REST do GitHub (Criação de Blobs, Trees, Commits e Refs) para enviar atualizações de código direto para o repositório do usuário.
+     - **Conexão Supabase OAuth (`supabaseClient.js`, `SupabaseModal.jsx` & `api/coder/supabase/route.js`)**: Modal e rotas para autorização OAuth e gerenciamento de credenciais da URL do projeto Supabase.
+  4. **Motor Agentic OpenClaude (`openclaudeEngine.js`)**:
+     - Módulo de inteligência que analisa os prompts do chat, aplica diffs e edições de arquivos no estado reativo do editor Monaco e dispara logs no terminal em tempo real.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
 
 
 

@@ -29,6 +29,7 @@ const navItems = [
 
 const lucasItems = [
   { href: "/chat", label: "Chat do Lucas", icon: "forum", highlight: true },
+  { href: "/coder", label: "Coder do Lucas", icon: "code", highlight: true },
   { href: "/dashboard2", label: "Painel do Lucas", icon: "smart_toy", highlight: true },
 ];
 
