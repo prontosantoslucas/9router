@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AgentBadge } from "@/shared/components/primitives/AgentBadge";
 import { MessageBubble } from "@/shared/components/primitives/MessageBubble";
 import { ChatComposer } from "@/shared/components/primitives/ChatComposer";
@@ -14,13 +14,15 @@ import { useFileUpload } from "./hooks/useFileUpload";
 import { useNotionSave } from "./hooks/useNotionSave";
 
 import { ChannelInbox } from "./components/ChannelInbox";
+import { CoderWorkspace } from "./components/CoderWorkspace";
+import { INITIAL_PROJECT_FILES, processOpenClaudePrompt } from "@/lib/coder/openclaudeEngine";
 import { translate as t } from "@/i18n/runtime";
 
 const i18nLabels = {
   headerClearChat: t("Limpar chat"),
   headerClearTitle: t("Limpar histórico da sessão"),
   emptyGreeting: t("Olá! Eu sou o Lucas."),
-  emptySubtitle: t("Estou pronto para ajudar no WhatsApp, Telegram e aqui na Web. Como posso ajudar hoje?"),
+  emptySubtitle: t("Estou pronto para ajudar no WhatsApp, Telegram, no Chat e na IDE Coder. Como posso ajudar hoje?"),
   typing: t("Lucas está digitando..."),
   processing: t("Processando arquivo..."),
   copilotHeading: (n) => `${t("Mensagens pendentes do modo Co-Piloto")} (${n})`,
@@ -46,16 +48,33 @@ export default function ChatPageClient() {
 
 function ChatShell() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialMode = searchParams.get("mode") === "coder" ? "coder" : "chat";
+
   const { showToast } = useToast();
   const { messages, isSending, sendMessage, clearSession } = useChatSession("main");
   const { uploadFile, isUploading } = useFileUpload();
   const { saveToNotion } = useNotionSave();
 
+  const [activeMode, setActiveMode] = useState(initialMode); // "chat" | "coder"
   const [isDragging, setIsDragging] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [copilotDrafts, setCopilotDrafts] = useState([]);
-  const [promptText, setPromptText] = useState("");
   const messagesEndRef = useRef(null);
+
+  // Coder State
+  const [coderFiles, setCoderFiles] = useState(INITIAL_PROJECT_FILES);
+  const [coderProjectName, setCoderProjectName] = useState("Projeto 9router Coder");
+  const [coderLogs, setCoderLogs] = useState([
+    { type: "info", text: "Ambiente Coder inicializado com motor OpenClaude." },
+  ]);
+
+  // Sync mode with URL if changed
+  useEffect(() => {
+    if (searchParams.get("mode") === "coder" && activeMode !== "coder") {
+      setActiveMode("coder");
+    }
+  }, [searchParams, activeMode]);
 
   // Auto-scroll ao receber novas mensagens
   useEffect(() => {
@@ -79,10 +98,6 @@ function ChatShell() {
     const interval = setInterval(fetchDrafts, COPILOT_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [fetchDrafts]);
-
-  // Notificações de canais (Telegram/WhatsApp) são gerenciadas pelo <ChannelInbox> no header,
-  // que faz peek (não-destrutivo) e só marca como lido quando o usuário abre/limpa o painel.
-  // O poller de toast foi removido porque consumia (marcava lido) as mensagens antes do inbox vê-las.
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -125,7 +140,7 @@ function ChatShell() {
     }
   };
 
-  const handleSend = (text) => {
+  const handleSend = async (text) => {
     const images = attachments.filter((a) => a.isImage).map((a) => ({ base64: a.base64, mimeType: a.mimeType }));
     const docs = attachments.filter((a) => !a.isImage);
 
@@ -137,6 +152,21 @@ function ChatShell() {
     if (attachments.length > 0) setAttachments([]);
 
     sendMessage(fullText, images.length > 0 ? { images } : undefined);
+
+    // Se estiver no modo Coder IDE, aciona o motor OpenClaude para atualizar arquivos se necessário
+    if (activeMode === "coder") {
+      try {
+        setCoderLogs((prev) => [...prev, { type: "command", text: `Prompt: ${text.slice(0, 50)}...` }]);
+        await processOpenClaudePrompt({
+          prompt: text,
+          currentFiles: coderFiles,
+          onTerminalLog: (log) => setCoderLogs((prev) => [...prev, log]),
+          onUpdateFiles: (newFiles) => setCoderFiles(newFiles),
+        });
+      } catch (err) {
+        setCoderLogs((prev) => [...prev, { type: "error", text: `Erro Coder: ${err.message}` }]);
+      }
+    }
   };
 
   const handleSaveNotion = async (message) => {
@@ -191,7 +221,7 @@ function ChatShell() {
     >
       <DropOverlay isDragging={isDragging} />
 
-      {/* Header com Glassmorphism */}
+      {/* Header com Glassmorphism e Design System Nativo */}
       <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border/80 bg-surface/90 backdrop-blur-md px-3 shadow-soft [padding-left:max(0.75rem,env(safe-area-inset-left))] [padding-right:max(0.75rem,env(safe-area-inset-right))] sm:h-16 sm:px-6 dark:bg-surface-2/90">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button
@@ -209,8 +239,35 @@ function ChatShell() {
             <span className="material-symbols-outlined text-sm text-brand-500">arrow_back</span>
             <span className="hidden sm:inline">{t("Voltar")}</span>
           </button>
+
           <div className="min-w-0 truncate">
             <AgentBadge agentId="lucas" size="md" />
+          </div>
+
+          {/* Mode Switcher: Chat vs Coder IDE */}
+          <div className="hidden sm:flex items-center bg-bg-alt p-1 rounded-lg border border-border ml-2">
+            <button
+              onClick={() => setActiveMode("chat")}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                activeMode === "chat"
+                  ? "bg-surface text-brand-500 shadow-soft border border-border"
+                  : "text-text-muted hover:text-text-main"
+              }`}
+            >
+              <span className="material-symbols-outlined text-[15px]">forum</span>
+              <span>Chat</span>
+            </button>
+            <button
+              onClick={() => setActiveMode("coder")}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                activeMode === "coder"
+                  ? "bg-surface text-brand-500 shadow-soft border border-border"
+                  : "text-text-muted hover:text-text-main"
+              }`}
+            >
+              <span className="material-symbols-outlined text-[15px]">code</span>
+              <span>Coder IDE</span>
+            </button>
           </div>
         </div>
 
@@ -228,84 +285,103 @@ function ChatShell() {
         </div>
       </header>
 
-      {/* Mensagens */}
-      <main className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-6">
-        <div className="mx-auto max-w-4xl space-y-4">
-          {copilotDrafts.length > 0 && (
-            <div className="mb-6 space-y-3">
-              <h4 className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-500">
-                <span className="material-symbols-outlined text-sm">verified_user</span>
-                <span>{i18nLabels.copilotHeading(copilotDrafts.length)}</span>
-              </h4>
-              {copilotDrafts.map((draft) => (
-                <CopilotApprovalCard
-                  key={draft.id}
-                  draft={draft}
-                  onApprove={handleApproveCopilot}
-                  onReject={handleRejectCopilot}
-                />
-              ))}
-            </div>
-          )}
+      {/* Main Body: Full Chat or Split Coder Workspace */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Left Column: Chat Container */}
+        <div className={`flex flex-col h-full ${activeMode === "coder" ? "w-full md:w-[420px] shrink-0 border-r border-border" : "w-full"}`}>
+          {/* Mensagens */}
+          <main className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4">
+            <div className="mx-auto max-w-4xl space-y-4">
+              {copilotDrafts.length > 0 && (
+                <div className="mb-6 space-y-3">
+                  <h4 className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-500">
+                    <span className="material-symbols-outlined text-sm">verified_user</span>
+                    <span>{i18nLabels.copilotHeading(copilotDrafts.length)}</span>
+                  </h4>
+                  {copilotDrafts.map((draft) => (
+                    <CopilotApprovalCard
+                      key={draft.id}
+                      draft={draft}
+                      onApprove={handleApproveCopilot}
+                      onReject={handleRejectCopilot}
+                    />
+                  ))}
+                </div>
+              )}
 
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <AgentBadge agentId="lucas" size="md" />
-              <h2 className="mt-4 text-xl font-extrabold text-text-main">{i18nLabels.emptyGreeting}</h2>
-              <p className="mt-2 max-w-md text-sm text-text-muted">{i18nLabels.emptySubtitle}</p>
-            </div>
-          ) : (
-            messages.map((msg) => (
-              <MessageBubble
-                key={msg.id}
-                message={msg}
-                onSaveNotion={handleSaveNotion}
-                onRetry={() => sendMessage(msg.content)}
-              />
-            ))
-          )}
+              {messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <AgentBadge agentId="lucas" size="md" />
+                  <h2 className="mt-4 text-xl font-extrabold text-text-main">{i18nLabels.emptyGreeting}</h2>
+                  <p className="mt-2 max-w-md text-sm text-text-muted">{i18nLabels.emptySubtitle}</p>
+                </div>
+              ) : (
+                messages.map((msg) => (
+                  <MessageBubble
+                    key={msg.id}
+                    message={msg}
+                    onSaveNotion={handleSaveNotion}
+                    onRetry={() => sendMessage(msg.content)}
+                  />
+                ))
+              )}
 
-          {isSending && (
-            <div className="flex items-center gap-2 text-xs italic text-text-muted" aria-live="polite">
-              <TypingDots />
-              <span>{i18nLabels.typing}</span>
-            </div>
-          )}
+              {isSending && (
+                <div className="flex items-center gap-2 text-xs italic text-text-muted" aria-live="polite">
+                  <TypingDots />
+                  <span>{i18nLabels.typing}</span>
+                </div>
+              )}
 
-          <div ref={messagesEndRef} />
+              <div ref={messagesEndRef} />
+            </div>
+          </main>
+
+          {/* Composer */}
+          <footer className="shrink-0 border-t border-border bg-surface p-3 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 dark:bg-surface-2">
+            <div className="mx-auto max-w-4xl space-y-2">
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 pb-2">
+                  {attachments.map((att, i) => (
+                    <FileAttachmentChip
+                      key={i}
+                      filename={att.name}
+                      onRemove={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {isUploading && (
+                <div className="flex items-center gap-2 text-xs text-brand-500" aria-live="polite">
+                  <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+                  <span>{i18nLabels.processing}</span>
+                </div>
+              )}
+
+              <ChatComposer onSend={handleSend} onUpload={handleUpload} isSending={isSending} />
+            </div>
+          </footer>
         </div>
-      </main>
 
-      {/* Composer */}
-      <footer className="shrink-0 border-t border-border bg-surface p-3 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 dark:bg-surface-2">
-        <div className="mx-auto max-w-4xl space-y-2">
-          {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 pb-2">
-              {attachments.map((att, i) => (
-                <FileAttachmentChip
-                  key={i}
-                  filename={att.name}
-                  onRemove={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
-                />
-              ))}
-            </div>
-          )}
-
-          {isUploading && (
-            <div className="flex items-center gap-2 text-xs text-brand-500" aria-live="polite">
-              <span className="material-symbols-outlined animate-spin text-sm">sync</span>
-              <span>{i18nLabels.processing}</span>
-            </div>
-          )}
-
-          <ChatComposer onSend={handleSend} onUpload={handleUpload} isSending={isSending} />
-        </div>
-      </footer>
+        {/* Right Column: Coder Workspace (rendered when activeMode === "coder") */}
+        {activeMode === "coder" && (
+          <div className="hidden md:flex flex-1 h-full overflow-hidden">
+            <CoderWorkspace
+              files={coderFiles}
+              setFiles={setCoderFiles}
+              terminalLogs={coderLogs}
+              setTerminalLogs={setCoderLogs}
+              projectName={coderProjectName}
+              setProjectName={setCoderProjectName}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-// Typing indicator no DS — 3 dots com fade
 function TypingDots() {
   return (
     <span className="inline-flex items-center gap-1" aria-hidden="true">

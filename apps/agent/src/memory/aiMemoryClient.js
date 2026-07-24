@@ -54,18 +54,38 @@ async function rpc(method, params = {}) {
   const returnedSession = res.headers.get("mcp-session-id");
   if (returnedSession) sessionId = returnedSession;
 
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  }
+
   const contentType = res.headers.get("content-type") || "";
   if (contentType.includes("text/event-stream")) {
     // Streaming — pegamos apenas a primeira mensagem "data:"
     const text = await res.text();
     const line = text.split("\n").find((l) => l.startsWith("data:"));
     if (!line) throw new Error("Resposta MCP SSE vazia");
-    const payload = JSON.parse(line.slice(5).trim());
+    let payload;
+    try {
+      payload = JSON.parse(line.slice(5).trim());
+    } catch {
+      throw new Error("Formato JSON inválido na mensagem SSE do MCP");
+    }
     if (payload.error) throw new Error(`MCP error: ${payload.error.message || JSON.stringify(payload.error)}`);
     return payload.result;
   }
 
-  const payload = await res.json();
+  if (!contentType.includes("application/json")) {
+    const rawText = await res.text();
+    throw new Error(`Servidor MCP retornou Content-Type não-JSON (${contentType}): ${rawText.slice(0, 100)}`);
+  }
+
+  let payload;
+  try {
+    payload = await res.json();
+  } catch {
+    throw new Error("Erro de síntaxe ao interpretar resposta JSON do MCP");
+  }
+
   if (payload.error) throw new Error(`MCP error: ${payload.error.message || JSON.stringify(payload.error)}`);
   return payload.result;
 }

@@ -1,10 +1,10 @@
-import CoderPageClient from "./CoderPageClient";
+import { redirect } from "next/navigation";
 
 export const metadata = {
   title: "Coder — Agente Lucas | MaxRouter",
-  description: "IDE Coder inteligente do Agente Lucas com motor OpenClaude, commit no GitHub, exportação ZIP e Supabase OAuth.",
+  description: "IDE Coder inteligente do Agente Lucas integrada nativamente ao Chat.",
 };
 
 export default function CoderPage() {
-  return <CoderPageClient />;
+  redirect("/chat?mode=coder");
 }

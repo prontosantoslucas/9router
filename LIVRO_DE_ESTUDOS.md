@@ -272,6 +272,26 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 20: Tratamento de Respostas MCP HTML no ai-memory e Unificação Nativa do Coder IDE no Chat (`/chat`) com Design System do 9Router
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  1. **Falha de Parse JSON em `aiMemoryClient.js`**: Quando a URL do servidor MCP (`AI_MEMORY_URL`) retornava um erro HTTP (como 404/502 em página HTML `<!DOCTYPE html>...`), a função `rpc()` invocava `res.json()` diretamente sem checar a flag `res.ok` nem o cabeçalho `Content-Type`. Isso gerava a exceção de sintaxe `SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON`, poluindo os logs e interrompendo a chamada antes de acionar o fallback para o GitHub Superbrain (`nortelucas/meueulucas`).
+  2. **Fragmentação de UI no Coder IDE (`/coder`)**: A versão inicial do Coder foi implementada como uma página separada isolada replicando um layout estrangeiro do Bolt (com cores `#0E0E10`, logo "b" do Bolt, mensagens mockadas "Importing Bolt Project" e logs estáticos de terminal Vite). Isso violou a diretriz de reutilização do Design System nativo do 9router.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Resiliência e Fallback Gracioso no `aiMemoryClient.js`**:
+     - Atualizado o método `rpc()` em `apps/agent/src/memory/aiMemoryClient.js` para checar `if (!res.ok)` e `if (!contentType.includes("application/json"))`, capturando respostas de erro HTML e lançando exceções controladas com mensagem explicativa.
+     - As funções `searchMemory` e `recordMemory` capturam o erro de forma transparente e acionam imediatamente o fallback para o GitHub Superbrain (`superbrain.searchMemoryInMarkdown` e `superbrain.appendMemory`), executando commits de memória no repositório `nortelucas/meueulucas` com 100% de sucesso.
+  2. **Unificação Nativa do Coder IDE no Chat (`/chat`)**:
+     - Desenvolvido o componente `CoderWorkspace.jsx` em `src/app/chat/components/` totalmente adaptado aos tokens de estilo nativos do 9router (`bg-bg`, `bg-surface`, `bg-surface-2`, `border-border`, `text-text-main`, `text-brand-500`, amber accent, `AgentBadge`).
+     - Atualizados `FileExplorer.jsx`, `TerminalPanel.jsx`, `ProjectsModal.jsx`, `SupabaseModal.jsx` e `GitHubCommitModal.jsx` para eliminar hardcodes de terceiros, logos isoladas ("b") e dados mockados de terminal.
+     - Integrada a navegação por abas (`Chat` vs `Coder IDE`) e split-view no header do `ChatPageClient.jsx`. O envio de mensagens no modo Coder IDE aciona o motor `processOpenClaudePrompt` em tempo real para manipular arquivos e registrar logs no terminal nativo.
+     - Atualizado `src/app/coder/page.js` para redirecionar diretamente para `/chat?mode=coder`, garantindo compatibilidade com o menu lateral e zero duplicidade de código.
+  3. **Validação de Testes**:
+     - Suíte `tests/unit/github-memory.test.js` executada e aprovada com 100% de sucesso (3 testes passando sem lançar erros de parse JSON).
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 

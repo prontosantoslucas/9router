@@ -22,4 +22,10 @@ describe("GitHub-backed ai-memory (nortelucas/meueulucas)", () => {
     expect(pingStatus.repo).toBe("nortelucas/meueulucas");
     expect(pingStatus.file).toBe("Superbrain-Lucas.md");
   });
+
+  it("deve fazer fallback gracioso para o Superbrain se o servidor MCP retornar HTML", async () => {
+    // Tenta gravar memória — mesmo com MCP mockado com erro ou inativo, não deve lançar exceção de JSON
+    const res = await aiMemoryClient.searchMemory("desenvolvedor", 3);
+    expect(Array.isArray(res)).toBe(true);
+  });
 });

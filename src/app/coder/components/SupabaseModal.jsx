@@ -13,7 +13,6 @@ export default function SupabaseModal({ isOpen, onClose }) {
 
   useEffect(() => {
     if (isOpen) {
-      // 1. Try local storage
       const cfg = getSupabaseConfig();
       if (cfg && cfg.supabaseUrl) {
         setSupabaseUrl(cfg.supabaseUrl);
@@ -21,7 +20,6 @@ export default function SupabaseModal({ isOpen, onClose }) {
         setIsConnected(true);
       }
 
-      // 2. Load persistent DB connections
       fetchCoderConnections().then((conn) => {
         if (conn && conn.supabaseUrl) {
           setSupabaseUrl(conn.supabaseUrl);
@@ -62,17 +60,17 @@ export default function SupabaseModal({ isOpen, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg bg-[#141417] border border-[#26262B] rounded-xl shadow-2xl overflow-hidden text-slate-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="w-full max-w-lg bg-surface border border-border rounded-xl shadow-elevated overflow-hidden text-text-main">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#26262B]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-bg-alt/50">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-md bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-sm">
+            <div className="w-7 h-7 rounded-md bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold text-sm">
               ⚡
             </div>
-            <h2 className="font-semibold text-base text-white">Conectar Supabase (OAuth)</h2>
+            <h2 className="font-bold text-base text-text-main">Conectar Supabase (OAuth)</h2>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded hover:bg-[#26262B] transition-colors">
+          <button onClick={onClose} className="text-text-muted hover:text-text-main p-1 rounded-md hover:bg-surface-2 transition-colors">
             ✕
           </button>
         </div>
@@ -80,62 +78,62 @@ export default function SupabaseModal({ isOpen, onClose }) {
         {/* Content */}
         <div className="p-5 space-y-4 text-xs font-sans">
           {isConnected && (
-            <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 flex items-center justify-between">
+            <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-between font-medium">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[18px]">check_circle</span>
                 <span>Conectado ao Supabase (Persistido no SQLite DB)</span>
               </div>
-              <button onClick={handleDisconnect} className="text-[11px] font-semibold text-rose-400 hover:underline">
+              <button onClick={handleDisconnect} className="text-[11px] font-bold text-danger hover:underline">
                 Desconectar
               </button>
             </div>
           )}
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1.5">Supabase Project URL</label>
+            <label className="block text-text-main font-semibold mb-1.5">Supabase Project URL</label>
             <input
               type="text"
               placeholder="https://sua-instancia.supabase.co"
               value={supabaseUrl}
               onChange={(e) => setSupabaseUrl(e.target.value)}
-              className="w-full bg-[#1B1B1F] border border-[#2B2B32] rounded-lg px-3 py-2 text-slate-100 text-xs focus:outline-none focus:border-emerald-500 font-mono"
+              className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-text-main text-xs focus:outline-none focus:border-brand-500 font-mono"
             />
           </div>
 
           <div>
-            <label className="block text-slate-300 font-medium mb-1.5">Anon / Public API Key (Opcional)</label>
+            <label className="block text-text-main font-semibold mb-1.5">Anon API Key (Opcional)</label>
             <input
               type="password"
-              placeholder="eyJhbGciOiJIUzI1NiIsInR5..."
+              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..."
               value={anonKey}
               onChange={(e) => setAnonKey(e.target.value)}
-              className="w-full bg-[#1B1B1F] border border-[#2B2B32] rounded-lg px-3 py-2 text-slate-100 text-xs focus:outline-none focus:border-emerald-500 font-mono"
+              className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-text-main text-xs focus:outline-none focus:border-brand-500 font-mono"
             />
           </div>
 
           {statusMsg && (
-            <div className="p-2.5 rounded bg-[#1C1C22] border border-[#2D2D35] text-slate-300 text-[11px]">
+            <p className={`text-xs ${statusMsg.startsWith("Erro") ? "text-danger" : "text-brand-500"}`}>
               {statusMsg}
-            </div>
+            </p>
           )}
         </div>
 
-        {/* Actions */}
-        <div className="px-5 py-4 bg-[#101013] border-t border-[#26262B] flex items-center justify-between">
+        {/* Action Bar */}
+        <div className="px-5 py-4 bg-bg border-t border-border flex items-center justify-between">
           <button
             onClick={handleSaveAndConnect}
             disabled={loading}
-            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs flex items-center gap-2 transition-colors disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-soft disabled:opacity-50"
           >
-            <span className="material-symbols-outlined text-[16px]">lock</span>
-            <span>{loading ? "Conectando..." : "Autenticar via Supabase OAuth"}</span>
+            <span className="material-symbols-outlined text-[16px]">bolt</span>
+            <span>{loading ? "Conectando..." : "Salvar & Login OAuth"}</span>
           </button>
 
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg bg-[#222227] hover:bg-[#2C2C33] text-slate-300 text-xs font-medium transition-colors"
+            className="px-4 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 text-text-muted text-xs font-medium transition-colors"
           >
-            Cancelar
+            Fechar
           </button>
         </div>
       </div>
