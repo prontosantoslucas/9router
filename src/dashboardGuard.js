@@ -225,6 +225,12 @@ export async function proxy(request) {
   if (ALWAYS_PROTECTED.some((p) => pathname.startsWith(p))) {
     if (await hasValidCliToken(request) || await hasValidToken(request))
       return pageNoStore(request);
+    // Page routes (/dashboard2, /chat) send the browser back to the login
+    // screen instead of surfacing a raw JSON error; API routes (/api/*)
+    // keep returning JSON since callers there expect a structured error.
+    if (!pathname.startsWith("/api/")) {
+      return NextResponse.redirect(new URL("/entrar", request.url));
+    }
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

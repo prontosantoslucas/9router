@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { AgentBadge } from "@/shared/components/primitives/AgentBadge";
 import { MessageBubble } from "@/shared/components/primitives/MessageBubble";
 import { ChatComposer } from "@/shared/components/primitives/ChatComposer";
@@ -14,8 +13,6 @@ import { useFileUpload } from "./hooks/useFileUpload";
 import { useNotionSave } from "./hooks/useNotionSave";
 
 import { ChannelInbox } from "./components/ChannelInbox";
-import { CoderWorkspace } from "./components/CoderWorkspace";
-import { CoderChatPanel } from "./components/CoderChatPanel";
 import { translate as t } from "@/i18n/runtime";
 
 const i18nLabels = {
@@ -23,8 +20,6 @@ const i18nLabels = {
   headerClearTitle: t("Limpar histórico da sessão"),
   emptyGreeting: t("Olá! Eu sou o Lucas."),
   emptySubtitle: t("Estou pronto para ajudar no WhatsApp, Telegram e aqui no Chat. Como posso ajudar hoje?"),
-  emptyCoderGreeting: t("Olá! Sou o Lucas Coder."),
-  emptyCoderSubtitle: t("O que vamos construir do zero hoje? Descreva sua ideia e eu irei gerar a interface React/Tailwind e a estrutura do Backend localhost para você."),
   typing: t("Lucas está digitando..."),
   processing: t("Processando arquivo..."),
   copilotHeading: (n) => `${t("Mensagens pendentes do modo Co-Piloto")} (${n})`,
@@ -51,45 +46,20 @@ export default function ChatPageClient() {
 }
 
 function ChatShell() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const initialMode = searchParams.get("mode") === "coder" ? "coder" : "chat";
 
   const { showToast } = useToast();
 
-  // Sessões de Chat Separadas: "main" (Chat Geral) vs "coder" (Chat do Coder IDE)
   const mainSession = useChatSession("main");
-  const coderSession = useChatSession("coder");
 
   const { uploadFile, isUploading } = useFileUpload();
   const { saveToNotion } = useNotionSave();
 
-  const [activeMode, setActiveMode] = useState(initialMode); // "chat" | "coder"
   const [isDragging, setIsDragging] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [copilotDrafts, setCopilotDrafts] = useState([]);
   const messagesEndRef = useRef(null);
 
-  // Coder State
-  const [coderFiles, setCoderFiles] = useState([]);
-  const [coderProjectName, setCoderProjectName] = useState("Nova Aplicação");
-  const [coderLogs, setCoderLogs] = useState([
-    { type: "info", text: "Ambiente Coder do zero inicializado com motor OpenClaude." },
-  ]);
-
-  // Seleciona a sessão de chat ativa com base no modo
-  const activeSession = activeMode === "coder" ? coderSession : mainSession;
-  const { messages, isSending, sendMessage, clearSession } = activeSession;
-
-  // Sincroniza o modo com a URL quando ela realmente mudar (ex.: navegação para
-  // /chat?mode=coder). Ajuste em tempo de render (não em efeito) para não
-  // reacoplar em `activeMode` e evitar re-renders em cascata.
-  const [syncedSearchParams, setSyncedSearchParams] = useState(searchParams);
-  if (searchParams !== syncedSearchParams) {
-    setSyncedSearchParams(searchParams);
-    if (searchParams.get("mode") === "coder") setActiveMode("coder");
-  }
-
+  const { messages, isSending, sendMessage, clearSession } = mainSession;
   // Auto-scroll ao receber novas mensagens
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -157,8 +127,8 @@ function ChatShell() {
     }
   };
 
-  // Envio para o Chat Geral (mainSession). O modo Coder tem seu próprio fluxo de
-  // envio (que também aciona o motor OpenClaude) dentro do CoderChatPanel.
+  // Envio para o Chat Geral (mainSession). A geração de código vive em /coder,
+  // com seu próprio composer e fluxo no motor OpenClaude.
   const handleSend = async (text) => {
     const images = attachments.filter((a) => a.isImage).map((a) => ({ base64: a.base64, mimeType: a.mimeType }));
     const docs = attachments.filter((a) => !a.isImage);
@@ -232,31 +202,6 @@ function ChatShell() {
             <AgentBadge agentId="lucas" size="md" />
           </div>
 
-          {/* Mode Switcher: Chat Geral vs Coder IDE */}
-          <div className="hidden sm:flex items-center bg-bg-alt p-1 rounded-lg border border-border ml-2">
-            <button
-              onClick={() => setActiveMode("chat")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all ${
-                activeMode === "chat"
-                  ? "bg-surface text-brand-500 shadow-soft border border-border"
-                  : "text-text-muted hover:text-text-main"
-              }`}
-            >
-              <span className="material-symbols-outlined text-[15px]">forum</span>
-              <span>Chat</span>
-            </button>
-            <button
-              onClick={() => setActiveMode("coder")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all ${
-                activeMode === "coder"
-                  ? "bg-surface text-brand-500 shadow-soft border border-border"
-                  : "text-text-muted hover:text-text-main"
-              }`}
-            >
-              <span className="material-symbols-outlined text-[15px]">code</span>
-              <span>Coder IDE</span>
-            </button>
-          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
@@ -275,39 +220,6 @@ function ChatShell() {
 
       {/* Main Body: Chat Column + Coder Workspace Column */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
-        {activeMode === "coder" ? (
-          <>
-            {/* Left Column: Coder Chat Panel (sessão dedicada + motor OpenClaude) */}
-            <div className="flex h-full w-full shrink-0 flex-col border-r border-border md:w-[420px]">
-              <CoderChatPanel
-                session={coderSession}
-                coderFiles={coderFiles}
-                onUpdateFiles={setCoderFiles}
-                onTerminalLog={setCoderLogs}
-                onSaveNotion={handleSaveNotion}
-                attachments={attachments}
-                onRemoveAttachment={(i) => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
-                onClearAttachments={() => setAttachments([])}
-                isUploading={isUploading}
-                onUpload={handleUpload}
-                emptyGreeting={i18nLabels.emptyCoderGreeting}
-                emptySubtitle={i18nLabels.emptyCoderSubtitle}
-              />
-            </div>
-
-            {/* Right Column: Coder Workspace */}
-            <div className="hidden h-full flex-1 overflow-hidden md:flex">
-              <CoderWorkspace
-                files={coderFiles}
-                setFiles={setCoderFiles}
-                terminalLogs={coderLogs}
-                setTerminalLogs={setCoderLogs}
-                projectName={coderProjectName}
-                setProjectName={setCoderProjectName}
-              />
-            </div>
-          </>
-        ) : (
           <div className="flex h-full w-full flex-col">
             {/* Mensagens do Chat Geral */}
             <main className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4">
@@ -388,7 +300,6 @@ function ChatShell() {
               </div>
             </footer>
           </div>
-        )}
       </div>
     </div>
   );

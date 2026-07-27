@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import PropTypes from "prop-types";
 import FileExplorer from "@/app/coder/components/FileExplorer";
@@ -8,39 +8,12 @@ import TerminalPanel from "@/app/coder/components/TerminalPanel";
 import ProjectsModal from "@/app/coder/components/ProjectsModal";
 import SupabaseModal from "@/app/coder/components/SupabaseModal";
 import GitHubCommitModal from "@/app/coder/components/GitHubCommitModal";
-import { enhanceUserPrompt, processOpenClaudePrompt } from "@/lib/coder/openclaudeEngine";
 import { downloadProjectAsZip } from "@/lib/coder/zipExporter";
 import { getSupabaseConfig } from "@/lib/coder/supabaseClient";
 import { buildPreviewDoc } from "@/lib/coder/previewBuilder";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
-const STARTER_SUGGESTIONS = [
-  {
-    icon: "content_cut",
-    title: "Barbearia & Agendamentos",
-    desc: "Sistema de agendamento de cortes e serviços em tempo real.",
-    prompt: "Criar um sistema de agendamento online de barbearia com escolha de profissional, horário e lista de serviços.",
-  },
-  {
-    icon: "insights",
-    title: "Dashboard SaaS Metrics",
-    desc: "Painel financeiro com gráficos de MRR, assinantes e churn.",
-    prompt: "Criar um dashboard SaaS completo de métricas com visão geral de receita, gráfico de crescimento e tabela de clientes.",
-  },
-  {
-    icon: "restaurant",
-    title: "Food Delivery & Cardápio",
-    desc: "App de restaurante com carrinho de compras e rastreamento.",
-    prompt: "Criar uma plataforma de delivery de comida com cardápio por categorias, carrinho de compras e acompanhamento de pedido.",
-  },
-  {
-    icon: "check_box",
-    title: "Gestor de Tarefas Kanban",
-    desc: "Organizador de projetos estilo Trello com colunas interativas.",
-    prompt: "Criar um quadro Kanban de tarefas com colunas 'A Fazer', 'Em Progresso' e 'Concluído', permitindo adicionar novos itens.",
-  },
-];
 
 export function CoderWorkspace({
   files = [],
@@ -49,26 +22,21 @@ export function CoderWorkspace({
   setTerminalLogs,
   projectName = "Nova Aplicação",
   setProjectName,
+  standalone = false,
 }) {
   const [viewMode, setViewMode] = useState("preview"); // "code" | "preview"
   const [selectedFilePath, setSelectedFilePath] = useState("src/App.tsx");
   const [isTerminalCollapsed, setIsTerminalCollapsed] = useState(false);
 
-  // Home / Prompt state
-  const [ideaInput, setIdeaInput] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [statusText, setStatusText] = useState("");
 
   // Modals state
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [isSupabaseOpen, setIsSupabaseOpen] = useState(false);
   const [isGitHubOpen, setIsGitHubOpen] = useState(false);
-  const [supabaseConnected, setSupabaseConnected] = useState(false);
-
-  useEffect(() => {
+  const [supabaseConnected] = useState(() => {
     const cfg = getSupabaseConfig();
-    if (cfg && cfg.supabaseUrl) setSupabaseConnected(true);
-  }, []);
+    return !!(cfg && cfg.supabaseUrl);
+  });
 
   const selectedFile = files.find((f) => f.path === selectedFilePath) || files[0];
 
@@ -90,146 +58,43 @@ export function CoderWorkspace({
     }
   };
 
-  // Recurso "Melhorar meu prompt com base na minha ideia"
-  const handleEnhancePrompt = () => {
-    if (!ideaInput.trim()) return;
-    const enhanced = enhanceUserPrompt(ideaInput);
-    setIdeaInput(enhanced);
-  };
 
-  // Gerar aplicação do zero
-  const handleGenerateApp = async (customPrompt) => {
-    const targetPrompt = customPrompt || ideaInput;
-    if (!targetPrompt.trim() || isGenerating) return;
-
-    setIsGenerating(true);
-    setStatusText("Iniciando geração...");
-
-    try {
-      await processOpenClaudePrompt({
-        prompt: targetPrompt,
-        currentFiles: files,
-        onStreamMessage: (msg) => setStatusText(msg),
-        onTerminalLog: (log) => {
-          if (setTerminalLogs) setTerminalLogs((prev) => [...prev, log]);
-        },
-        onUpdateFiles: (newFiles) => {
-          if (setFiles) setFiles(newFiles);
-          if (newFiles.length > 0) setSelectedFilePath(newFiles[0].path);
-        },
-      });
-
-      // Alterna automaticamente para o Preview ao vivo
-      setViewMode("preview");
-    } catch (err) {
-      if (setTerminalLogs) {
-        setTerminalLogs((prev) => [...prev, { type: "error", text: `Erro na geração: ${err.message}` }]);
-      }
-    } finally {
-      setIsGenerating(false);
-      setStatusText("");
-    }
-  };
 
   // Renderiza a página em HTML para o iframe do Preview ao vivo
   const generatePreviewHTML = () => buildPreviewDoc(files, projectName || "Aplicação Coder");
 
-  // Se não houver arquivos gerados (Projeto do Zero), exibe a Tela de Boas-Vindas & Sugestões
+  // Sem arquivos ainda: estado vazio. Este painel só mostra Preview/Código/
+  // Terminal — a entrada de prompt vive fora dele (no composer do rodapé
+  // quando `standalone`, ou na coluna de chat quando embutido).
   if (files.length === 0) {
     return (
-      <div className="flex-1 flex flex-col h-full w-full bg-bg text-text-main overflow-y-auto p-4 sm:p-8 font-sans select-none custom-scrollbar">
-        <div className="max-w-3xl mx-auto w-full space-y-6 my-auto">
-          {/* Header da Tela Inicial */}
-          <div className="text-center space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-500/10 border border-brand-500/30 text-brand-500 text-xs font-bold uppercase tracking-wider">
-              <span className="material-symbols-outlined text-sm">auto_awesome</span>
-              <span>Coder IDE do Agente Lucas</span>
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-text-main tracking-tight">
-              O que você deseja construir hoje?
-            </h1>
-            <p className="text-sm text-text-muted max-w-xl mx-auto">
-              Descreva sua ideia abaixo. O Coder criará primeiro o **Frontend** em React/Tailwind e depois a estrutura do **Backend localhost**, exibindo tudo no Preview ao vivo.
-            </p>
+      <div className={`flex-1 flex flex-col items-center justify-center h-full w-full bg-bg text-text-main p-8 select-none ${standalone ? "" : "border-l border-border"}`}>
+        <div className="max-w-sm text-center space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-500/10 border border-brand-500/30 text-brand-500 text-xs font-bold uppercase tracking-wider">
+            <span className="material-symbols-outlined text-sm">code</span>
+            <span>Coder IDE do Agente Lucas</span>
           </div>
-
-          {/* Prompt Form Container */}
-          <div className="bg-surface border border-border rounded-2xl p-4 sm:p-5 shadow-elevated space-y-4">
-            <textarea
-              rows={4}
-              placeholder="Ex: Quero um sistema de agendamento de barbearia com seleção de horários e lista de serviços..."
-              value={ideaInput}
-              onChange={(e) => setIdeaInput(e.target.value)}
-              className="w-full bg-bg border border-border rounded-xl p-3.5 text-xs text-text-main focus:outline-none focus:border-brand-500 placeholder-text-muted resize-none font-sans"
-            />
-
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-              <button
-                type="button"
-                onClick={handleEnhancePrompt}
-                disabled={!ideaInput.trim() || isGenerating}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-500/10 border border-brand-500/30 text-brand-500 hover:bg-brand-500/20 text-xs font-bold transition-all disabled:opacity-40"
-                title="Expande sua ideia simples em uma especificação técnica completa"
-              >
-                <span className="material-symbols-outlined text-sm">auto_fix_high</span>
-                <span>Melhorar meu prompt com base na minha ideia</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleGenerateApp()}
-                disabled={!ideaInput.trim() || isGenerating}
-                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold transition-all shadow-warm disabled:opacity-40"
-              >
-                <span className="material-symbols-outlined text-base">rocket_launch</span>
-                <span>{isGenerating ? "Gerando..." : "Gerar Aplicação"}</span>
-              </button>
-            </div>
-
-            {statusText && (
-              <div className="flex items-center gap-2 text-xs font-semibold text-brand-500 animate-pulse pt-2 border-t border-border">
-                <span className="material-symbols-outlined animate-spin text-sm">sync</span>
-                <span>{statusText}</span>
-              </div>
-            )}
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-surface border border-border flex items-center justify-center">
+            <span className="material-symbols-outlined text-3xl text-text-muted">terminal</span>
           </div>
-
-          {/* Cards de Sugestão de Prompts Rápidos */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted flex items-center gap-1">
-              <span className="material-symbols-outlined text-sm">lightbulb</span>
-              <span>Sugestões Rápidas para Começar</span>
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {STARTER_SUGGESTIONS.map((item, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => {
-                    setIdeaInput(item.prompt);
-                    handleGenerateApp(item.prompt);
-                  }}
-                  className="p-4 rounded-xl bg-surface border border-border hover:border-brand-500/50 transition-all cursor-pointer group space-y-1.5 shadow-soft hover:shadow-warm"
-                >
-                  <div className="flex items-center gap-2 text-brand-500">
-                    <span className="material-symbols-outlined text-lg">{item.icon}</span>
-                    <h4 className="font-bold text-xs text-text-main group-hover:text-brand-500 transition-colors">
-                      {item.title}
-                    </h4>
-                  </div>
-                  <p className="text-[11px] text-text-muted leading-relaxed">{item.desc}</p>
-                </div>
-              ))}
-            </div>
+          <h2 className="text-lg font-extrabold text-text-main">Nenhum projeto ainda</h2>
+          <p className="text-sm text-text-muted leading-relaxed">
+            Descreva sua ideia {standalone ? "no campo abaixo" : "no chat ao lado"} e o Coder vai gerar
+            o projeto em React/Tailwind. O Preview ao vivo aparece aqui automaticamente.
+          </p>
+          <div className="flex items-center justify-center gap-1.5 text-xs text-brand-500 font-semibold">
+            <span className="material-symbols-outlined text-sm">
+              {standalone ? "arrow_downward" : "arrow_back"}
+            </span>
+            <span>{standalone ? "Comece pelo composer" : "Comece pelo chat"}</span>
           </div>
         </div>
       </div>
     );
   }
-
   // Se houver arquivos gerados, exibe o Coder IDE completo
   return (
-    <div className="flex flex-col h-full w-full bg-bg text-text-main overflow-hidden font-sans border-l border-border select-none">
+    <div className={`flex flex-col h-full w-full bg-bg text-text-main overflow-hidden font-sans select-none ${standalone ? "" : "border-l border-border"}`}>
       {/* Coder Toolbar Header */}
       <div className="h-12 border-b border-border bg-surface px-4 flex items-center justify-between text-xs shrink-0">
         {/* Left: Project Selector */}
@@ -387,6 +252,7 @@ CoderWorkspace.propTypes = {
   setTerminalLogs: PropTypes.func,
   projectName: PropTypes.string,
   setProjectName: PropTypes.func,
+  standalone: PropTypes.bool,
 };
 
 function getLanguage(filename = "") {

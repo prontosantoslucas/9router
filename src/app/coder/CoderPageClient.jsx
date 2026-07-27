@@ -3,17 +3,15 @@
 import React, { useState } from "react";
 import { DropOverlay } from "@/shared/components/primitives/DropOverlay";
 import { ToastProvider, useToast } from "@/shared/components/primitives/Toast";
-import { useChatSession } from "@/app/chat/hooks/useChatSession";
 import { useFileUpload } from "@/app/chat/hooks/useFileUpload";
-import { CoderChatPanel } from "@/app/chat/components/CoderChatPanel";
+import { ChatComposer } from "@/shared/components/primitives/ChatComposer";
 import { CoderWorkspace } from "@/app/chat/components/CoderWorkspace";
+import { enhanceUserPrompt, processOpenClaudePrompt } from "@/lib/coder/openclaudeEngine";
 
 /**
- * Standalone /coder page. Thin shell around the same CoderChatPanel +
- * CoderWorkspace pair used by /chat?mode=coder — same coder session id
- * ("coder"), so conversation history is shared between both entry points.
- * DashboardLayout/Header already provides the app chrome; this page owns
- * only the coder-specific split view.
+ * Standalone /coder page: SOMENTE o Coder (sem coluna de chat). O workspace
+ * ocupa toda a largura e o prompt vive num composer fixo no rodape, que
+ * dispara o motor OpenClaude (geracao/streaming). O Chat geral fica em /chat.
  */
 export default function CoderPageClient() {
   return (
@@ -25,24 +23,22 @@ export default function CoderPageClient() {
 
 function CoderShell() {
   const { showToast } = useToast();
-  const coderSession = useChatSession("coder");
   const { uploadFile, isUploading } = useFileUpload();
 
   const [isDragging, setIsDragging] = useState(false);
-  const [attachments, setAttachments] = useState([]);
+  const [draftText, setDraftText] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
   const [coderFiles, setCoderFiles] = useState([]);
   const [coderProjectName, setCoderProjectName] = useState("Nova Aplicação");
   const [coderLogs, setCoderLogs] = useState([
-    { type: "info", text: "Ambiente Coder do zero inicializado com motor OpenClaude." },
+    { type: "info", text: "Ambiente Coder inicializado com motor OpenClaude." },
   ]);
 
   const handleDragOver = (e) => {
     e.preventDefault();
     setIsDragging(true);
   };
-
   const handleDragLeave = () => setIsDragging(false);
-
   const handleDrop = async (e) => {
     e.preventDefault();
     setIsDragging(false);
@@ -54,31 +50,37 @@ function CoderShell() {
     try {
       const result = await uploadFile(file);
       if (!result) return;
-      if (result.isImage) {
-        setAttachments((prev) => [
-          ...prev,
-          { name: result.filename || file.name, isImage: true, base64: result.base64, mimeType: result.mimeType },
-        ]);
-      } else if (result.isVideo) {
-        const parts = [];
-        if (result.transcript) parts.push(`[Vídeo: ${result.filename} — transcrição do áudio]\n${result.transcript}`);
-        setAttachments((prev) => [
-          ...prev,
-          ...(parts.length ? [{ name: result.filename, text: parts.join("\n") }] : []),
-          ...(result.frames || []).map((fr, i) => ({
-            name: `${result.filename} (frame ${i + 1})`, isImage: true, base64: fr.base64, mimeType: fr.mimeType,
-          })),
-        ]);
-      } else {
-        setAttachments((prev) => [...prev, { name: file.name, text: result.text }]);
-      }
+      const text = result.text || result.transcript || "";
+      if (text) setDraftText((prev) => `${prev}\n\n[Anexo: ${result.filename || file.name}]\n${text}`.trim());
     } catch (err) {
       showToast({ kind: "error", text: `Falha no upload: ${err.message}` });
     }
   };
 
-  const handleSaveNotion = async () => {
-    showToast({ kind: "info", text: "Salvar no Notion está disponível a partir do Chat Geral." });
+  const handleEnhancePrompt = () => {
+    const raw = draftText.trim() || "Criar uma aplicação web moderna do zero";
+    setDraftText(enhanceUserPrompt(raw));
+  };
+
+  const handleSend = async (text) => {
+    const prompt = (text ?? draftText).trim();
+    if (!prompt || isGenerating) return;
+    setDraftText("");
+    setIsGenerating(true);
+    setCoderLogs((prev) => [...prev, { type: "command", text: `Prompt: ${prompt.slice(0, 60)}...` }]);
+    try {
+      await processOpenClaudePrompt({
+        prompt,
+        currentFiles: coderFiles,
+        onTerminalLog: (log) => setCoderLogs((prev) => [...prev, log]),
+        onUpdateFiles: (newFiles) => setCoderFiles(newFiles),
+      });
+    } catch (err) {
+      setCoderLogs((prev) => [...prev, { type: "error", text: `Erro Coder: ${err.message}` }]);
+      showToast({ kind: "error", text: `Erro na geração: ${err.message}` });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -86,28 +88,12 @@ function CoderShell() {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="relative flex h-full w-full overflow-hidden bg-bg text-text-main"
+      className="relative flex h-full w-full flex-col overflow-hidden bg-bg text-text-main"
     >
       <DropOverlay isDragging={isDragging} />
 
-      {/* Left Column: Coder Chat Panel (sessão dedicada + motor OpenClaude) */}
-      <div className="flex h-full w-full shrink-0 flex-col border-r border-border md:w-[420px]">
-        <CoderChatPanel
-          session={coderSession}
-          coderFiles={coderFiles}
-          onUpdateFiles={setCoderFiles}
-          onTerminalLog={setCoderLogs}
-          onSaveNotion={handleSaveNotion}
-          attachments={attachments}
-          onRemoveAttachment={(i) => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
-          onClearAttachments={() => setAttachments([])}
-          isUploading={isUploading}
-          onUpload={handleUpload}
-        />
-      </div>
-
-      {/* Right Column: Coder Workspace */}
-      <div className="hidden h-full flex-1 overflow-hidden md:flex">
+      {/* Workspace ocupa toda a largura */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <CoderWorkspace
           files={coderFiles}
           setFiles={setCoderFiles}
@@ -115,8 +101,44 @@ function CoderShell() {
           setTerminalLogs={setCoderLogs}
           projectName={coderProjectName}
           setProjectName={setCoderProjectName}
+          standalone
         />
       </div>
+
+      {/* Composer fixo no rodapé (única entrada do Coder) */}
+      <footer className="shrink-0 border-t border-border bg-surface p-3 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 dark:bg-surface-2 space-y-2">
+        <div className="mx-auto max-w-4xl space-y-2">
+          <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-1">
+            <button
+              type="button"
+              onClick={handleEnhancePrompt}
+              className="flex items-center gap-1.5 text-[11px] font-bold text-brand-500 hover:underline"
+            >
+              <span className="material-symbols-outlined text-sm">auto_fix_high</span>
+              <span>Melhorar meu prompt com base na minha ideia</span>
+            </button>
+            <span className="font-mono text-[10px] text-text-muted">
+              {isGenerating ? "Gerando..." : "Coder Mode"}
+            </span>
+          </div>
+
+          {isUploading && (
+            <div className="flex items-center gap-2 text-xs text-brand-500" aria-live="polite">
+              <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+              <span>Processando arquivo...</span>
+            </div>
+          )}
+
+          <ChatComposer
+            value={draftText}
+            onChange={setDraftText}
+            onSend={handleSend}
+            onUpload={handleUpload}
+            isSending={isGenerating}
+            placeholder="Descreva a aplicação ou alteração de código desejada..."
+          />
+        </div>
+      </footer>
     </div>
   );
 }
