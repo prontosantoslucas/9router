@@ -381,7 +381,33 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 26: Criação e Anexação do Volume Persistente `/app/data` no Railway
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - No deployment da aplicação no Railway (projeto `illustrious-motivation`, serviço `9router`), o contêiner Docker executa com um sistema de arquivos efêmero.
+  - A aplicação utiliza o banco de dados SQLite e arquivos de configuração armazenados no diretório `/app/data` (conforme definido por `ENV DATA_DIR=/app/data` no [`Dockerfile`](Dockerfile) e resolvido dinamicamente em [`src/lib/dataDir.js`](src/lib/dataDir.js)).
+  - O [`docker-compose.yml`](docker-compose.yml) já resolvia isso com um volume nomeado (`9router-data:/app/data`), mas o Railway constrói o `Dockerfile` diretamente, sem passar pelo Compose — por isso a proteção não valia no ambiente de produção.
+  - Sem um Volume montado no Railway apontando para `/app/data`, todas as reinicializações do serviço ou novos envios de código (redeploys) recriavam o contêiner efêmero do zero, ocasionando a perda total dos dados persistidos no SQLite (como credenciais, sessões, provedores e configurações do agente).
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Inspeção do Ambiente Railway via CLI**:
+     - Executado `railway status` confirmando a vinculação com o projeto `illustrious-motivation` (ID `a77c60e8-3eae-45b7-a124-a38512b65708`) e serviço `9router` (ID `132e6acb-4d7c-439e-a5df-c1fc136a5855`).
+     - Executado `railway volume list --json` constatando a ausência de volumes pré-existentes.
+  2. **Criação e Montagem do Volume Persistente**:
+     - Executado o comando `railway volume add --mount-path /app/data --json`.
+     - O Railway criou e vinculou com sucesso o volume `9router-volume` (ID `71dcd0e2-07eb-4bcd-9d9b-aa989f94d9f1`) montado no caminho `/app/data` do serviço `9router`.
+  3. **Validação**:
+     - Executado `railway volume list --json` confirmando que o volume foi anexado e está no status `Ready` no caminho `/app/data`, garantindo a persistência dos arquivos de dados e bancos de dados SQLite mesmo após reinicializações e redeploys do projeto.
+  4. **Rede de segurança no código** (commit `5e0485e`):
+     - `getDataDir()` passou a priorizar a variável `RAILWAY_VOLUME_MOUNT_PATH`, que o Railway injeta automaticamente quando há um Volume anexado. Ela precisa vir **antes** de `DATA_DIR` porque a imagem sempre entrega `DATA_DIR` preenchido, o que venceria a resolução.
+     - Como neste caso o volume foi montado exatamente em `/app/data`, os dois caminhos coincidem e a resolução não muda. O ganho é evitar regressão silenciosa: se o ponto de montagem for alterado no painel um dia, os dados acompanham o volume em vez de voltarem para o disco efêmero.
+
+* **Ponto de atenção operacional**: um volume sobe **vazio** e monta por cima do caminho, então os dados que estavam na camada efêmera não migram sozinhos. Após anexá-lo, as conexões (Supabase/GitHub), provedores e chaves precisam ser reconfigurados uma última vez — daí em diante sobrevivem aos redeploys.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
 
 
 
