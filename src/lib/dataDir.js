@@ -12,6 +12,22 @@ function defaultDir() {
 }
 
 export function getDataDir() {
+  // Railway injeta RAILWAY_VOLUME_MOUNT_PATH quando um Volume esta anexado ao
+  // servico. Ele tem prioridade sobre DATA_DIR porque a imagem ja traz
+  // `ENV DATA_DIR=/app/data` embutido, e /app/data mora na camada efemera do
+  // container: sem isso, todo redeploy (todo push) recria o container e apaga
+  // o SQLite junto com as conexoes, providers e chaves. Se o volume estiver
+  // montado justamente em /app/data, o valor e o mesmo e nada muda.
+  const railwayVolume = process.env.RAILWAY_VOLUME_MOUNT_PATH;
+  if (railwayVolume) {
+    try {
+      fs.mkdirSync(railwayVolume, { recursive: true });
+      return railwayVolume;
+    } catch (e) {
+      console.warn(`[DATA_DIR] volume Railway '${railwayVolume}' indisponivel (${e?.code}) → segue para DATA_DIR`);
+    }
+  }
+
   const configured = process.env.DATA_DIR;
   if (!configured) return defaultDir();
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import PropTypes from "prop-types";
 import FileExplorer from "@/app/coder/components/FileExplorer";
@@ -9,7 +9,7 @@ import ProjectsModal from "@/app/coder/components/ProjectsModal";
 import SupabaseModal from "@/app/coder/components/SupabaseModal";
 import GitHubCommitModal from "@/app/coder/components/GitHubCommitModal";
 import { downloadProjectAsZip } from "@/lib/coder/zipExporter";
-import { getSupabaseConfig } from "@/lib/coder/supabaseClient";
+import { getSupabaseConfig, fetchCoderConnections } from "@/lib/coder/supabaseClient";
 import { buildPreviewDoc } from "@/lib/coder/previewBuilder";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
@@ -33,10 +33,28 @@ export function CoderWorkspace({
   const [isProjectsOpen, setIsProjectsOpen] = useState(false);
   const [isSupabaseOpen, setIsSupabaseOpen] = useState(false);
   const [isGitHubOpen, setIsGitHubOpen] = useState(false);
-  const [supabaseConnected] = useState(() => {
-    const cfg = getSupabaseConfig();
-    return !!(cfg && cfg.supabaseUrl);
-  });
+  const [supabaseConnected, setSupabaseConnected] = useState(false);
+
+  // O banco e a fonte de verdade (sobrevive a troca de navegador/maquina); o
+  // localStorage entra so como fallback offline. Roda em efeito, e nao em
+  // inicializador de useState, porque ler localStorage durante o SSR devolve
+  // vazio e causaria divergencia de hidratacao. Reavalia ao fechar o modal
+  // para o badge refletir a conexao recem-salva.
+  useEffect(() => {
+    if (isSupabaseOpen) return;
+    let cancelled = false;
+    (async () => {
+      const conn = await fetchCoderConnections();
+      if (cancelled) return;
+      if (conn?.supabaseUrl) {
+        setSupabaseConnected(true);
+        return;
+      }
+      const cfg = getSupabaseConfig();
+      setSupabaseConnected(!!cfg?.supabaseUrl);
+    })();
+    return () => { cancelled = true; };
+  }, [isSupabaseOpen]);
 
   const selectedFile = files.find((f) => f.path === selectedFilePath) || files[0];
 
