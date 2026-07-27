@@ -359,11 +359,29 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 25: Botão Voltar do Chat Retornava ao Login, Sidebar Desaparecia e Coder Não Funcionava
+
+* **Por que ocorreram estes problemas (Causa Raiz Detalhada)**:
+  1. **Botão "Voltar" retornava ao Login**: O `ChatPageClient.jsx` usava `router.back()` para navegação do botão voltar. Quando o usuário chegava ao chat vindo da tela de login, `router.back()` seguia o histórico literal do navegador, voltando ao login em vez do dashboard. A condição `window.history.length > 1` não resolvia o problema porque o histórico existia, apenas apontava para a rota errada.
+  2. **Menu Lateral (Sidebar) desaparecia no Chat e Coder**: As páginas `/chat` e `/coder` eram renderizadas como rotas independentes fora da hierarquia do `DashboardLayout`. Enquanto todas as rotas dentro de `(dashboard)/` automaticamente recebiam a Sidebar via o `layout.js` do route group, e o `/dashboard2` incluía `<DashboardLayout>` explicitamente na sua `page.js`, tanto `/chat` quanto `/coder` renderizavam seus componentes client diretamente, sem envolvê-los no layout que contém a Sidebar.
+  3. **Coder não funcionava**: A rota `/coder/page.js` continha apenas `redirect("/chat?mode=coder")`, redirecionando para o Chat com query parameter. No Chat, o modo coder habilitava o `CoderWorkspace` na coluna direita, mas este era visível apenas em telas `md:` (escondido em mobile) e não tinha o IDE completo standalone (`CoderPageClient.jsx` com Monaco Editor, FileExplorer e Terminal) disponível.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Remoção do `router.back()`**: Eliminado o botão "Voltar" redundante do header do `ChatPageClient.jsx`, já que a Sidebar agora provê toda a navegação necessária.
+  2. **Envolvimento com `DashboardLayout`**: Modificados `chat/page.js` e `coder/page.js` para envolver seus componentes client com `<DashboardLayout>`, garantindo que a Sidebar e o Header do dashboard apareçam em ambas as telas.
+  3. **Coder Standalone**: Removido o `redirect("/chat?mode=coder")` do `coder/page.js` e substituído pela renderização direta do `<CoderPageClient />` (IDE completo com Monaco Editor, File Explorer, Terminal Panel e modais de GitHub/Supabase).
+  4. **Ajuste de CSS para Layout**: Alterados `h-screen` para `h-full` em `ChatPageClient.jsx` e `CoderPageClient.jsx` para que funcionem corretamente dentro do container do `DashboardLayout` (que já controla a altura da tela). Estendida a lógica de tratamento full-height/sem-padding no `DashboardLayout.js` para incluir `/chat` e `/coder` junto com `/dashboard/basic-chat`.
+
+  **Arquivos Modificados**:
+  - `src/app/chat/page.js` — Adicionado `DashboardLayout`
+  - `src/app/chat/ChatPageClient.jsx` — Removido botão voltar, `h-screen` → `h-full`
+  - `src/app/coder/page.js` — Substituído `redirect()` por renderização de `CoderPageClient` com `DashboardLayout`
+  - `src/app/coder/CoderPageClient.jsx` — `h-screen` → `h-full`
+  - `src/shared/components/layouts/DashboardLayout.js` — Estendido tratamento full-height para `/chat` e `/coder`
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
-
-
-
-
 
 
 

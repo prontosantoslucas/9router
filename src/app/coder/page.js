@@ -1,4 +1,5 @@
-import { redirect } from "next/navigation";
+import CoderPageClient from "./CoderPageClient";
+import DashboardLayout from "@/shared/components/layouts/DashboardLayout";
 
 export const metadata = {
   title: "Coder — Agente Lucas | MaxRouter",
@@ -6,5 +7,9 @@ export const metadata = {
 };
 
 export default function CoderPage() {
-  redirect("/chat?mode=coder");
+  return (
+    <DashboardLayout>
+      <CoderPageClient />
+    </DashboardLayout>
+  );
 }

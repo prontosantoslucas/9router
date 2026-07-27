@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
@@ -11,6 +11,7 @@ import GitHubCommitModal from "@/app/coder/components/GitHubCommitModal";
 import { enhanceUserPrompt, processOpenClaudePrompt } from "@/lib/coder/openclaudeEngine";
 import { downloadProjectAsZip } from "@/lib/coder/zipExporter";
 import { getSupabaseConfig } from "@/lib/coder/supabaseClient";
+import { buildPreviewDoc } from "@/lib/coder/previewBuilder";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
@@ -18,26 +19,26 @@ const STARTER_SUGGESTIONS = [
   {
     icon: "content_cut",
     title: "Barbearia & Agendamentos",
-    desc: "Sistema de agendamento de cortes e serviços em tempo real.",
-    prompt: "Criar um sistema de agendamento online de barbearia com escolha de profissional, horário e lista de serviços.",
+    desc: "Sistema de agendamento de cortes e serviÃ§os em tempo real.",
+    prompt: "Criar um sistema de agendamento online de barbearia com escolha de profissional, horÃ¡rio e lista de serviÃ§os.",
   },
   {
     icon: "insights",
     title: "Dashboard SaaS Metrics",
-    desc: "Painel financeiro com gráficos de MRR, assinantes e churn.",
-    prompt: "Criar um dashboard SaaS completo de métricas com visão geral de receita, gráfico de crescimento e tabela de clientes.",
+    desc: "Painel financeiro com grÃ¡ficos de MRR, assinantes e churn.",
+    prompt: "Criar um dashboard SaaS completo de mÃ©tricas com visÃ£o geral de receita, grÃ¡fico de crescimento e tabela de clientes.",
   },
   {
     icon: "restaurant",
-    title: "Food Delivery & Cardápio",
+    title: "Food Delivery & CardÃ¡pio",
     desc: "App de restaurante com carrinho de compras e rastreamento.",
-    prompt: "Criar uma plataforma de delivery de comida com cardápio por categorias, carrinho de compras e acompanhamento de pedido.",
+    prompt: "Criar uma plataforma de delivery de comida com cardÃ¡pio por categorias, carrinho de compras e acompanhamento de pedido.",
   },
   {
     icon: "check_box",
     title: "Gestor de Tarefas Kanban",
     desc: "Organizador de projetos estilo Trello com colunas interativas.",
-    prompt: "Criar um quadro Kanban de tarefas com colunas 'A Fazer', 'Em Progresso' e 'Concluído', permitindo adicionar novos itens.",
+    prompt: "Criar um quadro Kanban de tarefas com colunas 'A Fazer', 'Em Progresso' e 'ConcluÃ­do', permitindo adicionar novos itens.",
   },
 ];
 
@@ -46,7 +47,7 @@ export function CoderWorkspace({
   setFiles,
   terminalLogs = [],
   setTerminalLogs,
-  projectName = "Nova Aplicação",
+  projectName = "Nova AplicaÃ§Ã£o",
   setProjectName,
 }) {
   const [viewMode, setViewMode] = useState("preview"); // "code" | "preview"
@@ -84,7 +85,7 @@ export function CoderWorkspace({
     if (setTerminalLogs) {
       setTerminalLogs((prev) => [
         ...prev,
-        { type: "success", text: `✓ Download do projeto ${projectName || "Projeto-9router"}.zip iniciado.` },
+        { type: "success", text: `âœ“ Download do projeto ${projectName || "Projeto-9router"}.zip iniciado.` },
       ]);
     }
   };
@@ -96,13 +97,13 @@ export function CoderWorkspace({
     setIdeaInput(enhanced);
   };
 
-  // Gerar aplicação do zero
+  // Gerar aplicaÃ§Ã£o do zero
   const handleGenerateApp = async (customPrompt) => {
     const targetPrompt = customPrompt || ideaInput;
     if (!targetPrompt.trim() || isGenerating) return;
 
     setIsGenerating(true);
-    setStatusText("Iniciando geração...");
+    setStatusText("Iniciando geraÃ§Ã£o...");
 
     try {
       await processOpenClaudePrompt({
@@ -122,7 +123,7 @@ export function CoderWorkspace({
       setViewMode("preview");
     } catch (err) {
       if (setTerminalLogs) {
-        setTerminalLogs((prev) => [...prev, { type: "error", text: `Erro na geração: ${err.message}` }]);
+        setTerminalLogs((prev) => [...prev, { type: "error", text: `Erro na geraÃ§Ã£o: ${err.message}` }]);
       }
     } finally {
       setIsGenerating(false);
@@ -130,50 +131,10 @@ export function CoderWorkspace({
     }
   };
 
-  // Renderiza a página em HTML para o iframe do Preview ao vivo
-  const generatePreviewHTML = () => {
-    const appFile = files.find((f) => f.path === "src/App.tsx");
-    const indexCssFile = files.find((f) => f.path === "src/index.css");
+  // Renderiza a pÃ¡gina em HTML para o iframe do Preview ao vivo
+  const generatePreviewHTML = () => buildPreviewDoc(files, projectName || "Aplicação Coder");
 
-    if (!appFile) {
-      return `<html lang="pt-BR"><body style="background:#0f172a;color:#94a3b8;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;"><div>Nenhum arquivo de visualização encontrado.</div></body></html>`;
-    }
-
-    // Extrai o conteúdo simulado do JSX para renderizar em HTML limpo no iframe
-    const rawJsx = appFile.content;
-    const isDark = rawJsx.includes("bg-slate-950") || rawJsx.includes("bg-slate-900");
-
-    return `<!DOCTYPE html>
-<html lang="pt-BR">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
-  </head>
-  <body class="${isDark ? "bg-slate-950 text-slate-100" : "bg-slate-900 text-slate-100"} min-h-screen font-sans">
-    <div id="root">
-      <div className="p-6 text-center space-y-4">
-        <h1 className="text-2xl font-bold text-amber-500">${projectName || "Aplicação Coder"}</h1>
-        <p className="text-sm text-slate-400">Pré-visualização ao vivo gerada pelo Agente Lucas</p>
-      </div>
-    </div>
-    <script>
-      // Renderizador simples de JSX para Live Preview em iframe
-      try {
-        const root = document.getElementById('root');
-        if (root) {
-          root.innerHTML = \`${extractHtmlFromJsx(rawJsx)}\`;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    </script>
-  </body>
-</html>`;
-  };
-
-  // Se não houver arquivos gerados (Projeto do Zero), exibe a Tela de Boas-Vindas & Sugestões
+  // Se nÃ£o houver arquivos gerados (Projeto do Zero), exibe a Tela de Boas-Vindas & SugestÃµes
   if (files.length === 0) {
     return (
       <div className="flex-1 flex flex-col h-full w-full bg-bg text-text-main overflow-y-auto p-4 sm:p-8 font-sans select-none custom-scrollbar">
@@ -185,10 +146,10 @@ export function CoderWorkspace({
               <span>Coder IDE do Agente Lucas</span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-text-main tracking-tight">
-              O que você deseja construir hoje?
+              O que vocÃª deseja construir hoje?
             </h1>
             <p className="text-sm text-text-muted max-w-xl mx-auto">
-              Descreva sua ideia abaixo. O Coder criará primeiro o **Frontend** em React/Tailwind e depois a estrutura do **Backend localhost**, exibindo tudo no Preview ao vivo.
+              Descreva sua ideia abaixo. O Coder criarÃ¡ primeiro o **Frontend** em React/Tailwind e depois a estrutura do **Backend localhost**, exibindo tudo no Preview ao vivo.
             </p>
           </div>
 
@@ -196,7 +157,7 @@ export function CoderWorkspace({
           <div className="bg-surface border border-border rounded-2xl p-4 sm:p-5 shadow-elevated space-y-4">
             <textarea
               rows={4}
-              placeholder="Ex: Quero um sistema de agendamento de barbearia com seleção de horários e lista de serviços..."
+              placeholder="Ex: Quero um sistema de agendamento de barbearia com seleÃ§Ã£o de horÃ¡rios e lista de serviÃ§os..."
               value={ideaInput}
               onChange={(e) => setIdeaInput(e.target.value)}
               className="w-full bg-bg border border-border rounded-xl p-3.5 text-xs text-text-main focus:outline-none focus:border-brand-500 placeholder-text-muted resize-none font-sans"
@@ -208,7 +169,7 @@ export function CoderWorkspace({
                 onClick={handleEnhancePrompt}
                 disabled={!ideaInput.trim() || isGenerating}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-500/10 border border-brand-500/30 text-brand-500 hover:bg-brand-500/20 text-xs font-bold transition-all disabled:opacity-40"
-                title="Expande sua ideia simples em uma especificação técnica completa"
+                title="Expande sua ideia simples em uma especificaÃ§Ã£o tÃ©cnica completa"
               >
                 <span className="material-symbols-outlined text-sm">auto_fix_high</span>
                 <span>Melhorar meu prompt com base na minha ideia</span>
@@ -221,7 +182,7 @@ export function CoderWorkspace({
                 className="flex items-center gap-2 px-5 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold transition-all shadow-warm disabled:opacity-40"
               >
                 <span className="material-symbols-outlined text-base">rocket_launch</span>
-                <span>{isGenerating ? "Gerando..." : "Gerar Aplicação"}</span>
+                <span>{isGenerating ? "Gerando..." : "Gerar AplicaÃ§Ã£o"}</span>
               </button>
             </div>
 
@@ -233,11 +194,11 @@ export function CoderWorkspace({
             )}
           </div>
 
-          {/* Cards de Sugestão de Prompts Rápidos */}
+          {/* Cards de SugestÃ£o de Prompts RÃ¡pidos */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted flex items-center gap-1">
               <span className="material-symbols-outlined text-sm">lightbulb</span>
-              <span>Sugestões Rápidas para Começar</span>
+              <span>SugestÃµes RÃ¡pidas para ComeÃ§ar</span>
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -320,7 +281,7 @@ export function CoderWorkspace({
             }`}
             title="Supabase OAuth"
           >
-            <span>⚡</span>
+            <span>âš¡</span>
             <span className="hidden sm:inline">{supabaseConnected ? "Supabase OK" : "Supabase"}</span>
           </button>
 
@@ -407,7 +368,7 @@ export function CoderWorkspace({
         activeProjectId="p1"
         onSelectProject={() => {}}
         onCreateProject={() => {
-          if (setProjectName) setProjectName("Nova Aplicação");
+          if (setProjectName) setProjectName("Nova AplicaÃ§Ã£o");
           if (setFiles) setFiles([]);
         }}
       />
@@ -437,15 +398,3 @@ function getLanguage(filename = "") {
   return "plaintext";
 }
 
-function extractHtmlFromJsx(jsxCode = "") {
-  try {
-    const returnMatch = jsxCode.match(/return\s*\(\s*([\s\S]*?)\s*\);?\s*\}/);
-    if (returnMatch && returnMatch[1]) {
-      return returnMatch[1]
-        .replace(/className=/g, "class=")
-        .replace(/\{items\.map\([\s\S]*?\)\}/g, `<div class="p-3 bg-slate-900 border border-slate-800 rounded-lg text-slate-300 text-xs">Exemplo de item gerado dinamicamente no React</div>`)
-        .replace(/\{[\s\S]*?\}/g, "");
-    }
-  } catch {}
-  return `<div class="p-8 text-center text-slate-300">Aplicação React pronta para visualização.</div>`;
-}

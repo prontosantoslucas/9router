@@ -236,29 +236,13 @@ function ChatShell() {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="relative flex h-screen h-[100dvh] w-full flex-col overflow-hidden bg-bg text-text-main"
+      className="relative flex h-full w-full flex-col overflow-hidden bg-bg text-text-main"
     >
       <DropOverlay isDragging={isDragging} />
 
       {/* Header com Glassmorphism e Seletor de Modo Nativo */}
       <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border/80 bg-surface/90 backdrop-blur-md px-3 shadow-soft [padding-left:max(0.75rem,env(safe-area-inset-left))] [padding-right:max(0.75rem,env(safe-area-inset-right))] sm:h-16 sm:px-6 dark:bg-surface-2/90">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              if (window.history.length > 1) {
-                router.back();
-              } else {
-                router.push("/dashboard");
-              }
-            }}
-            className="flex shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:bg-bg-alt hover:text-text-main sm:px-3"
-            title="Voltar ao Painel"
-          >
-            <span className="material-symbols-outlined text-sm text-brand-500">arrow_back</span>
-            <span className="hidden sm:inline">{t("Voltar")}</span>
-          </button>
-
           <div className="min-w-0 truncate">
             <AgentBadge agentId="lucas" size="md" />
           </div>

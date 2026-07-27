@@ -1,4 +1,5 @@
 import ChatPageClient from "./ChatPageClient";
+import DashboardLayout from "@/shared/components/layouts/DashboardLayout";
 
 export const metadata = {
   title: "Chat — Agente Lucas | MaxRouter",
@@ -6,5 +7,9 @@ export const metadata = {
 };
 
 export default function ChatPage() {
-  return <ChatPageClient />;
+  return (
+    <DashboardLayout>
+      <ChatPageClient />
+    </DashboardLayout>
+  );
 }

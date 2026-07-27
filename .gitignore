@@ -78,3 +78,6 @@ open-sse.old/
 .graphifyignore
 graphify-out/*
 .next-analyze/*
+
+# local DB backups (coder connections migration)
+_db-backup-*/

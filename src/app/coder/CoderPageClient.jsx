@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
@@ -10,6 +10,7 @@ import GitHubCommitModal from "./components/GitHubCommitModal";
 import { INITIAL_PROJECT_FILES, processOpenClaudePrompt } from "@/lib/coder/openclaudeEngine";
 import { downloadProjectAsZip } from "@/lib/coder/zipExporter";
 import { getSupabaseConfig } from "@/lib/coder/supabaseClient";
+import { buildPreviewDoc } from "@/lib/coder/previewBuilder";
 
 // Dynamically import Monaco Editor to avoid SSR hydration mismatches
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
@@ -94,7 +95,7 @@ export default function CoderPageClient() {
         prompt: userMessageText,
         currentFiles: files,
         onStreamMessage: (statusText) => {
-          // Stream preview status if needed
+          setTerminalLogs((prev) => [...prev, { type: "info", text: statusText }]);
         },
         onTerminalLog: (log) => {
           setTerminalLogs((prev) => [...prev, log]);
@@ -121,36 +122,17 @@ export default function CoderPageClient() {
 
   const handleDownloadZip = () => {
     downloadProjectAsZip(projectName, files);
-    setTerminalLogs((prev) => [...prev, { type: "success", text: `✓ Download do projeto ${projectName}.zip iniciado.` }]);
+    setTerminalLogs((prev) => [...prev, { type: "success", text: `âœ“ Download do projeto ${projectName}.zip iniciado.` }]);
   };
 
   // Generate preview HTML for iframe
-  const generatePreviewHTML = () => {
-    const appFile = files.find((f) => f.path === "src/App.tsx");
-    if (!appFile) return "<div>No preview available</div>";
-
-    return `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <script src="https://cdn.tailwindcss.com"></script>
-  </head>
-  <body className="bg-[#0F0F11]">
-    <div id="root">
-      <div style="padding: 40px; color: white; font-family: sans-serif; text-align: center;">
-        <h1 style="font-size: 28px; font-weight: bold; color: #38bdf8;">${projectName}</h1>
-        <p style="color: #94a3b8; margin-top: 10px;">Pré-visualização ao vivo gerada pelo Coder</p>
-      </div>
-    </div>
-  </body>
-</html>`;
-  };
+  const generatePreviewHTML = () => buildPreviewDoc(files, projectName);
 
   return (
-    <div className="flex flex-col h-screen bg-[#0E0E10] text-slate-200 overflow-hidden font-sans select-none">
-      {/* ───────────────────────────────────────────────────────────── */}
+    <div className="flex flex-col h-full bg-[#0E0E10] text-slate-200 overflow-hidden font-sans select-none">
+      {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {/* TOP HEADER BAR (Bolt Style)                                   */}
-      {/* ───────────────────────────────────────────────────────────── */}
+      {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <header className="h-12 border-b border-[#1E1E22] bg-[#0E0E10] px-4 flex items-center justify-between text-xs">
         {/* Left Section: Logo & Project Switcher */}
         <div className="flex items-center gap-3">
@@ -226,7 +208,7 @@ export default function CoderPageClient() {
                 : "bg-[#18181C] border-[#2A2A30] text-slate-300 hover:border-slate-500"
             }`}
           >
-            <span className="text-emerald-400">⚡</span>
+            <span className="text-emerald-400">âš¡</span>
             <span>{supabaseConnected ? "Supabase Conectado" : "Conectar Supabase"}</span>
           </button>
 
@@ -251,9 +233,9 @@ export default function CoderPageClient() {
         </div>
       </header>
 
-      {/* ───────────────────────────────────────────────────────────── */}
+      {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {/* MAIN CONTENT SPLIT (Left: Chat | Right: Code or Preview)     */}
-      {/* ───────────────────────────────────────────────────────────── */}
+      {/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT COLUMN: CHAT INTERFACE */}
         <div className="w-[420px] border-r border-[#1E1E22] bg-[#0E0E10] flex flex-col h-full">
@@ -281,7 +263,7 @@ export default function CoderPageClient() {
             {isProcessing && (
               <div className="flex items-center gap-2 text-xs text-blue-400 animate-pulse">
                 <span className="material-symbols-outlined text-[16px]">hourglass_empty</span>
-                <span>OpenClaude processando alterações...</span>
+                <span>OpenClaude processando alteraÃ§Ãµes...</span>
               </div>
             )}
           </div>
@@ -423,3 +405,6 @@ function getLanguage(filename) {
   if (filename.endsWith(".json")) return "json";
   return "plaintext";
 }
+
+
+
