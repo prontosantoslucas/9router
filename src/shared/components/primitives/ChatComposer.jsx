@@ -16,8 +16,14 @@ function blobToBase64(blob) {
   });
 }
 
-export function ChatComposer({ onSend, onUpload, isSending, placeholder = "Converse com o Lucas..." }) {
-  const [text, setText] = useState("");
+export function ChatComposer({ onSend, onUpload, isSending, placeholder = "Converse com o Lucas...", value, onChange }) {
+  // Controlled mode (value/onChange passed): parent owns the draft text (e.g. to
+  // let a "melhorar prompt" action fill the box without auto-sending). Omit both
+  // to keep the original uncontrolled/internal-state behavior.
+  const isControlled = value !== undefined;
+  const [internalText, setInternalText] = useState("");
+  const text = isControlled ? value : internalText;
+  const setText = isControlled ? onChange : setInternalText;
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);

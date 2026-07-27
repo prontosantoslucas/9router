@@ -19,26 +19,26 @@ const STARTER_SUGGESTIONS = [
   {
     icon: "content_cut",
     title: "Barbearia & Agendamentos",
-    desc: "Sistema de agendamento de cortes e serviÃ§os em tempo real.",
-    prompt: "Criar um sistema de agendamento online de barbearia com escolha de profissional, horÃ¡rio e lista de serviÃ§os.",
+    desc: "Sistema de agendamento de cortes e serviços em tempo real.",
+    prompt: "Criar um sistema de agendamento online de barbearia com escolha de profissional, horário e lista de serviços.",
   },
   {
     icon: "insights",
     title: "Dashboard SaaS Metrics",
-    desc: "Painel financeiro com grÃ¡ficos de MRR, assinantes e churn.",
-    prompt: "Criar um dashboard SaaS completo de mÃ©tricas com visÃ£o geral de receita, grÃ¡fico de crescimento e tabela de clientes.",
+    desc: "Painel financeiro com gráficos de MRR, assinantes e churn.",
+    prompt: "Criar um dashboard SaaS completo de métricas com visão geral de receita, gráfico de crescimento e tabela de clientes.",
   },
   {
     icon: "restaurant",
-    title: "Food Delivery & CardÃ¡pio",
+    title: "Food Delivery & Cardápio",
     desc: "App de restaurante com carrinho de compras e rastreamento.",
-    prompt: "Criar uma plataforma de delivery de comida com cardÃ¡pio por categorias, carrinho de compras e acompanhamento de pedido.",
+    prompt: "Criar uma plataforma de delivery de comida com cardápio por categorias, carrinho de compras e acompanhamento de pedido.",
   },
   {
     icon: "check_box",
     title: "Gestor de Tarefas Kanban",
     desc: "Organizador de projetos estilo Trello com colunas interativas.",
-    prompt: "Criar um quadro Kanban de tarefas com colunas 'A Fazer', 'Em Progresso' e 'ConcluÃ­do', permitindo adicionar novos itens.",
+    prompt: "Criar um quadro Kanban de tarefas com colunas 'A Fazer', 'Em Progresso' e 'Concluído', permitindo adicionar novos itens.",
   },
 ];
 
@@ -47,7 +47,7 @@ export function CoderWorkspace({
   setFiles,
   terminalLogs = [],
   setTerminalLogs,
-  projectName = "Nova AplicaÃ§Ã£o",
+  projectName = "Nova Aplicação",
   setProjectName,
 }) {
   const [viewMode, setViewMode] = useState("preview"); // "code" | "preview"
@@ -85,7 +85,7 @@ export function CoderWorkspace({
     if (setTerminalLogs) {
       setTerminalLogs((prev) => [
         ...prev,
-        { type: "success", text: `âœ“ Download do projeto ${projectName || "Projeto-9router"}.zip iniciado.` },
+        { type: "success", text: `✓ Download do projeto ${projectName || "Projeto-9router"}.zip iniciado.` },
       ]);
     }
   };
@@ -97,13 +97,13 @@ export function CoderWorkspace({
     setIdeaInput(enhanced);
   };
 
-  // Gerar aplicaÃ§Ã£o do zero
+  // Gerar aplicação do zero
   const handleGenerateApp = async (customPrompt) => {
     const targetPrompt = customPrompt || ideaInput;
     if (!targetPrompt.trim() || isGenerating) return;
 
     setIsGenerating(true);
-    setStatusText("Iniciando geraÃ§Ã£o...");
+    setStatusText("Iniciando geração...");
 
     try {
       await processOpenClaudePrompt({
@@ -123,7 +123,7 @@ export function CoderWorkspace({
       setViewMode("preview");
     } catch (err) {
       if (setTerminalLogs) {
-        setTerminalLogs((prev) => [...prev, { type: "error", text: `Erro na geraÃ§Ã£o: ${err.message}` }]);
+        setTerminalLogs((prev) => [...prev, { type: "error", text: `Erro na geração: ${err.message}` }]);
       }
     } finally {
       setIsGenerating(false);
@@ -131,10 +131,10 @@ export function CoderWorkspace({
     }
   };
 
-  // Renderiza a pÃ¡gina em HTML para o iframe do Preview ao vivo
+  // Renderiza a página em HTML para o iframe do Preview ao vivo
   const generatePreviewHTML = () => buildPreviewDoc(files, projectName || "Aplicação Coder");
 
-  // Se nÃ£o houver arquivos gerados (Projeto do Zero), exibe a Tela de Boas-Vindas & SugestÃµes
+  // Se não houver arquivos gerados (Projeto do Zero), exibe a Tela de Boas-Vindas & Sugestões
   if (files.length === 0) {
     return (
       <div className="flex-1 flex flex-col h-full w-full bg-bg text-text-main overflow-y-auto p-4 sm:p-8 font-sans select-none custom-scrollbar">
@@ -146,10 +146,10 @@ export function CoderWorkspace({
               <span>Coder IDE do Agente Lucas</span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-extrabold text-text-main tracking-tight">
-              O que vocÃª deseja construir hoje?
+              O que você deseja construir hoje?
             </h1>
             <p className="text-sm text-text-muted max-w-xl mx-auto">
-              Descreva sua ideia abaixo. O Coder criarÃ¡ primeiro o **Frontend** em React/Tailwind e depois a estrutura do **Backend localhost**, exibindo tudo no Preview ao vivo.
+              Descreva sua ideia abaixo. O Coder criará primeiro o **Frontend** em React/Tailwind e depois a estrutura do **Backend localhost**, exibindo tudo no Preview ao vivo.
             </p>
           </div>
 
@@ -157,7 +157,7 @@ export function CoderWorkspace({
           <div className="bg-surface border border-border rounded-2xl p-4 sm:p-5 shadow-elevated space-y-4">
             <textarea
               rows={4}
-              placeholder="Ex: Quero um sistema de agendamento de barbearia com seleÃ§Ã£o de horÃ¡rios e lista de serviÃ§os..."
+              placeholder="Ex: Quero um sistema de agendamento de barbearia com seleção de horários e lista de serviços..."
               value={ideaInput}
               onChange={(e) => setIdeaInput(e.target.value)}
               className="w-full bg-bg border border-border rounded-xl p-3.5 text-xs text-text-main focus:outline-none focus:border-brand-500 placeholder-text-muted resize-none font-sans"
@@ -169,7 +169,7 @@ export function CoderWorkspace({
                 onClick={handleEnhancePrompt}
                 disabled={!ideaInput.trim() || isGenerating}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-brand-500/10 border border-brand-500/30 text-brand-500 hover:bg-brand-500/20 text-xs font-bold transition-all disabled:opacity-40"
-                title="Expande sua ideia simples em uma especificaÃ§Ã£o tÃ©cnica completa"
+                title="Expande sua ideia simples em uma especificação técnica completa"
               >
                 <span className="material-symbols-outlined text-sm">auto_fix_high</span>
                 <span>Melhorar meu prompt com base na minha ideia</span>
@@ -182,7 +182,7 @@ export function CoderWorkspace({
                 className="flex items-center gap-2 px-5 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold transition-all shadow-warm disabled:opacity-40"
               >
                 <span className="material-symbols-outlined text-base">rocket_launch</span>
-                <span>{isGenerating ? "Gerando..." : "Gerar AplicaÃ§Ã£o"}</span>
+                <span>{isGenerating ? "Gerando..." : "Gerar Aplicação"}</span>
               </button>
             </div>
 
@@ -194,11 +194,11 @@ export function CoderWorkspace({
             )}
           </div>
 
-          {/* Cards de SugestÃ£o de Prompts RÃ¡pidos */}
+          {/* Cards de Sugestão de Prompts Rápidos */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted flex items-center gap-1">
               <span className="material-symbols-outlined text-sm">lightbulb</span>
-              <span>SugestÃµes RÃ¡pidas para ComeÃ§ar</span>
+              <span>Sugestões Rápidas para Começar</span>
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -281,7 +281,7 @@ export function CoderWorkspace({
             }`}
             title="Supabase OAuth"
           >
-            <span>âš¡</span>
+            <span>⚡</span>
             <span className="hidden sm:inline">{supabaseConnected ? "Supabase OK" : "Supabase"}</span>
           </button>
 
@@ -368,7 +368,7 @@ export function CoderWorkspace({
         activeProjectId="p1"
         onSelectProject={() => {}}
         onCreateProject={() => {
-          if (setProjectName) setProjectName("Nova AplicaÃ§Ã£o");
+          if (setProjectName) setProjectName("Nova Aplicação");
           if (setFiles) setFiles([]);
         }}
       />

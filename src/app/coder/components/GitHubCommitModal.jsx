@@ -59,7 +59,7 @@ export default function GitHubCommitModal({ isOpen, onClose, files }) {
 
   const handleCommit = async () => {
     if (!repo.trim()) {
-      setResultMsg("Informe o repositÃ³rio do GitHub (ex: usuario/meu-projeto).");
+      setResultMsg("Informe o repositório do GitHub (ex: usuario/meu-projeto).");
       return;
     }
     if (!message.trim()) {
@@ -79,7 +79,7 @@ export default function GitHubCommitModal({ isOpen, onClose, files }) {
       }).catch(() => {});
 
       const res = await commitToGitHub({ repo, branch, message, token, files });
-      setResultMsg(`âœ“ ${res.message}`);
+      setResultMsg(`✓ ${res.message}`);
     } catch (err) {
       setResultMsg(`Erro: ${err.message}`);
     } finally {
@@ -97,7 +97,7 @@ export default function GitHubCommitModal({ isOpen, onClose, files }) {
             <h2 className="font-bold text-base text-text-main">Commitar no GitHub</h2>
           </div>
           <button onClick={onClose} className="text-text-muted hover:text-text-main p-1 rounded-md hover:bg-surface-2 transition-colors">
-            âœ•
+            ✕
           </button>
         </div>
 
@@ -110,7 +110,7 @@ export default function GitHubCommitModal({ isOpen, onClose, files }) {
             </div>
           )}
           <div>
-            <label className="block text-text-main font-semibold mb-1.5">RepositÃ³rio GitHub (usuario/repo)</label>
+            <label className="block text-text-main font-semibold mb-1.5">Repositório GitHub (usuario/repo)</label>
             <input
               type="text"
               placeholder="ex: LucasNorte/crystal-water-app"

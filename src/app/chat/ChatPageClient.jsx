@@ -15,7 +15,7 @@ import { useNotionSave } from "./hooks/useNotionSave";
 
 import { ChannelInbox } from "./components/ChannelInbox";
 import { CoderWorkspace } from "./components/CoderWorkspace";
-import { enhanceUserPrompt, processOpenClaudePrompt } from "@/lib/coder/openclaudeEngine";
+import { CoderChatPanel } from "./components/CoderChatPanel";
 import { translate as t } from "@/i18n/runtime";
 
 const i18nLabels = {
@@ -81,12 +81,14 @@ function ChatShell() {
   const activeSession = activeMode === "coder" ? coderSession : mainSession;
   const { messages, isSending, sendMessage, clearSession } = activeSession;
 
-  // Sync mode with URL if changed
-  useEffect(() => {
-    if (searchParams.get("mode") === "coder" && activeMode !== "coder") {
-      setActiveMode("coder");
-    }
-  }, [searchParams, activeMode]);
+  // Sincroniza o modo com a URL quando ela realmente mudar (ex.: navegação para
+  // /chat?mode=coder). Ajuste em tempo de render (não em efeito) para não
+  // reacoplar em `activeMode` e evitar re-renders em cascata.
+  const [syncedSearchParams, setSyncedSearchParams] = useState(searchParams);
+  if (searchParams !== syncedSearchParams) {
+    setSyncedSearchParams(searchParams);
+    if (searchParams.get("mode") === "coder") setActiveMode("coder");
+  }
 
   // Auto-scroll ao receber novas mensagens
   useEffect(() => {
@@ -106,6 +108,9 @@ function ChatShell() {
   }, []);
 
   useEffect(() => {
+    // fetchDrafts's setState only runs after its internal `await`, never
+    // synchronously during this effect — genuine mount+poll data fetch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDrafts();
     const interval = setInterval(fetchDrafts, COPILOT_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
@@ -152,6 +157,8 @@ function ChatShell() {
     }
   };
 
+  // Envio para o Chat Geral (mainSession). O modo Coder tem seu próprio fluxo de
+  // envio (que também aciona o motor OpenClaude) dentro do CoderChatPanel.
   const handleSend = async (text) => {
     const images = attachments.filter((a) => a.isImage).map((a) => ({ base64: a.base64, mimeType: a.mimeType }));
     const docs = attachments.filter((a) => !a.isImage);
@@ -163,29 +170,7 @@ function ChatShell() {
     }
     if (attachments.length > 0) setAttachments([]);
 
-    // Registra a mensagem na sessão de chat ativa
     sendMessage(fullText, images.length > 0 ? { images } : undefined);
-
-    // Se estiver no Chat do Coder, dispara a geração/atualização de código no motor OpenClaude
-    if (activeMode === "coder") {
-      try {
-        setCoderLogs((prev) => [...prev, { type: "command", text: `Prompt: ${text.slice(0, 50)}...` }]);
-        await processOpenClaudePrompt({
-          prompt: text,
-          currentFiles: coderFiles,
-          onTerminalLog: (log) => setCoderLogs((prev) => [...prev, log]),
-          onUpdateFiles: (newFiles) => setCoderFiles(newFiles),
-        });
-      } catch (err) {
-        setCoderLogs((prev) => [...prev, { type: "error", text: `Erro Coder: ${err.message}` }]);
-      }
-    }
-  };
-
-  const handleEnhancePromptAction = (currentText) => {
-    const raw = currentText || "Criar uma aplicação web moderna do zero";
-    const enhanced = enhanceUserPrompt(raw);
-    handleSend(enhanced);
   };
 
   const handleSaveNotion = async (message) => {
@@ -290,118 +275,118 @@ function ChatShell() {
 
       {/* Main Body: Chat Column + Coder Workspace Column */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Left Column: Chat Container (exibe mainSession ou coderSession) */}
-        <div className={`flex flex-col h-full ${activeMode === "coder" ? "w-full md:w-[420px] shrink-0 border-r border-border" : "w-full"}`}>
-          {/* Mensagens da Sessão Ativa */}
-          <main className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4">
-            <div className="mx-auto max-w-4xl space-y-4">
-              {copilotDrafts.length > 0 && activeMode === "chat" && (
-                <div className="mb-6 space-y-3">
-                  <h4 className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-500">
-                    <span className="material-symbols-outlined text-sm">verified_user</span>
-                    <span>{i18nLabels.copilotHeading(copilotDrafts.length)}</span>
-                  </h4>
-                  {copilotDrafts.map((draft) => (
-                    <CopilotApprovalCard
-                      key={draft.id}
-                      draft={draft}
-                      onApprove={handleApproveCopilot}
-                      onReject={handleRejectCopilot}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center">
-                  <AgentBadge agentId="lucas" size="md" />
-                  <h2 className="mt-4 text-xl font-extrabold text-text-main">
-                    {activeMode === "coder" ? i18nLabels.emptyCoderGreeting : i18nLabels.emptyGreeting}
-                  </h2>
-                  <p className="mt-2 max-w-md text-sm text-text-muted">
-                    {activeMode === "coder" ? i18nLabels.emptyCoderSubtitle : i18nLabels.emptySubtitle}
-                  </p>
-                </div>
-              ) : (
-                messages.map((msg) => (
-                  <MessageBubble
-                    key={msg.id}
-                    message={msg}
-                    onSaveNotion={handleSaveNotion}
-                    onRetry={() => sendMessage(msg.content)}
-                  />
-                ))
-              )}
-
-              {isSending && (
-                <div className="flex items-center gap-2 text-xs italic text-text-muted" aria-live="polite">
-                  <TypingDots />
-                  <span>{i18nLabels.typing}</span>
-                </div>
-              )}
-
-              <div ref={messagesEndRef} />
-            </div>
-          </main>
-
-          {/* Composer */}
-          <footer className="shrink-0 border-t border-border bg-surface p-3 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 dark:bg-surface-2 space-y-2">
-            {/* No modo Coder, exibe a ação rápida de melhorar prompt */}
-            {activeMode === "coder" && (
-              <div className="flex items-center justify-between gap-2 pb-1 border-b border-border/60">
-                <button
-                  type="button"
-                  onClick={() => handleEnhancePromptAction("")}
-                  className="flex items-center gap-1.5 text-[11px] font-bold text-brand-500 hover:underline"
-                >
-                  <span className="material-symbols-outlined text-sm">auto_fix_high</span>
-                  <span>✨ Melhorar meu prompt com base na minha ideia</span>
-                </button>
-                <span className="text-[10px] text-text-muted font-mono">Coder Mode</span>
-              </div>
-            )}
-
-            <div className="mx-auto max-w-4xl space-y-2">
-              {attachments.length > 0 && (
-                <div className="flex flex-wrap gap-2 pb-2">
-                  {attachments.map((att, i) => (
-                    <FileAttachmentChip
-                      key={i}
-                      filename={att.name}
-                      onRemove={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {isUploading && (
-                <div className="flex items-center gap-2 text-xs text-brand-500" aria-live="polite">
-                  <span className="material-symbols-outlined animate-spin text-sm">sync</span>
-                  <span>{i18nLabels.processing}</span>
-                </div>
-              )}
-
-              <ChatComposer
-                onSend={handleSend}
+        {activeMode === "coder" ? (
+          <>
+            {/* Left Column: Coder Chat Panel (sessão dedicada + motor OpenClaude) */}
+            <div className="flex h-full w-full shrink-0 flex-col border-r border-border md:w-[420px]">
+              <CoderChatPanel
+                session={coderSession}
+                coderFiles={coderFiles}
+                onUpdateFiles={setCoderFiles}
+                onTerminalLog={setCoderLogs}
+                onSaveNotion={handleSaveNotion}
+                attachments={attachments}
+                onRemoveAttachment={(i) => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+                onClearAttachments={() => setAttachments([])}
+                isUploading={isUploading}
                 onUpload={handleUpload}
-                isSending={isSending}
-                placeholder={activeMode === "coder" ? "Descreva a aplicação ou alteração de código desejada..." : "Converse com o Lucas..."}
+                emptyGreeting={i18nLabels.emptyCoderGreeting}
+                emptySubtitle={i18nLabels.emptyCoderSubtitle}
               />
             </div>
-          </footer>
-        </div>
 
-        {/* Right Column: Coder Workspace (exibido no modo Coder IDE) */}
-        {activeMode === "coder" && (
-          <div className="hidden md:flex flex-1 h-full overflow-hidden">
-            <CoderWorkspace
-              files={coderFiles}
-              setFiles={setCoderFiles}
-              terminalLogs={coderLogs}
-              setTerminalLogs={setCoderLogs}
-              projectName={coderProjectName}
-              setProjectName={setCoderProjectName}
-            />
+            {/* Right Column: Coder Workspace */}
+            <div className="hidden h-full flex-1 overflow-hidden md:flex">
+              <CoderWorkspace
+                files={coderFiles}
+                setFiles={setCoderFiles}
+                terminalLogs={coderLogs}
+                setTerminalLogs={setCoderLogs}
+                projectName={coderProjectName}
+                setProjectName={setCoderProjectName}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="flex h-full w-full flex-col">
+            {/* Mensagens do Chat Geral */}
+            <main className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4">
+              <div className="mx-auto max-w-4xl space-y-4">
+                {copilotDrafts.length > 0 && (
+                  <div className="mb-6 space-y-3">
+                    <h4 className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-500">
+                      <span className="material-symbols-outlined text-sm">verified_user</span>
+                      <span>{i18nLabels.copilotHeading(copilotDrafts.length)}</span>
+                    </h4>
+                    {copilotDrafts.map((draft) => (
+                      <CopilotApprovalCard
+                        key={draft.id}
+                        draft={draft}
+                        onApprove={handleApproveCopilot}
+                        onReject={handleRejectCopilot}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <AgentBadge agentId="lucas" size="md" />
+                    <h2 className="mt-4 text-xl font-extrabold text-text-main">{i18nLabels.emptyGreeting}</h2>
+                    <p className="mt-2 max-w-md text-sm text-text-muted">{i18nLabels.emptySubtitle}</p>
+                  </div>
+                ) : (
+                  messages.map((msg) => (
+                    <MessageBubble
+                      key={msg.id}
+                      message={msg}
+                      onSaveNotion={handleSaveNotion}
+                      onRetry={() => sendMessage(msg.content)}
+                    />
+                  ))
+                )}
+
+                {isSending && (
+                  <div className="flex items-center gap-2 text-xs italic text-text-muted" aria-live="polite">
+                    <TypingDots />
+                    <span>{i18nLabels.typing}</span>
+                  </div>
+                )}
+
+                <div ref={messagesEndRef} />
+              </div>
+            </main>
+
+            {/* Composer */}
+            <footer className="shrink-0 border-t border-border bg-surface p-3 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 dark:bg-surface-2 space-y-2">
+              <div className="mx-auto max-w-4xl space-y-2">
+                {attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pb-2">
+                    {attachments.map((att, i) => (
+                      <FileAttachmentChip
+                        key={i}
+                        filename={att.name}
+                        onRemove={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {isUploading && (
+                  <div className="flex items-center gap-2 text-xs text-brand-500" aria-live="polite">
+                    <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+                    <span>{i18nLabels.processing}</span>
+                  </div>
+                )}
+
+                <ChatComposer
+                  onSend={handleSend}
+                  onUpload={handleUpload}
+                  isSending={isSending}
+                  placeholder="Converse com o Lucas..."
+                />
+              </div>
+            </footer>
           </div>
         )}
       </div>
