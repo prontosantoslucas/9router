@@ -414,7 +414,14 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
   // or have no active credentials. 503 is more accurate and retryable by clients.
   const allDisabled = lastError && lastError.toLowerCase().includes("no credentials");
   const status = allDisabled ? 503 : (lastStatus || 503);
-  const msg = lastError || "All combo models unavailable";
+  // Report the exhausted chain, not just its last link. Surfacing only
+  // `lastError` reads as "provider X has no key" and hides that every model in
+  // the combo was attempted — which is exactly the fallback doing its job.
+  const attempted = rotatedModels.length;
+  const detail = lastError || "no error reported";
+  const msg = attempted > 1
+    ? `All ${attempted} models in combo "${comboName}" failed. Last error: ${detail}`
+    : (lastError || "All combo models unavailable");
 
   if (earliestRetryAfter) {
     const retryHuman = formatRetryAfter(earliestRetryAfter);

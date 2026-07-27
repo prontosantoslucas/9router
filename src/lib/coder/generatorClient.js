@@ -68,19 +68,6 @@ function extractSummary(text) {
   return m ? m[1].trim() : "";
 }
 
-async function resolveModel() {
-  try {
-    const res = await fetch("/api/models");
-    if (res.ok) {
-      const data = await res.json();
-      const list = data.models || [];
-      const preferred = list.find((x) => x.caps?.reasoning) || list[0];
-      if (preferred?.fullModel) return preferred.fullModel;
-    }
-  } catch {}
-  return "auto";
-}
-
 /**
  * Streams generation. Calls:
  *  - onToken(textDelta)   raw model text (for terminal echo)
@@ -98,7 +85,15 @@ export async function generateProjectFromLLM({
   onTerminalLog,
   onStreamMessage,
 }) {
-  const chosenModel = model || (await resolveModel());
+  // "auto" delega a escolha ao roteador, que resolve contra os provedores de
+  // fato configurados (AUTO_MODEL / MODEL_RANKING / primeiro node com
+  // defaultModel) e aplica o fallback de conta. Antes daqui saia um modelo
+  // fixo escolhido do catalogo estatico de /api/models, que lista tudo que o
+  // app conhece sem olhar credencial: bastava o primeiro do catalogo nao ter
+  // chave para a geracao morrer com "No active credentials", ignorando todas
+  // as chaves validas cadastradas. Um combo tambem pode ser passado em `model`
+  // para encadear fallback entre provedores.
+  const chosenModel = model || "auto";
   onStreamMessage?.(`Gerando com modelo ${chosenModel}...`);
   onTerminalLog?.({ type: "info", text: `$ coder generate --stream --model ${chosenModel}` });
 
