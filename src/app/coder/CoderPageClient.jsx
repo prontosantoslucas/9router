@@ -28,6 +28,7 @@ function CoderShell() {
   const [isDragging, setIsDragging] = useState(false);
   const [draftText, setDraftText] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [statusText, setStatusText] = useState("");
   const [coderFiles, setCoderFiles] = useState([]);
   const [coderProjectName, setCoderProjectName] = useState("Nova Aplicação");
   const [coderLogs, setCoderLogs] = useState([
@@ -67,19 +68,25 @@ function CoderShell() {
     if (!prompt || isGenerating) return;
     setDraftText("");
     setIsGenerating(true);
+    setStatusText("Iniciando geração...");
     setCoderLogs((prev) => [...prev, { type: "command", text: `Prompt: ${prompt.slice(0, 60)}...` }]);
     try {
-      await processOpenClaudePrompt({
+      const { message } = await processOpenClaudePrompt({
         prompt,
         currentFiles: coderFiles,
+        onStreamMessage: (msg) => setStatusText(msg),
         onTerminalLog: (log) => setCoderLogs((prev) => [...prev, log]),
         onUpdateFiles: (newFiles) => setCoderFiles(newFiles),
       });
+      // Sem coluna de chat aqui, o resumo do modelo vai para o terminal —
+      // caso contrário a explicação do que foi construído se perderia.
+      if (message) setCoderLogs((prev) => [...prev, { type: "success", text: message }]);
     } catch (err) {
       setCoderLogs((prev) => [...prev, { type: "error", text: `Erro Coder: ${err.message}` }]);
       showToast({ kind: "error", text: `Erro na geração: ${err.message}` });
     } finally {
       setIsGenerating(false);
+      setStatusText("");
     }
   };
 
@@ -117,9 +124,14 @@ function CoderShell() {
               <span className="material-symbols-outlined text-sm">auto_fix_high</span>
               <span>Melhorar meu prompt com base na minha ideia</span>
             </button>
-            <span className="font-mono text-[10px] text-text-muted">
-              {isGenerating ? "Gerando..." : "Coder Mode"}
-            </span>
+            {isGenerating ? (
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-500">
+                <span className="material-symbols-outlined animate-spin text-sm">sync</span>
+                <span className="truncate max-w-[260px]">{statusText || "Gerando..."}</span>
+              </span>
+            ) : (
+              <span className="font-mono text-[10px] text-text-muted">Coder Mode</span>
+            )}
           </div>
 
           {isUploading && (
