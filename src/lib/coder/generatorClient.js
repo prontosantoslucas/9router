@@ -112,7 +112,10 @@ export async function generateProjectFromLLM({
   const headers = { "Content-Type": "application/json" };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
-  const res = await fetch("/api/v1/chat/completions", {
+  // Rota de primeira parte autenticada pela sessao do dashboard. Chamar
+  // /api/v1/chat/completions daqui devolve 401 em deploy remoto, porque o
+  // gateway publico exige loopback, CLI token ou API key.
+  const res = await fetch("/api/coder/generate", {
     method: "POST",
     headers,
     signal,
