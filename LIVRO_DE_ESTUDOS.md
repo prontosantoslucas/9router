@@ -406,11 +406,26 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 27: Resolução do Bug de Status Code no Fallback de Combo e Latência de Roteamento em `resolveAutoModel`
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  1. **Status Code 404 em vez de 503 quando Fallback de Combo é Esgotado**: No arquivo [`open-sse/services/combo.js`](file:///c:/Users/user/Documents/GitHub/9router/open-sse/services/combo.js), a lógica de encerramento do combo executava `lastError.toLowerCase().includes("no credentials")`. A mensagem de erro real retornada pelos handlers de chat ao falhar autenticação/chaves é `"No active credentials for provider: <x>"` (status HTTP 404). Como a substring `"no credentials"` não batia com `"no active credentials"` (devido à palavra "active" no meio), a variável `allDisabled` avaliava para `false`. Com isso, a resposta do combo herdava o status 404 do último modelo em vez do status **503 (Service Unavailable)** documentado formalmente nos comentários.
+  2. **Gap Latente no Fallback do `resolveAutoModel`**: No arquivo [`src/sse/services/model.js`](file:///c:/Users/user/Documents/GitHub/9router/src/sse/services/model.js), o passo 3 da função `resolveAutoModel()` consultava apenas `providerNodes` (nós customizados OpenAI/Anthropic-compatible), ignorando `providerConnections` (tabela do banco SQLite onde ficam gravadas as credenciais normais adicionadas pela interface em `/dashboard/providers`). Em cenários sem o combo "auto" cadastrado no banco (ex: deploy novo no Railway), ao solicitar o modelo `"auto"`, o roteador pulava as credenciais ativas do usuário e caía direto no passo 4 de fallback cego do `REGISTRY` (selecionando a primeira entrada estática, ex: OpenAI), resultando em falhas desnecessárias de autenticação.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Ajuste de Status Code em `combo.js` e `errorConfig.js`**:
+     - No [`open-sse/services/combo.js`](file:///c:/Users/user/Documents/GitHub/9router/open-sse/services/combo.js), atualizada a verificação de `allDisabled` para testar tanto `"no credentials"` quanto `"no active credentials"`.
+     - No [`open-sse/config/errorConfig.js`](file:///c:/Users/user/Documents/GitHub/9router/open-sse/config/errorConfig.js), adicionada a regra `{ text: "no active credentials", cooldownMs: COOLDOWN.long }`.
+     - Isso garante que quando todos os modelos de um combo falharem por falta de credenciais, o roteador retorna HTTP **503** com a mensagem clara contendo todo o histórico de tentativas do combo.
+  2. **Consulta a `providerConnections` em `resolveAutoModel`**:
+     - No [`src/sse/services/model.js`](file:///c:/Users/user/Documents/GitHub/9router/src/sse/services/model.js), o passo 3 de `resolveAutoModel()` foi atualizado para consultar primeiramente `getProviderConnections({ isActive: true })`.
+     - Se houver uma conexão ativa com `defaultModel`, o roteador a seleciona imediatamente; caso contrário, seleciona o primeiro provedor ativo cadastrado que exista no `REGISTRY`. Se nenhuma conexão ativa for encontrada, segue para `providerNodes` e `REGISTRY`.
+  3. **Verificação por Testes de Unidade**:
+     - Criada a suíte de testes [`tests/unit/auto-model-and-combo-status.test.js`](file:///c:/Users/user/Documents/GitHub/9router/tests/unit/auto-model-and-combo-status.test.js) cobrindo tanto o retorno do status HTTP 503 quanto o roteamento prioritário para `providerConnections` (100% dos testes aprovados).
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
-
-
-
-
 
 
 

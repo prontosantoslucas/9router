@@ -1,5 +1,4 @@
-// Re-export from open-sse with localDb integration
-import { getModelAliases, getComboByName, getProviderNodes } from "@/lib/localDb";
+import { getModelAliases, getComboByName, getProviderNodes, getProviderConnections } from "@/lib/localDb";
 import { parseModel as parseModelCore, resolveModelAliasFromMap, getModelInfoCore } from "open-sse/services/model.js";
 import REGISTRY from "open-sse/providers/registry/index.js";
 
@@ -34,7 +33,7 @@ export async function resolveModelAlias(alias) {
 
 /**
  * Resolve "auto" model alias to a real model.
- * Priority: AUTO_MODEL env → MODEL_RANKING env → first provider with defaultModel → fallback null
+ * Priority: AUTO_MODEL env → MODEL_RANKING env → active providerConnections → providerNodes with defaultModel → first registry entry
  */
 async function resolveAutoModel() {
   // 1. Explicit AUTO_MODEL env var (e.g., "openai/gpt-4o" or "kr/auto-thinking")
@@ -54,14 +53,40 @@ async function resolveAutoModel() {
     if (info && info.provider) return info;
   }
 
-  // 3. First configured provider node with a defaultModel
-  const allNodes = await getProviderNodes();
-  const withDefault = allNodes.find(n => n.defaultModel);
-  if (withDefault) {
-    return { provider: withDefault.id, model: withDefault.defaultModel };
+  // 3. First configured active provider connection (standard UI providers)
+  try {
+    const activeConns = await getProviderConnections({ isActive: true });
+    if (activeConns && activeConns.length > 0) {
+      // Priority 3a: active connection with an explicit defaultModel
+      const connWithDefault = activeConns.find(c => c.defaultModel);
+      if (connWithDefault) {
+        return { provider: connWithDefault.provider, model: connWithDefault.defaultModel };
+      }
+      // Priority 3b: first active connection whose provider exists in REGISTRY
+      for (const conn of activeConns) {
+        const regEntry = REGISTRY.find(e => e.id === conn.provider || e.alias === conn.provider);
+        const models = regEntry?.models || [];
+        if (models.length > 0 && models[0].id) {
+          return { provider: conn.provider, model: models[0].id };
+        }
+      }
+    }
+  } catch (err) {
+    // Ignore error if DB query fails during startup or test
   }
 
-  // 4. First registry entry with a model
+  // 4. First configured provider node with a defaultModel
+  try {
+    const allNodes = await getProviderNodes();
+    const withDefault = allNodes.find(n => n.defaultModel);
+    if (withDefault) {
+      return { provider: withDefault.id, model: withDefault.defaultModel };
+    }
+  } catch (err) {
+    // Ignore error if DB query fails
+  }
+
+  // 5. First registry entry with a model
   for (const entry of REGISTRY) {
     const models = entry.models || [];
     if (models.length > 0 && models[0].id) {

@@ -412,7 +412,8 @@ export async function handleComboChat({ body, models, handleSingleModel, log, co
   // Use 503 (Service Unavailable) rather than 406 (Not Acceptable) — 406 implies
   // the request itself is invalid, but here the providers are simply unavailable
   // or have no active credentials. 503 is more accurate and retryable by clients.
-  const allDisabled = lastError && lastError.toLowerCase().includes("no credentials");
+  const lowerError = lastError ? lastError.toLowerCase() : "";
+  const allDisabled = lowerError.includes("no credentials") || lowerError.includes("no active credentials");
   const status = allDisabled ? 503 : (lastStatus || 503);
   // Report the exhausted chain, not just its last link. Surfacing only
   // `lastError` reads as "provider X has no key" and hides that every model in
