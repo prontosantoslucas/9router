@@ -15,8 +15,10 @@ services:
       HOSTNAME: "0.0.0.0"
       NODE_ENV: production
       HEADROOM_URL: http://headroom:8787
+      SEARXNG_URL: http://searxng:8888/search
     depends_on:
       - headroom
+      - searxng
 
   headroom:
     image: ghcr.io/chopratejas/headroom:latest
@@ -25,6 +27,21 @@ services:
     ports:
       - "8787:8787"
 
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    restart: always
+    ports:
+      - "8888:8888"
+    volumes:
+      - searxng-data:/etc/searxng:rw
+    environment:
+      SEARXNG_BASE_URL: "http://localhost:8888"
+      SEARXNG_SECRET_KEY: "9router-searxng-internal-key-change-me"
+      REDIS_URL: ""
+
 volumes:
   9router-data:
     name: 9router-data
+  searxng-data:
+    name: searxng-data

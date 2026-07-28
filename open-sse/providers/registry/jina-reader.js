@@ -11,16 +11,17 @@ export default {
       apiKeyUrl: "https://jina.ai/?sui=apikey"
     }
   },
-  category: "apikey",
-  authType: "apikey",
+  category: "freeTier",
+  authType: "none",
+  noAuth: true,
   serviceKinds: [
     "webFetch"
   ],
   fetchConfig: {
     baseUrl: "https://r.jina.ai",
     method: "GET",
-    authType: "apikey",
-    authHeader: "bearer",
+    authType: "none",
+    authHeader: "none",
     costPerQuery: 0,
     freeMonthlyQuota: 1000000,
     formats: [
