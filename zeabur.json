@@ -1,0 +1,10 @@
+{
+  "name": "9router",
+  "type": "docker",
+  "regions": ["sin", "hkg", "nrt", "gru", "iad"],
+  "env": {
+    "NODE_ENV": "production",
+    "HOSTNAME": "0.0.0.0",
+    "DATA_DIR": "/data"
+  }
+}

@@ -22,13 +22,12 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────
-# Porta do MAXROUTER: o Railway injeta PORT (ex.: 8080). O Next escuta nela.
-# O agente precisa chamar o gateway LLM do maxrouter NESSA porta — não em 20128.
-# Sem isso, o agente tenta http://127.0.0.1:20128/v1, nada escuta lá, e o chat
-# quebra com 500 "fetch failed" (agente→maxrouter). Capturamos a porta real e
-# passamos ROUTER_BASE_URL pro agente. Se ROUTER_BASE_URL já vier do env, respeita.
+# Porta do MAXROUTER: HF Spaces ou env injeta PORT (7860 por padrão).
+# O Next escuta nela. O agente precisa chamar o gateway LLM do maxrouter
+# NESSA porta. Capturamos a porta real e passamos ROUTER_BASE_URL pro agente.
+# Se ROUTER_BASE_URL já vier do env, respeita.
 # ─────────────────────────────────────────────────────────────
-MAXROUTER_PORT="${PORT:-20128}"
+MAXROUTER_PORT="${PORT:-7860}"
 AGENT_ROUTER_BASE_URL="${ROUTER_BASE_URL:-http://127.0.0.1:${MAXROUTER_PORT}/v1}"
 echo "[Start] Maxrouter na porta ${MAXROUTER_PORT} · agente chamará ${AGENT_ROUTER_BASE_URL}"
 

@@ -8,21 +8,15 @@ FROM base AS builder
 RUN apk --no-cache upgrade && apk --no-cache add python3 make g++ linux-headers
 
 COPY package.json ./
-# Railway exige `id` em cache mounts (formato s/<service-id>-<target>).
-RUN --mount=type=cache,id=s/132e6acb-4d7c-439e-a5df-c1fc136a5855-/root/.npm,target=/root/.npm \
+RUN --mount=type=cache,target=/root/.npm \
   npm install
 
 COPY . ./
 
-# ────────────────────────────────────────────────────────────────
-# Instala deps do agente (workspace independente com package.json próprio).
-# Sem este passo `apps/agent/node_modules` fica vazio (o npm install do root
-# não desce em apps/*) e o processo Express crasha no boot ao fazer
-# require("googleapis") / require("@modelcontextprotocol/sdk").
-# --ignore-scripts pra evitar o `postinstall` do agente que tenta git submodule
-# update dentro do container (submodule 9router não é usado no deploy unificado).
-# ────────────────────────────────────────────────────────────────
-RUN --mount=type=cache,id=s/132e6acb-4d7c-439e-a5df-c1fc136a5855-/root/.npm,target=/root/.npm \
+# Instala deps do agente (workspace independente).
+# --ignore-scripts evita o postinstall que tenta git submodule update
+# (submodule 9router não é usado no deploy unificado).
+RUN --mount=type=cache,target=/root/.npm \
   cd apps/agent && npm install --omit=dev --no-audit --no-fund --ignore-scripts
 
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -34,7 +28,7 @@ WORKDIR /app
 LABEL org.opencontainers.image.title="9router"
 
 ENV NODE_ENV=production
-ENV PORT=20128
+ENV PORT=7860
 ENV HOSTNAME=0.0.0.0
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATA_DIR=/app/data
@@ -69,7 +63,7 @@ RUN apk --no-cache upgrade && apk --no-cache add su-exec && \
   printf '#!/bin/sh\nchown -R node:node /app/data /app/data-home 2>/dev/null\nexec su-exec node "$@"\n' > /entrypoint.sh && \
   chmod +x /entrypoint.sh
 
-EXPOSE 20128
+EXPOSE 7860
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/bin/sh", "/app/runner-start.sh"]
