@@ -83,7 +83,7 @@ app.use(express.urlencoded({ limit: "200mb", extended: true }));
 app.use(
   createHmacMiddleware({
     secret: AGENT_INTERNAL_SECRET,
-    skipPrefixes: ["/health", "/api/webhook/evolution", "/api/google/callback"],
+    skipPrefixes: ["/health", "/api/webhook/evolution", "/api/google/callback", "/api/notion/config"],
   })
 );
 
@@ -253,7 +253,7 @@ app.get("/api/image/:id", (req, res) => {
 
 app.post("/api/notion/config", async (req, res) => {
   const { token, databaseId } = req.body || {};
-  if (token) require("./notion").setConfig(token, databaseId);
+  require("./notion").setConfig(token || "", databaseId || "");
   res.json({ ok: true, configured: require("./notion").isConfigured() });
 });
 

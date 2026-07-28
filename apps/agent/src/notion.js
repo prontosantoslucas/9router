@@ -1,5 +1,19 @@
 let config = require("./config");
 
+const db = require("./db");
+
+function loadPersisted() {
+  try {
+    const row = db.prepare("SELECT token, database_id FROM notion_config WHERE id = 1").get();
+    if (row) {
+      config.NOTION_TOKEN = row.token || config.NOTION_TOKEN;
+      config.NOTION_DATABASE_ID = row.database_id || config.NOTION_DATABASE_ID;
+    }
+  } catch {}
+}
+
+loadPersisted();
+
 function getHeaders() {
   return {
     Authorization: `Bearer ${config.NOTION_TOKEN}`,
@@ -11,6 +25,13 @@ function getHeaders() {
 function setConfig(token, databaseId) {
   config.NOTION_TOKEN = token;
   config.NOTION_DATABASE_ID = databaseId;
+  try {
+    db.prepare(
+      "INSERT INTO notion_config (id, token, database_id) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET token = excluded.token, database_id = excluded.database_id"
+    ).run(token, databaseId);
+  } catch (err) {
+    console.error("[notion] falha ao persistir config:", err.message);
+  }
 }
 
 function isConfigured() {

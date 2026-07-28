@@ -132,6 +132,12 @@ db.exec(`
     text TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS notion_config (
+    id INTEGER PRIMARY KEY,
+    token TEXT NOT NULL DEFAULT '',
+    database_id TEXT NOT NULL DEFAULT ''
+  );
 `);
 
 module.exports = db;
