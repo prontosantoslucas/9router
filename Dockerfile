@@ -8,16 +8,14 @@ FROM base AS builder
 RUN apk --no-cache upgrade && apk --no-cache add python3 make g++ linux-headers
 
 COPY package.json ./
-RUN --mount=type=cache,id=npm,target=/root/.npm \
-  npm install
+RUN npm install
 
 COPY . ./
 
 # Instala deps do agente (workspace independente).
 # --ignore-scripts evita o postinstall que tenta git submodule update
 # (submodule 9router não é usado no deploy unificado).
-RUN --mount=type=cache,id=npm,target=/root/.npm \
-  cd apps/agent && npm install --omit=dev --no-audit --no-fund --ignore-scripts
+RUN cd apps/agent && npm install --omit=dev --no-audit --no-fund --ignore-scripts
 
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
