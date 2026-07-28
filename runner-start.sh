@@ -36,6 +36,16 @@ echo "[Start] Maxrouter na porta ${MAXROUTER_PORT} · agente chamará ${AGENT_RO
 echo "[Start] Iniciando Agente Lucas em 127.0.0.1:3717..."
 AGENT_PORT=3717 PORT=3717 ROUTER_BASE_URL="${AGENT_ROUTER_BASE_URL}" node apps/agent/src/index.js &
 
-# Iniciar o Maxrouter Next.js em primeiro plano — usa o PORT injetado pelo Railway.
+# Keepalive interno (background): ping a cada 5min no healthcheck.
+# Ajuda a aquecer o servidor + evita idle em provedores que desligam por inatividade.
+(
+  sleep 15
+  while true; do
+    curl -sfo /dev/null "http://127.0.0.1:${MAXROUTER_PORT}/api/health" 2>/dev/null || true
+    sleep 300
+  done
+) &
+
+# Iniciar o Maxrouter Next.js em primeiro plano (substitui o shell — Docker restart policy cuida de crash).
 echo "[Start] Iniciando Maxrouter em 0.0.0.0:${MAXROUTER_PORT}..."
 exec node custom-server.js
