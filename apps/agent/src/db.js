@@ -117,6 +117,21 @@ db.exec(`
     value TEXT NOT NULL,
     updated_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS agent_corrections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id TEXT NOT NULL,
+    text TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_agent_corrections_agent ON agent_corrections(agent_id);
+
+  CREATE TABLE IF NOT EXISTS psicanalista_insights (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    text TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 module.exports = db;

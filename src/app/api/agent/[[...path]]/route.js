@@ -70,6 +70,7 @@ const ALLOWED_PATHS = [
   "/api/imagine",
   "/api/imagine/models",
   "/api/image/",
+  "/api/notion/config",
   "/api/notion/save",
   "/api/notion/search",
   "/api/notion/list",

@@ -1,5 +1,5 @@
 const { complete } = require("./proxy");
-const { getAgent, getSecondary, detectAgent } = require("./agents");
+const { getAgent, detectAgent, buildSystem, addAgentCorrection, addPsicanalistaInsight, scoreAgent } = require("./agents");
 const { TOOL_SCHEMAS, runTool } = require("./tools");
 const memory = require("./memory");
 const db = require("./db");
@@ -50,11 +50,7 @@ function isMuted(agentId) {
 }
 
 function agentSystem(agent, userName) {
-  let base = agent.system(userName);
-  const corrections = memory.getRecentCorrections(5);
-  if (corrections.length > 0) {
-    base += `\n\n## Correções anteriores\n${corrections.map((c) => `- ${c}`).join("\n")}`;
-  }
+  let base = buildSystem(agent.system, userName, agent.id);
   if (agent.tools.length > 0) {
     base += `\n\n${TOOLS_PROMPT}`;
   }
@@ -81,15 +77,8 @@ function isCorrection(text) {
 }
 
 function isRelevantFor(question, agentId) {
-  const lower = question.toLowerCase();
-  const patterns = {
-    dev: /(code|código|codigo|programa|função|funcao|script|bug|debug|compilar|npm|git|api|router|app|classe|html|css|js|python|sql|banco|endpoint)/i,
-    pesquisador: /(pesquisa|busca|google|notícia|noticia|quem é|o que é|como funciona|por que|quando|onde|história|historia|fato|dado|estatística)/i,
-    escritor: /(documenta|escreve|artigo|traduz|readme|tutorial|texto|email|redação|redacao|ortografia|gramática)/i,
-    sysadmin: /(deploy|servidor|docker|railway|infra|instalar|config|serviço|nginx|cloud|devops|container)/i,
-    lucas: /(você|como está|quem é|sobre|conversa|tudo bem|oi|olá)/i,
-  };
-  return patterns[agentId]?.test(lower) ?? true;
+  if (agentId === "lucas") return true;
+  return scoreAgent(question, agentId) >= 5;
 }
 
 async function runAgentWithTools(agent, msgs, chatId, ctx = {}) {
@@ -136,6 +125,12 @@ async function runAgentWithTools(agent, msgs, chatId, ctx = {}) {
 
 async function processMessage(chatId, text, userName, ctx = {}) {
   const session = getHistory(chatId);
+
+  // Reply-to-message: injeta contexto da mensagem original no histórico
+  if (ctx.replyTo) {
+    const quoted = `[Respondendo a ${ctx.replyTo.from}: "${ctx.replyTo.text}"]`;
+    text = `${quoted}\n${text}`;
+  }
 
   // Comandos mute/unmute - so respondem quando o estado REALMENTE muda.
   // Se ja esta no estado pedido (ex.: liberar com todos ja liberados), nao e
@@ -186,8 +181,11 @@ async function processMessage(chatId, text, userName, ctx = {}) {
     }
   }
 
+  // Correção: salva por agente para aprendizado dirigido
   if (isCorrection(text)) {
     memory.addCorrection(text);
+    const primaryId = detectAgent(text);
+    addAgentCorrection(primaryId, text);
   }
 
   const primaryId = detectAgent(text);
@@ -253,35 +251,84 @@ async function processMessage(chatId, text, userName, ctx = {}) {
 
   session.msgs.push({ role: "assistant", content: primaryAnswer });
 
-  // Secundário paralelo
-  let secondaryComment = null;
-  const secondaryId = getSecondary(activePrimaryId);
-  if (usePrimary && secondaryId !== activePrimaryId && !isMuted(secondaryId) && isRelevantFor(text, secondaryId)) {
-    const reviewPrompt = `O usuário perguntou: "${text}"
+  // Secundários paralelos — TODOS os agentes relevantes podem contribuir
+  const secondaryComments = [];
+  const AGENT_ORDER = ["dev", "sysadmin", "pesquisador", "escritor", "psicanalista"];
+  const secondaryPromises = AGENT_ORDER
+    .filter((id) => id !== activePrimaryId && !isMuted(id) && isRelevantFor(text, id))
+    .map(async (id) => {
+      const reviewPrompt = `O usuário perguntou: "${text}"
 
 O especialista respondeu:
 ${primaryAnswer}
 
-Como outro especialista, tem algo útil a acrescentar? Se for relevante, responda bem curto. Se não: —`;
+Como especialista em ${getAgent(id).name}, você pode acrescentar algo relevante do seu ponto de vista? Se sim, responda bem curto (1-2 frases). Se não: —`;
 
-    const p = runAgentWithTools(getAgent(secondaryId), [
-      { role: "system", content: agentSystem(getAgent(secondaryId), userName) },
-      { role: "user", content: reviewPrompt },
-    ], chatId, ctx);
+      const r = await runAgentWithTools(getAgent(id), [
+        { role: "system", content: agentSystem(getAgent(id), userName) },
+        { role: "user", content: reviewPrompt },
+      ], chatId, ctx);
 
-    const [r] = await Promise.all([p]);
-    if (r && r.trim() !== "—" && r.trim() !== "-") {
-      secondaryComment = { content: r, agent: secondaryId };
+      if (r && r.trim() !== "—" && r.trim() !== "-") {
+        return { content: r, agent: id };
+      }
+      return null;
+    });
+
+  const secondaryResults = await Promise.all(secondaryPromises);
+  for (const r of secondaryResults) {
+    if (r) secondaryComments.push(r);
+  }
+
+  // Psicanalista: se primário ou presente nos secundários, registra insights
+  const psicoAnswer = activePrimaryId === "psicanalista"
+    ? primaryAnswer
+    : secondaryComments.find(s => s.agent === "psicanalista")?.content;
+  if (psicoAnswer && psicoAnswer.length > 60) {
+    addPsicanalistaInsight(`[${new Date().toLocaleDateString()}] ${psicoAnswer.slice(0, 300)}`);
+  }
+
+  // Se psicanalista detectou padrão e primário não é psicanalista, adiciona alerta separado
+  let psicoAlert = null;
+  if (activePrimaryId !== "psicanalista") {
+    const psicoScore = scoreAgent(text, "psicanalista");
+    const needsPsicoAnalysis = psicoScore >= 15 || /resumo|me analisa|o que acha de mim|padrão.*comportamento|minha vida/i.test(text);
+    if (needsPsicoAnalysis && !secondaryComments.find(s => s.agent === "psicanalista")) {
+      const alertPrompt = `O usuário disse: "${text}"
+
+A resposta do especialista foi:
+${primaryAnswer}
+
+Como psicanalista, faça uma análise breve (2-3 frases) destacando padrões de comportamento ou reflexões relevantes. Se não houver padrão, responda apenas: —`;
+
+      const r = await runAgentWithTools(getAgent("psicanalista"), [
+        { role: "system", content: agentSystem(getAgent("psicanalista"), userName) },
+        { role: "user", content: alertPrompt },
+      ], chatId, ctx);
+
+      if (r && r.trim() !== "—" && r.trim() !== "-") {
+        psicoAlert = { content: r, agent: "psicanalista" };
+        addPsicanalistaInsight(`[${new Date().toLocaleDateString()}] ${r.slice(0, 300)}`);
+      }
     }
   }
 
-    let content = primaryAnswer;
+  // Montagem da resposta
+  let content = primaryAnswer;
   let formatted = `${activePrimary.emoji} *${activePrimary.name}*:\n${primaryAnswer}`;
-  if (secondaryComment) {
-    const sa = getAgent(secondaryComment.agent);
-    content += `\n\n${sa.name}: ${secondaryComment.content}`;
-    formatted += `\n\n${sa.emoji} *${sa.name}*:\n${secondaryComment.content}`;
+
+  for (const sc of secondaryComments) {
+    const sa = getAgent(sc.agent);
+    content += `\n\n${sa.name}: ${sc.content}`;
+    formatted += `\n\n${sa.emoji} *${sa.name}*:\n${sc.content}`;
   }
+
+  if (psicoAlert) {
+    const sa = getAgent(psicoAlert.agent);
+    content += `\n\n🔔 ${sa.name}: ${psicoAlert.content}`;
+    formatted += `\n\n🔔 ${sa.emoji} *${sa.name}*:\n${psicoAlert.content}`;
+  }
+
   if (!usePrimary) {
     const note = `ℹ️ ${primary.emoji} ${primary.name} mutado, redirecionado para ${activePrimary.emoji} ${activePrimary.name}.`;
     formatted += `\n\n_${note}_`;

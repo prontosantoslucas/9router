@@ -1,20 +1,26 @@
-const { NOTION_TOKEN, NOTION_DATABASE_ID } = require("./config");
+let config = require("./config");
 
-const API = "https://api.notion.com/v1";
-const HEADERS = {
-  Authorization: `Bearer ${NOTION_TOKEN}`,
-  "Content-Type": "application/json",
-  "Notion-Version": "2022-06-28",
-};
+function getHeaders() {
+  return {
+    Authorization: `Bearer ${config.NOTION_TOKEN}`,
+    "Content-Type": "application/json",
+    "Notion-Version": "2022-06-28",
+  };
+}
+
+function setConfig(token, databaseId) {
+  config.NOTION_TOKEN = token;
+  config.NOTION_DATABASE_ID = databaseId;
+}
 
 function isConfigured() {
-  return !!(NOTION_TOKEN && NOTION_DATABASE_ID);
+  return !!(config.NOTION_TOKEN && config.NOTION_DATABASE_ID);
 }
 
 async function createPage(title, content, tags = [], source = "chat") {
   if (!isConfigured()) return { ok: false, error: "Notion não configurado" };
   const body = {
-    parent: { database_id: NOTION_DATABASE_ID },
+    parent: { database_id: config.NOTION_DATABASE_ID },
     properties: {
       title: { title: [{ type: "text", text: { content: title.slice(0, 200) } }] },
       Fonte: { select: { name: source } },
@@ -34,9 +40,9 @@ async function createPage(title, content, tags = [], source = "chat") {
     body.properties.Tags = { multi_select: tags.map((t) => ({ name: t })) };
   }
   try {
-    const res = await fetch(`${API}/pages`, {
+    const res = await fetch("https://api.notion.com/v1/pages", {
       method: "POST",
-      headers: HEADERS,
+      headers: getHeaders(),
       body: JSON.stringify(body),
     });
     const data = await res.json();
@@ -54,9 +60,9 @@ async function queryDatabase(filter = {}, sorts = []) {
   if (sorts.length > 0) body.sorts = sorts;
   body.page_size = 20;
   try {
-    const res = await fetch(`${API}/databases/${NOTION_DATABASE_ID}/query`, {
+    const res = await fetch(`https://api.notion.com/v1/databases/${config.NOTION_DATABASE_ID}/query`, {
       method: "POST",
-      headers: HEADERS,
+      headers: getHeaders(),
       body: JSON.stringify(body),
     });
     const data = await res.json();
@@ -76,9 +82,9 @@ async function queryDatabase(filter = {}, sorts = []) {
 
 async function searchPages(query) {
   try {
-    const res = await fetch(`${API}/search`, {
+    const res = await fetch("https://api.notion.com/v1/search", {
       method: "POST",
-      headers: HEADERS,
+      headers: getHeaders(),
       body: JSON.stringify({ query, page_size: 10 }),
     });
     const data = await res.json();
@@ -99,4 +105,4 @@ async function searchPages(query) {
   }
 }
 
-module.exports = { createPage, queryDatabase, searchPages, isConfigured };
+module.exports = { createPage, queryDatabase, searchPages, isConfigured, setConfig };

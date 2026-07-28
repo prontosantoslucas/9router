@@ -229,10 +229,23 @@ function createBot(tokenOverride) {
     const userText = ctx.message.text;
     const userName = ctx.from.first_name || ctx.from.username || "Você";
 
+    // Detecta reply-to-message: contexto da mensagem original
+    let replyTo = null;
+    const replied = ctx.message.reply_to_message;
+    if (replied) {
+      const repliedText = replied.text || replied.caption || "";
+      const repliedFrom = replied.from?.is_bot
+        ? replied.from.first_name || "Assistente"
+        : replied.from?.first_name || replied.from?.username || "Usuário";
+      if (repliedText) {
+        replyTo = { text: repliedText, from: repliedFrom };
+      }
+    }
+
     const typingTimer = setInterval(() => ctx.sendChatAction("typing").catch(() => {}), 4000);
 
     try {
-      const result = await processMessage(chatId, userText, userName);
+      const result = await processMessage(chatId, userText, userName, { replyTo });
       clearInterval(typingTimer);
       const text = result.formatted || result.content;
       if (result.image) {

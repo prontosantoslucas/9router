@@ -54,7 +54,7 @@ function normalizeEvent(e) {
  * Cria evento. Requer `start`, `end` (ISO ou {date:'YYYY-MM-DD'} para all-day).
  * `attendees` opcional (array de emails).
  */
-async function createEvent({ title, description, location, start, end, attendees, calendarId = "primary", sendUpdates = "none" }) {
+async function createEvent({ title, description, location, start, end, attendees, recurrence, calendarId = "primary", sendUpdates = "none" }) {
   if (!title) throw new Error("title obrigatório");
   if (!start || !end) throw new Error("start e end obrigatórios (ISO 8601)");
   const cal = client();
@@ -66,6 +66,9 @@ async function createEvent({ title, description, location, start, end, attendees
     end: isAllDayDate(end) ? { date: end } : { dateTime: end },
     attendees: (attendees || []).map((e) => (typeof e === "string" ? { email: e } : e)),
   };
+  if (recurrence) {
+    requestBody.recurrence = Array.isArray(recurrence) ? recurrence : [recurrence];
+  }
   const res = await cal.events.insert({ calendarId, requestBody, sendUpdates });
   return normalizeEvent(res.data);
 }

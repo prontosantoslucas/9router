@@ -38,6 +38,7 @@ const systemItems = [
   { href: "/dashboard/skills", label: "Skills", icon: "extension" },
   { href: "/dashboard/token-saver", label: "Token Saver", icon: "savings" },
   { href: "/dashboard/quota", label: "Quota", icon: "data_usage" },
+  { href: "/dashboard/notion-config", label: "Notion", icon: "book" },
 ];
 
 export default function Sidebar({ onClose }) {

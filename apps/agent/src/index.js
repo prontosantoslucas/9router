@@ -251,6 +251,12 @@ app.get("/api/image/:id", (req, res) => {
   imagine.serveImage(req.params.id, req, res);
 });
 
+app.post("/api/notion/config", async (req, res) => {
+  const { token, databaseId } = req.body || {};
+  if (token) require("./notion").setConfig(token, databaseId);
+  res.json({ ok: true, configured: require("./notion").isConfigured() });
+});
+
 app.post("/api/notion/save", async (req, res) => {
   if (!require("./notion").isConfigured()) return res.status(400).json({ error: "Notion não configurado" });
   const { title, content, tags, source } = req.body;

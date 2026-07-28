@@ -551,7 +551,7 @@ const GOOGLE_TOOLS = {
   },
   calendar_create: {
     name: "calendar_create",
-    desc: "Cria um novo evento na Agenda do Google.",
+    desc: "Cria um novo evento na Agenda do Google, com ou sem recorrência.",
     args: {
       type: "object",
       properties: {
@@ -561,6 +561,7 @@ const GOOGLE_TOOLS = {
         description: { type: "string", description: "Descrição ou pauta da reunião (opcional)" },
         location: { type: "string", description: "Local ou link de reunião (opcional)" },
         attendees: { type: "array", items: { type: "string" }, description: "Lista de e-mails dos convidados (opcional)" },
+        recurrence: { type: "array", items: { type: "string" }, description: "Regras de recorrência RRULE. Ex: [\"RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR\"] para seg/qua/sex, [\"RRULE:FREQ=DAILY;COUNT=10\"] para 10 dias seguidos. Veja https://www.rfc-editor.org/rfc/rfc5545#section-3.8.5.3" },
       },
       required: ["title", "start", "end"],
     },
@@ -570,7 +571,9 @@ const GOOGLE_TOOLS = {
         if (!oauth.isAuthorized()) return "❌ Google Workspace não autorizado. Conecte sua conta do Google no /dashboard2.";
         const calendar = require("../google/calendar");
         const ev = await calendar.createEvent(args);
-        return `✅ Evento "${ev.title}" criado com sucesso na Agenda!\n⏰ ${ev.start} até ${ev.end}\n🔗 [Ver no Google Calendar](${ev.htmlLink})`;
+        let msg = `✅ Evento "${ev.title}" criado com sucesso na Agenda!\n⏰ ${ev.start} até ${ev.end}\n🔗 [Ver no Google Calendar](${ev.htmlLink})`;
+        if (args.recurrence) msg += `\n🔁 Recorrência: ${args.recurrence.join(", ")}`;
+        return msg;
       } catch (err) {
         return `❌ Erro ao criar evento na Agenda: ${err.message}`;
       }
