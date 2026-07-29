@@ -391,7 +391,7 @@ const PHONE_TOOLS = {
       properties: {
         action: {
           type: "string",
-          enum: ["open-url", "notify", "read-file", "list-files", "exec"],
+          enum: ["open-url", "notify", "read-file", "list-files", "exec", "sms-list", "sms-send"],
           description: "Ação a executar no celular",
         },
         url: { type: "string", description: "URL para abrir (se action=open-url)" },
@@ -399,6 +399,8 @@ const PHONE_TOOLS = {
         text: { type: "string", description: "Texto da notificação (se action=notify)" },
         path: { type: "string", description: "Caminho do arquivo (se action=read-file ou list-files)" },
         cmd: { type: "string", description: "Comando Termux (se action=exec)" },
+        numero: { type: "string", description: "Número de telefone com DDD (se action=sms-send)" },
+        limit: { type: "number", description: "Quantidade de SMS a listar (se action=sms-list, default 10)" },
       },
       required: ["action"],
     },

@@ -69,21 +69,19 @@ function createBot(tokenOverride) {
     await ctx.reply(
       `📱 *PhoneAgent — Controlar Celular pelo Bot*\n\n` +
       `Para conectar seu celular:\n\n` +
-      `1. Instale Termux na Play Store/F-Droid\n` +
-      `2. Instale Termux:API pelo F-Droid\n` +
-      `3. No Termux execute:\n` +
-      "```\npkg install nodejs\nnpm install express\n```\n" +
-      `4. Copie o script phone-agent/server.js para o Termux\n` +
-      `5. Execute: \`node server.js\`\n` +
-      `6. Exponha com Cloudflare Tunnel:\n` +
+      `1. Instale Termux (F-Droid) + Termux:API\n` +
+      `2. No Termux:\n` +
+      "```\npkg upgrade && pkg install nodejs\n```\n" +
+      `3. Baixe o script:\n` +
+      "```\ncurl -L https://raw.githubusercontent.com/nortelucas/9router/master/phone-agent/server.js > server.js\n```\n" +
+      `4. Execute:\n` +
+      "```\nnode server.js\n```\n" +
+      `5. Exponha com Cloudflare Tunnel:\n` +
       "```\ncloudflared tunnel --url http://localhost:3333\n```\n" +
-      `7. Configure a URL gerada no .env:\n` +
+      `6. Configure a URL no .env:\n` +
       "```\nPHONE_AGENT_URL=https://exemplo.trycloudflare.com\n```\n\n" +
       `Após configurado, os agentes podem:\n` +
-      `📱 Abrir URLs no navegador\n` +
-      `📱 Enviar notificações push\n` +
-      `📱 Ler arquivos do celular\n` +
-      `📱 Executar comandos no Termux`
+      `📱 Abrir URLs\n📱 Notificações push\n📱 Ler arquivos\n📱 Comandos Termux\n📱 **Ler SMS** (termux-sms-list)\n📱 **Enviar SMS** (termux-sms-send)`
     );
   });
 
