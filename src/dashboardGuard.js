@@ -44,6 +44,7 @@ const ALWAYS_PROTECTED = [
   "/api/oauth/kiro/auto-import",
   "/dashboard2",
   "/chat",
+  "/coder",
   "/api/agent",
 ];
 

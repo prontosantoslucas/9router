@@ -20,7 +20,8 @@ REGRAS DE SAÍDA (obrigatórias):
 - Sempre inclua src/main.tsx que faz createRoot e renderiza src/App.tsx.
 - Não repita arquivos. Conteúdo completo em cada bloco.`;
 
-const FENCE_OPEN = /```(?:[a-zA-Z]*[ \t]+)?path=([^\n`]+)\n/;
+// Aceita ```path=x, ```tsx path=x e ```tsx path = x (com espaços).
+const FENCE_OPEN = /```[a-zA-Z0-9]*[ \t]*path[ \t]*=[ \t]*([^\n`]+)\n/;
 
 function makeStreamParser(onFile) {
   let buf = "";
@@ -57,7 +58,8 @@ function makeStreamParser(onFile) {
         curContent += buf.slice(0, close);
         buf = buf.slice(close + 4); // drop "\n```"
         inFile = false;
-        if (curPath) onFile({ path: curPath, content: curContent });
+        // Não emite bloco vazio (era a causa dos "blocos em branco").
+        if (curPath && curContent.trim()) onFile({ path: curPath, content: curContent });
       }
     }
   };
@@ -171,7 +173,24 @@ export async function generateProjectFromLLM({
   }
 
   if (files.length === 0) {
-    throw new Error("Modelo não retornou arquivos em blocos path=. Tente reescrever o pedido.");
+    // Fallback tolerante: alguns modelos ignoram o formato path= e usam cercas
+    // simples com o nome do arquivo no título/comentário. Só roda se o parser
+    // estrito não achou nada.
+    for (const f of extractFilesLenient(fullText)) {
+      files.push(f);
+      onFile?.(f);
+      onTerminalLog?.({ type: "success", text: `✓ ${f.path} (fallback)` });
+    }
+  }
+  if (files.length === 0) {
+    // Mostra o começo da resposta bruta pro usuário ver o que o modelo devolveu.
+    onTerminalLog?.({
+      type: "error",
+      text: `Resposta do modelo (sem arquivos reconhecíveis):\n${fullText.slice(0, 400) || "(vazia)"}`,
+    });
+    throw new Error(
+      "Modelo não retornou arquivos reconhecíveis. Veja a resposta bruta no terminal e reescreva o pedido (ou troque o modelo)."
+    );
   }
 
   const summary = extractSummary(fullText) || `Projeto gerado com ${files.length} arquivo(s).`;
@@ -184,5 +203,44 @@ export function parseFilesFromReply(text) {
   const parser = makeStreamParser((f) => files.push(f));
   parser(text.endsWith("\n") ? text : text + "\n");
   return files;
+}
+
+const NAME_RE = /[\w./-]+\.(?:tsx?|jsx?|css|html|json|md|mjs|cjs)/i;
+
+/**
+ * Extrator tolerante para quando o modelo NÃO segue o formato path=.
+ * Reconhece o nome do arquivo em três lugares: na própria linha da cerca
+ * (```lang path=... ou ```lang file.tsx), num título/backtick logo acima,
+ * ou num comentário na primeira linha do bloco. Ignora blocos sem nome/vazios.
+ */
+export function extractFilesLenient(text = "") {
+  const files = [];
+  const fenceRe = /```([^\n]*)\n([\s\S]*?)```/g;
+  let m;
+  while ((m = fenceRe.exec(text)) !== null) {
+    const info = (m[1] || "").trim();
+    const body = m[2];
+    if (!body || !body.trim()) continue;
+
+    let path = "";
+    const pOnFence = info.match(/path\s*=\s*["'`]?([^\s"'`]+)/i) || info.match(NAME_RE);
+    if (pOnFence) path = pOnFence[1] || pOnFence[0];
+
+    if (!path) {
+      const before = text.slice(Math.max(0, m.index - 160), m.index);
+      const h = before.match(new RegExp(`(${NAME_RE.source})[\`*\\s]*$`, "i"));
+      if (h) path = h[1];
+    }
+    if (!path) {
+      const c = body.match(new RegExp(`^\\s*(?://|/\\*|<!--|#)\\s*(${NAME_RE.source})`, "i"));
+      if (c) path = c[1];
+    }
+    if (!path) continue;
+
+    path = path.trim().replace(/^["'`]|["'`]$/g, "").replace(/^\.?\//, "");
+    files.push({ path, content: body.replace(/\n$/, "") });
+  }
+  // dedupe por path (última ocorrência vence)
+  return Array.from(new Map(files.map((f) => [f.path, f])).values());
 }
 

@@ -49,6 +49,7 @@ data/
 logs/*
 source/*
 .cursor/*
+.claude/
 docs/*
 !docs/ARCHITECTURE.md
 test/*

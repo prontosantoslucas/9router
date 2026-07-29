@@ -24,9 +24,11 @@ function pickEntry(files) {
 }
 
 export function buildPreviewDoc(files = [], projectName = "App") {
-  const scriptFiles = files.filter((f) => /\.(t|j)sx?$/.test(f.path));
-  const cssFiles = files.filter((f) => f.path.endsWith(".css"));
-  const entry = pickEntry(files);
+  // Ignora arquivos sem conteúdo — um arquivo vazio quebrava o bundle em silêncio.
+  const nonEmpty = files.filter((f) => (f.content || "").trim());
+  const scriptFiles = nonEmpty.filter((f) => /\.(t|j)sx?$/.test(f.path));
+  const cssFiles = nonEmpty.filter((f) => f.path.endsWith(".css"));
+  const entry = pickEntry(nonEmpty);
 
   if (!entry) {
     return `<!DOCTYPE html><html><body style="background:#0f172a;color:#94a3b8;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div>Sem arquivos JS/TS para pré-visualizar.</div></body></html>`;
@@ -65,8 +67,11 @@ const VFS = ${JSON.stringify(vfs)};
 const ENTRY = ${JSON.stringify(entryPath)};
 const EXTERNAL = { react: "${ESM}/react@18", "react-dom": "${ESM}/react-dom@18", "react-dom/client": "${ESM}/react-dom@18/client", "react/jsx-runtime": "${ESM}/react@18/jsx-runtime" };
 
+function post(type,payload){ try{ parent.postMessage({__coderPreview:true,type,payload:String(payload||"")},"*"); }catch(_){} }
 function setStatus(t){ const e=document.getElementById("__status"); if(e) e.textContent=t; }
-function showErr(m){ const e=document.getElementById("__err"); const s=document.getElementById("__status"); if(s) s.style.display="none"; if(e){ e.style.display="block"; e.textContent=String(m);} }
+function showErr(m){ const e=document.getElementById("__err"); const s=document.getElementById("__status"); if(s) s.style.display="none"; if(e){ e.style.display="block"; e.textContent=String(m);} post("error", m); }
+window.addEventListener("error", (ev)=>{ showErr(ev.message); });
+window.addEventListener("unhandledrejection", (ev)=>{ const r=ev.reason; showErr((r&&r.stack)||r); });
 
 function resolveInVfs(spec, importer) {
   if (spec in EXTERNAL) return null; // handled as external
@@ -139,6 +144,7 @@ const vfsPlugin = {
         createRoot(root).render(React.createElement(App));
       }
     }
+    post("ready", "");
   } catch (e) {
     showErr((e && e.stack) || e);
   }

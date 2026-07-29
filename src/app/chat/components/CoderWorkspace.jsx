@@ -23,6 +23,8 @@ export function CoderWorkspace({
   projectName = "Nova Aplicação",
   setProjectName,
   standalone = false,
+  onPreviewError,
+  onPreviewReady,
 }) {
   const [viewMode, setViewMode] = useState("preview"); // "code" | "preview"
   const [selectedFilePath, setSelectedFilePath] = useState("src/App.tsx");
@@ -55,6 +57,30 @@ export function CoderWorkspace({
     })();
     return () => { cancelled = true; };
   }, [isSupabaseOpen]);
+
+  // Erros do Preview (iframe) chegam via postMessage e vão pro Terminal, para
+  // ficarem visíveis (antes morriam dentro do iframe) e servirem de base para
+  // a auto-correção. Só reage a mensagens do nosso preview.
+  useEffect(() => {
+    function onMsg(ev) {
+      const d = ev?.data;
+      if (!d || !d.__coderPreview) return;
+      if (d.type === "error" && d.payload) {
+        onPreviewError?.(String(d.payload));
+        if (setTerminalLogs) {
+          setTerminalLogs((prev) => {
+            const text = `Preview: ${String(d.payload).slice(0, 400)}`;
+            if (prev[prev.length - 1]?.text === text) return prev; // evita spam
+            return [...prev, { type: "error", text }];
+          });
+        }
+      } else if (d.type === "ready") {
+        onPreviewReady?.();
+      }
+    }
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [setTerminalLogs, onPreviewError, onPreviewReady]);
 
   const selectedFile = files.find((f) => f.path === selectedFilePath) || files[0];
 
@@ -271,6 +297,8 @@ CoderWorkspace.propTypes = {
   projectName: PropTypes.string,
   setProjectName: PropTypes.func,
   standalone: PropTypes.bool,
+  onPreviewError: PropTypes.func,
+  onPreviewReady: PropTypes.func,
 };
 
 function getLanguage(filename = "") {
