@@ -145,4 +145,14 @@ db.exec(`
   );
 `);
 
+// Migração idempotente: segundo database do segundo cérebro ("Cérebro
+// Inteligente" — Agenda/Tarefas/Metas/etc.), separado do database_id original
+// (Planos/Metas/Memórias/etc.). SQLite não tem "ADD COLUMN IF NOT EXISTS";
+// tenta e ignora o erro de coluna duplicada se já existir.
+try {
+  db.exec(`ALTER TABLE notion_config ADD COLUMN second_database_id TEXT NOT NULL DEFAULT '';`);
+} catch (err) {
+  if (!/duplicate column/i.test(err.message)) throw err;
+}
+
 module.exports = db;

@@ -513,6 +513,36 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 32: Segundo Cérebro com Duas Famílias de Categorias — Integração do "Cérebro Inteligente" Pessoal
+
+* **Contexto**: o segundo cérebro (Capítulo 28) já salvava conversas/planos/metas/ideias em um database Notion dedicado, criado do zero para esse fim. Só que o usuário já tinha, antes dessa integração, uma página pessoal chamada "Cérebro Inteligente" no Notion — um rastreador com Agenda, Anotações, Metas, Tarefas, Alimentação, Financeiro e Atalhos — usada no dia a dia. A pergunta era: usar essa página já existente para autopreenchimento em vez de (ou além) do database dedicado.
+
+* **Descoberta do problema real (Causa Raiz)**: a página não aparecia nem em buscas globais da integração Notion. Investigação em camadas:
+  1. Consulta direta via API às IDs de página/database retornava 404 — a integração "maxrouter" nunca tinha sido conectada àquela página.
+  2. Usuário tentou compartilhar pelo menu Connections do Notion, mas "maxrouter" não aparecia na lista de opções — hipótese de workspace errado, descartada ao confirmar via `/v1/users/me` que o token realmente pertencia ao workspace certo ("Lucas Santos's").
+  3. Um screenshot revelou a causa: a página estava marcada **🔒 Particular** — o Notion não permite conectar integrações de workspace a páginas particulares, então "maxrouter" nunca poderia aparecer na lista enquanto isso não mudasse.
+  4. Depois que o usuário tornou a página compartilhada, a API passou a enxergar o database, mas consultas de linhas retornavam zero — apesar da UI mostrar cards visíveis. Causa: a estrutura de **multi-source database** do Notion — o database "Cérebro Inteligente" (`a9105e5e...`) é uma casca praticamente vazia; o conteúdo real (as 7 categorias, cada uma uma linha) mora em um **segundo database aninhado** (`92805e5e-aa0f-83d0-a94c-8189a151ba99`), cujo parent é o database-casca.
+
+* **Decisão**: perguntado se o "Cérebro Inteligente" deveria substituir, ser ignorado, ou conviver com o database original — usuário escolheu **"os dois ao mesmo tempo"**. Isso introduz duas famílias de categorias simultâneas, cada uma com seu próprio database Notion, e um problema concreto: **as duas famílias têm uma categoria chamada literalmente "Metas"** (meta discutida em conversa vs. item do rastreador pessoal) — mesmo nome, sentido e destino diferentes.
+
+* **Como foi resolvido**:
+  1. Nova coluna `second_database_id` em `notion_config` ([db.js](apps/agent/src/db.js)), migração idempotente (`ALTER TABLE ... ADD COLUMN` com `try/catch` silenciando só o erro de coluna duplicada — mesmo padrão de outras migrações deste projeto).
+  2. `NOTION_SECOND_DATABASE_ID` em [config.js](apps/agent/src/config.js) e `setSecondDatabase()` em [notion.js](apps/agent/src/notion.js) para persistir o segundo database, com semente default apontando para o database real (`92805e5e...`), não para a casca.
+  3. **`notion.js` generalizado para múltiplos databases**: cache de schema virou um `Map` por `databaseId` (era uma variável única); `createPage`/`getCategoryPageId`/`saveToCategory` agora recebem `databaseId` como parâmetro em vez de sempre usar o database fixo do `config`.
+  4. **A correção que elimina a colisão de "Metas" de fato**: `findPageByExactTitle` deixou de fazer busca global (`/v1/search`, que enxerga as duas famílias misturadas e não tem como distinguir duas páginas com o mesmo título) e passou a consultar **dentro de um database específico** (`POST /v1/databases/{databaseId}/query` com filtro `title.equals`). Como cada família vive num database diferente, a mesma string "Metas" nunca mais colide — a busca está escopada pela API, não por heurística.
+  5. **Novo módulo único de configuração**: [brainCategories.js](apps/agent/src/brainCategories.js) centraliza as 14 entradas (7 + 7), cada uma com `label` (o que o classificador LLM e o enum da tool `notion_save` veem), `categoria` (o título real da página no Notion) e `db()` (função que resolve o database no momento da chamada, refletindo qualquer `setSecondDatabase()` feito depois do boot). Como "Metas" colide como `categoria` mas não pode colidir como `label`, as duas entradas usam rótulos distintos — `"Metas (discutida em conversa)"` e `"Metas (rastreador pessoal)"` — resolvendo a ambiguidade também do lado do classificador, não só da API.
+  6. [orchestrator.js](apps/agent/src/orchestrator.js) (captura automática) e [tools/index.js](apps/agent/src/tools/index.js) (tool manual `notion_save`) foram reescritos para importar de `brainCategories.js` em vez de manter listas duplicadas — evita o tipo de divergência por cópia-e-cola já visto neste projeto (ex.: a lógica de resolução do segredo HMAC).
+
+* **Verificação**:
+  1. Sintaxe (`node -c`) e ESLint limpos nos 6 arquivos tocados.
+  2. **Teste ao vivo contra a API real do Notion, escrevendo nas duas páginas "Metas"** (uma por família) via `saveToCategory("Metas", ..., dbA)` / `saveToCategory("Metas", ..., dbB)`, com snapshot de contagem de blocos antes/depois: a nota apareceu exclusivamente na página correta em cada chamada, zero contaminação cruzada. Blocos de teste removidos ao final, contagens restauradas ao estado original.
+  3. Suíte de testes do agente (RAG + orchestrator + modules + proxy-route + github-memory) rodada 3x consecutivas — 20/20 aprovados nas três vezes, sem flakiness.
+  4. Boot limpo do agente (Telegram ativo, 176 modelos carregados).
+  5. Inspeção direta do enum `categoria` exportado pela tool `notion_save`: as 14 labels esperadas presentes, incluindo os dois rótulos distintos de "Metas".
+  6. **Teste de ponta a ponta pela tool de verdade** (`runTool("notion_save", { categoria: "Tarefas", ... })`, não chamando `notion.js` diretamente): anexou corretamente na página "Tarefas" do segundo database (4→8 blocos), limpeza confirmada restaurando a contagem original (8→4).
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 

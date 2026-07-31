@@ -5,6 +5,7 @@ const memoryStore = require("../memoryStore");
 const { ROUTER_BASE_URL, PHONE_AGENT_URL, PHONE_TOKEN, BOT_TOKEN } = require("../config");
 const keyrotator = require("../keyrotator");
 const notion = require("../notion");
+const { BRAIN_ENTRY_BY_LABEL, BRAIN_LABELS } = require("../brainCategories");
 const fs = require("fs");
 const path = require("path");
 const { Telegraf } = require("telegraf");
@@ -239,7 +240,7 @@ const TOOLS = {
 const NOTION_TOOLS = {
   notion_save: {
     name: "notion_save",
-    desc: "Salva uma nota no Notion (segundo cérebro). Use quando o usuário pedir pra salvar informação, ou quando algo importante for discutido que mereça registro: planos, metas, ideias, viradas de chave, pontos importantes, memórias, conversas profundas.",
+    desc: "Salva uma nota no Notion (segundo cérebro). Use quando o usuário pedir pra salvar informação, ou quando algo importante for discutido que mereça registro: planos, metas, ideias, viradas de chave, pontos importantes, memórias, conversas profundas, agenda, tarefas, financeiro, alimentação, anotações ou atalhos.",
     args: {
       type: "object",
       properties: {
@@ -247,16 +248,17 @@ const NOTION_TOOLS = {
         content: { type: "string", description: "Conteúdo completo da nota" },
         categoria: {
           type: "string",
-          enum: ["Conversas Profundas", "Planos", "Metas", "Pontos Importantes", "Viradas de Chave", "Memórias", "Ideias Não Trabalhadas"],
-          description: "Categoria do segundo cérebro para classificar a nota",
+          enum: BRAIN_LABELS,
+          description: "Categoria do segundo cérebro para classificar a nota. \"Metas\" existe em duas famílias diferentes — escolha o rótulo que descreve o contexto certo.",
         },
         tags: { type: "array", items: { type: "string" }, description: "Tags para categorizar (opcional)" },
       },
       required: ["title", "content"],
     },
     run: async (args) => {
-      const r = args.categoria
-        ? await notion.saveToCategory(args.categoria, args.title, args.content, args.tags || [], "agent")
+      const entry = args.categoria && BRAIN_ENTRY_BY_LABEL.get(args.categoria);
+      const r = entry
+        ? await notion.saveToCategory(entry.categoria, args.title, args.content, args.tags || [], "agent", entry.db())
         : await notion.createPage(args.title, args.content, args.tags || [], "agent", "");
       return r.ok
         ? `✅ Salvo no Notion${r.appended ? ` (anexado em "${args.categoria}")` : ""}: ${r.url}`

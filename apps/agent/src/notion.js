@@ -4,10 +4,16 @@ const db = require("./db");
 
 function loadPersisted() {
   try {
-    const row = db.prepare("SELECT token, database_id FROM notion_config WHERE id = 1").get();
+    const row = db.prepare("SELECT token, database_id, second_database_id FROM notion_config WHERE id = 1").get();
     if (row) {
       config.NOTION_TOKEN = row.token || config.NOTION_TOKEN;
       config.NOTION_DATABASE_ID = row.database_id || config.NOTION_DATABASE_ID;
+      // Segundo database do segundo cérebro ("Cérebro Inteligente" —
+      // Agenda/Tarefas/Metas/Alimentação/Financeiro/Anotações/Atalhos),
+      // separado do database_id original (Conversas Profundas/Planos/etc.).
+      // Semeado com o database real encontrado em 2026-07-31 (a linked view
+      // da página homônima apontava pra este, não pro database-casca vazio).
+      config.NOTION_SECOND_DATABASE_ID = row.second_database_id || config.NOTION_SECOND_DATABASE_ID || "92805e5e-aa0f-83d0-a94c-8189a151ba99";
     }
   } catch {}
 }
@@ -25,8 +31,7 @@ function getHeaders() {
 function setConfig(token, databaseId) {
   config.NOTION_TOKEN = token;
   config.NOTION_DATABASE_ID = databaseId;
-  _schema = null;
-  _schemaFetchedAt = 0;
+  _schemaCache.delete(databaseId);
   try {
     db.prepare(
       "INSERT INTO notion_config (id, token, database_id) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET token = excluded.token, database_id = excluded.database_id"
@@ -36,28 +41,43 @@ function setConfig(token, databaseId) {
   }
 }
 
+function setSecondDatabase(databaseId) {
+  config.NOTION_SECOND_DATABASE_ID = databaseId;
+  _schemaCache.delete(databaseId);
+  try {
+    db.prepare(
+      "INSERT INTO notion_config (id, second_database_id) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET second_database_id = excluded.second_database_id"
+    ).run(databaseId);
+  } catch (err) {
+    console.error("[notion] falha ao persistir second_database_id:", err.message);
+  }
+}
+
 function isConfigured() {
   return !!(config.NOTION_TOKEN && config.NOTION_DATABASE_ID);
 }
 
-// Cache com expiração curta: sem TTL, uma coluna criada no Notion depois do
-// boot do agente ficava invisível até reiniciar o processo manualmente.
+// Cache com expiração curta, por database — sem TTL, uma propriedade criada
+// no Notion depois do boot do agente ficava invisível até reiniciar o
+// processo manualmente. Por database porque agora existe mais de um
+// (database original + "Cérebro Inteligente"), cada um com seu próprio schema.
 const SCHEMA_TTL_MS = 5 * 60 * 1000;
-let _schema = null;
-let _schemaFetchedAt = 0;
-async function getSchema() {
-  if (_schema && Date.now() - _schemaFetchedAt < SCHEMA_TTL_MS) return _schema;
+const _schemaCache = new Map(); // databaseId -> { schema, fetchedAt }
+
+async function getSchema(databaseId = config.NOTION_DATABASE_ID) {
+  const cached = _schemaCache.get(databaseId);
+  if (cached && Date.now() - cached.fetchedAt < SCHEMA_TTL_MS) return cached.schema;
   try {
-    const res = await fetch(`https://api.notion.com/v1/databases/${config.NOTION_DATABASE_ID}`, {
+    const res = await fetch(`https://api.notion.com/v1/databases/${databaseId}`, {
       headers: getHeaders(),
     });
     const data = await res.json();
-    if (!res.ok) return _schema; // mantém o cache antigo (melhor que nada) se a API falhar
-    _schema = data.properties || {};
-    _schemaFetchedAt = Date.now();
-    return _schema;
+    if (!res.ok) return cached?.schema || null; // mantém o cache antigo (melhor que nada) se a API falhar
+    const schema = data.properties || {};
+    _schemaCache.set(databaseId, { schema, fetchedAt: Date.now() });
+    return schema;
   } catch {
-    return _schema;
+    return cached?.schema || null;
   }
 }
 
@@ -67,9 +87,9 @@ function titlePropertyName(schema) {
   return entry ? entry[0] : "title";
 }
 
-async function createPage(title, content, tags = [], source = "chat", categoria = "") {
+async function createPage(title, content, tags = [], source = "chat", categoria = "", databaseId = config.NOTION_DATABASE_ID) {
   if (!isConfigured()) return { ok: false, error: "Notion não configurado" };
-  const schema = await getSchema();
+  const schema = await getSchema(databaseId);
   const titleProp = titlePropertyName(schema);
   const properties = {
     [titleProp]: { title: [{ type: "text", text: { content: title.slice(0, 200) } }] },
@@ -83,7 +103,7 @@ async function createPage(title, content, tags = [], source = "chat", categoria 
     properties.Tags = { multi_select: tags.slice(0, 10).map((t) => ({ name: String(t).slice(0, 100) })) };
   }
   const body = {
-    parent: { database_id: config.NOTION_DATABASE_ID },
+    parent: { database_id: databaseId },
     properties,
     children: [
       {
@@ -109,34 +129,26 @@ async function createPage(title, content, tags = [], source = "chat", categoria 
   }
 }
 
-function pageTitle(page) {
-  if (page?.object === "database" && Array.isArray(page.title)) {
-    return page.title.map((t) => t.plain_text).join("");
-  }
-  const props = page?.properties || {};
-  for (const v of Object.values(props)) {
-    if (v?.type === "title" && Array.isArray(v.title)) {
-      return v.title.map((t) => t.plain_text).join("");
-    }
-  }
-  return "";
-}
-
-async function findPageByExactTitle(title) {
+// Busca ESCOPADA a um database especifico (query, nao search global). Duas
+// categorias podem ter o mesmo titulo em databases diferentes — ex.: "Metas"
+// existe tanto no segundo cerebro original quanto no Cerebro Inteligente — e
+// a busca global do Notion (/v1/search) nao tem como distinguir qual das duas
+// o chamador queria. Escopar ao database certo elimina a ambiguidade.
+async function findPageByExactTitle(title, databaseId) {
   try {
-    const res = await fetch("https://api.notion.com/v1/search", {
+    const schema = await getSchema(databaseId);
+    const titleProp = titlePropertyName(schema);
+    const res = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({
-        query: title,
-        filter: { property: "object", value: "page" },
-        page_size: 10,
+        filter: { property: titleProp, title: { equals: title } },
+        page_size: 1,
       }),
     });
     const data = await res.json();
     if (!res.ok) return null;
-    const wanted = title.trim().toLowerCase();
-    return (data.results || []).find((p) => pageTitle(p).trim().toLowerCase() === wanted) || null;
+    return data.results?.[0] || null;
   } catch {
     return null;
   }
@@ -149,16 +161,17 @@ async function findPageByExactTitle(title) {
 // (Select "Categoria" e afins exigem confirmação manual na UI do Notion, que
 // já se mostrou um passo frágil de esquecer/errar).
 const CATEGORY_PAGE_TTL_MS = 5 * 60 * 1000;
-const _categoryPages = new Map(); // categoria -> { id, fetchedAt }
+const _categoryPages = new Map(); // `${databaseId}:${categoria}` -> { id, fetchedAt }
 
-async function getCategoryPageId(categoria) {
-  if (!categoria) return null;
-  const cached = _categoryPages.get(categoria);
+async function getCategoryPageId(categoria, databaseId = config.NOTION_DATABASE_ID) {
+  if (!categoria || !databaseId) return null;
+  const cacheKey = `${databaseId}:${categoria}`;
+  const cached = _categoryPages.get(cacheKey);
   if (cached && Date.now() - cached.fetchedAt < CATEGORY_PAGE_TTL_MS) return cached.id;
 
-  const found = await findPageByExactTitle(categoria);
+  const found = await findPageByExactTitle(categoria, databaseId);
   if (found) {
-    _categoryPages.set(categoria, { id: found.id, fetchedAt: Date.now() });
+    _categoryPages.set(cacheKey, { id: found.id, fetchedAt: Date.now() });
     return found.id;
   }
 
@@ -166,10 +179,12 @@ async function getCategoryPageId(categoria) {
     categoria,
     `Página do segundo cérebro para a categoria "${categoria}". Criada automaticamente — as capturas dessa categoria são anexadas aqui.`,
     [],
-    "system"
+    "system",
+    "",
+    databaseId
   );
   if (!created.ok) return null;
-  _categoryPages.set(categoria, { id: created.id, fetchedAt: Date.now() });
+  _categoryPages.set(cacheKey, { id: created.id, fetchedAt: Date.now() });
   return created.id;
 }
 
@@ -221,8 +236,8 @@ async function appendEntry(pageId, title, content, meta = "") {
 // categoria não puder ser resolvida (Notion indisponível, sem categoria
 // informada), cai de volta para uma linha nova no database — para nunca
 // perder a captura silenciosamente.
-async function saveToCategory(categoria, title, content, tags = [], source = "chat") {
-  const pageId = await getCategoryPageId(categoria);
+async function saveToCategory(categoria, title, content, tags = [], source = "chat", databaseId = config.NOTION_DATABASE_ID) {
+  const pageId = await getCategoryPageId(categoria, databaseId);
   if (pageId) {
     const meta = `${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} · ${source}`;
     const appended = await appendEntry(pageId, title, content, meta);
@@ -230,7 +245,7 @@ async function saveToCategory(categoria, title, content, tags = [], source = "ch
       return { ok: true, appended: true, categoria, url: `https://notion.so/${pageId.replace(/-/g, "")}` };
     }
   }
-  return createPage(title, content, tags, source, categoria);
+  return createPage(title, content, tags, source, categoria, databaseId);
 }
 
 async function queryDatabase(filter = {}, sorts = []) {
@@ -285,4 +300,4 @@ async function searchPages(query) {
   }
 }
 
-module.exports = { createPage, saveToCategory, queryDatabase, searchPages, isConfigured, setConfig };
+module.exports = { createPage, saveToCategory, queryDatabase, searchPages, isConfigured, setConfig, setSecondDatabase };

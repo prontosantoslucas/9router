@@ -28,6 +28,7 @@ const cfg = {
   PHONE_TOKEN: process.env.PHONE_TOKEN || "",
   NOTION_TOKEN: process.env.NOTION_TOKEN || "",
   NOTION_DATABASE_ID: process.env.NOTION_DATABASE_ID || "",
+  NOTION_SECOND_DATABASE_ID: process.env.NOTION_SECOND_DATABASE_ID || "",
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "",
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",
   GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || "",
