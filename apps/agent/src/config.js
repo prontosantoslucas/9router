@@ -16,6 +16,7 @@ const cfg = {
   GITHUB_TOKEN: process.env.GITHUB_TOKEN || "",
   GITHUB_PERSONALITY_URL: process.env.GITHUB_PERSONALITY_URL || "",
   AI_MEMORY_URL: process.env.AI_MEMORY_URL || "http://127.0.0.1:8080",
+  AI_MEMORY_TOKEN: process.env.AI_MEMORY_TOKEN || "",
   EVOLUTION_API_URL: process.env.EVOLUTION_API_URL || "",
   EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY || "",
   EVOLUTION_INSTANCE_NAME: process.env.EVOLUTION_INSTANCE_NAME || "lucas",

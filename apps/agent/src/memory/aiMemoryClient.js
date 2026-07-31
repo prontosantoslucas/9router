@@ -25,6 +25,21 @@ function nextId() {
   return requestId;
 }
 
+// Header base para toda chamada ao servidor MCP. O bearer token só é anexado
+// se AI_MEMORY_TOKEN estiver configurado — servidor local em loopback (uso
+// padrão) não exige auth; um servidor exposto publicamente (Render e afins)
+// rejeita tudo sem o token, então esse header é obrigatório nesse caso.
+function baseHeaders(extra = {}) {
+  const headers = {
+    Accept: "application/json, text/event-stream",
+    "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
+    ...extra,
+  };
+  if (cfg.AI_MEMORY_TOKEN) headers.Authorization = `Bearer ${cfg.AI_MEMORY_TOKEN}`;
+  if (sessionId) headers["Mcp-Session-Id"] = sessionId;
+  return headers;
+}
+
 async function rpc(method, params = {}) {
   const url = endpoint();
   if (!url) throw new Error("AI_MEMORY_URL não configurado");
@@ -34,12 +49,7 @@ async function rpc(method, params = {}) {
     method,
     params,
   };
-  const headers = {
-    "Content-Type": "application/json",
-    Accept: "application/json, text/event-stream",
-    "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
-  };
-  if (sessionId) headers["Mcp-Session-Id"] = sessionId;
+  const headers = baseHeaders({ "Content-Type": "application/json" });
 
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), 8000);
@@ -101,12 +111,7 @@ async function initialize() {
   try {
     await fetch(endpoint(), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "MCP-Protocol-Version": MCP_PROTOCOL_VERSION,
-        ...(sessionId ? { "Mcp-Session-Id": sessionId } : {}),
-      },
+      headers: baseHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
     }).catch(() => {});
   } catch {

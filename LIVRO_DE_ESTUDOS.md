@@ -441,6 +441,23 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 29: Autenticação no Cliente MCP do ai-memory para Deploy Público (Render)
+
+* **Contexto**: [`apps/agent/src/memory/aiMemoryClient.js`](apps/agent/src/memory/aiMemoryClient.js) fala com um servidor `ai-memory` (fork Rust de [`akitaonrails/ai-memory`](https://github.com/akitaonrails/ai-memory)) via MCP streamable-HTTP em `AI_MEMORY_URL`, com fallback para o GitHub Superbrain se o servidor não responder. Até aqui, o uso padrão era um servidor `ai-memory` em loopback (`127.0.0.1`), sem necessidade de autenticação.
+
+* **Por que era necessário**: o `ai-memory` publica um bearer-token check nativo (`AI_MEMORY_AUTH_TOKEN` no servidor), obrigatório segundo a própria documentação sempre que o servidor é exposto além de loopback/LAN — sem ele, qualquer um na rede pode chamar tools MCP destrutivas (apagar páginas, injetar observações falsas, estourar o orçamento de LLM). Como o objetivo é subir o servidor no Render (acessível pela internet pública), o token passa de opcional para obrigatório do lado do servidor — mas o cliente em `aiMemoryClient.js` nunca enviava nenhum header `Authorization`, então todas as chamadas do agente receberiam 401 assim que a autenticação fosse ligada no servidor.
+
+* **Como foi resolvido**:
+  1. Nova variável `AI_MEMORY_TOKEN` em [`apps/agent/src/config.js`](apps/agent/src/config.js) e documentada em [`apps/agent/.env.example`](apps/agent/.env.example).
+  2. `aiMemoryClient.js` ganhou `baseHeaders()`, um helper compartilhado (mesmo padrão do `getHeaders()` em `notion.js`) que anexa `Authorization: Bearer <token>` **somente se** `AI_MEMORY_TOKEN` estiver configurado — servidor local em loopback continua funcionando exatamente como antes, sem mudança de comportamento.
+  3. Os dois pontos que faziam fetch direto (`rpc()` e a notificação `notifications/initialized` em `initialize()`) foram unificados para usar `baseHeaders()`, eliminando duplicação e garantindo que nenhum dos dois esqueça o header.
+
+* **Verificação**: testado contra um servidor HTTP local mockado que registra o header recebido — sem `AI_MEMORY_TOKEN`, nenhum header `Authorization` é enviado (compatibilidade com quem já roda em loopback); com `AI_MEMORY_TOKEN` definido, o header `Bearer <token>` chega corretamente em toda chamada.
+
+* **Nota operacional para o deploy no Render**: além do token, o `ai-memory` valida o header `Host` contra `AI_MEMORY_ALLOWED_HOSTS` (guarda contra DNS-rebinding) — o hostname público do Render (`*.onrender.com` ou domínio customizado) precisa estar nessa lista no servidor, senão ele rejeita as requisições mesmo com o token correto. E o diretório `/data` do container precisa de um Disk persistente do Render — sem ele, a memória (SQLite + wiki markdown) é perdida a cada redeploy, o mesmo problema do Capítulo 26 para o volume do Railway.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 
