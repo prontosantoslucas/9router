@@ -10,11 +10,14 @@ export function useChatSession(sessionId = "default") {
   const [isSending, setIsSending] = useState(false);
   const storageKey = `chat_msgs_${sessionId}`;
 
-  // Carregar histórico inicial do localStorage
+  // Carregar histórico inicial do localStorage. localStorage não existe no
+  // SSR, então precisa ser um efeito (não dá pra ler no render nem num
+  // inicializador de useState) — sincronização legítima com sistema externo.
   useEffect(() => {
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setMessages(JSON.parse(saved));
       }
     } catch (err) {
@@ -73,8 +76,10 @@ export function useChatSession(sessionId = "default") {
         htmlContent: renderMarkdown(data.reply || data.content || "Entendido!"),
         image: data.image,
         audioUrl: data.audioUrl,
+        telemetry: data.telemetry,
         timestamp: Date.now(),
       };
+
 
       saveMessages([...updatedWithUser, agentMsg]);
     } catch (err) {

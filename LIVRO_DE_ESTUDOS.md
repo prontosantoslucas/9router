@@ -458,7 +458,63 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 30: Higienização de Artefatos, Unificação do Dashboard Hub, Telemetria em Tempo Real no Chat, Validação Zod & Novos Módulos (Playground A/B e RAG Local)
+
+* **Por que foi feita essa alteração (Causa Raiz & Objetivo)**:
+  1. **Resíduos na Raiz**: O repositório continha backups soltos (`_db-backup-*`) e arquivos rascunho de texto (`login.txt`, `memoria.json`, `memoria.md`, `test-scanner.mjs`) que poluíam a raiz.
+  2. **Navegação Duplicada no Dashboard**: O painel era dividido entre rotas `/dashboard/*` e `/dashboard2`, gerando confusão de navegação e componentes duplicados.
+  3. **Opacidade de Custos no Chat**: As respostas do chat não indicavam ao usuário o tempo de processamento (ms), consumo de tokens de entrada/saída nem a estimativa de custo em dólares.
+  4. **Vulnerabilidade de Validação & Reconexão de Canais**: APIs aceitavam payloads sem validação estrita de schema e o cliente WhatsApp Web Baileys não possuía reconexão com delay exponencial (*Exponential Backoff*).
+  5. **Ausência de Módulos A/B e RAG**: Faltava uma ferramenta para comparar a resposta do mesmo prompt em múltiplos modelos simultaneamente e um mecanismo de indexação vetorial local para arquivos do usuário (PDF/TXT).
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Limpeza e Ignores do Git**: Eliminados os arquivos soltos da raiz e atualizado o arquivo [.gitignore](file:///c:/Users/user/Documents/GitHub/9router/.gitignore) com as regras `_db-backup-*/`, `login.txt`, `memoria.*` e `*.tmp`.
+  2. **Unificação do Dashboard Hub**:
+     - A rota principal `/dashboard` ([page.js](file:///c:/Users/user/Documents/GitHub/9router/src/app/(dashboard)/dashboard/page.js)) passou a renderizar o `<Dashboard2Client />` (Hub Central de Status do Agente Lucas e Sidecars).
+     - A rota antiga `/dashboard2` ([page.js](file:///c:/Users/user/Documents/GitHub/9router/src/app/dashboard2/page.js)) recebeu redirecionamento `redirect("/dashboard")`.
+     - A barra lateral ([Sidebar.js](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/Sidebar.js)) foi atualizada apontando o "Painel do Lucas" para `/dashboard` e adicionando os links para o **Playground A/B** e **RAG Documentos**.
+  3. **Telemetria e Transparência no Chat**:
+     - No backend ([orchestrator.js](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/orchestrator.js)), a função `processMessage` passou a medir o tempo de execução em milissegundos (`latencyMs`), calcular os tokens aproximados (`promptTokens`, `completionTokens`) e computar a estimativa de custo (`estimatedCost`).
+     - No cliente ([useChatSession.js](file:///c:/Users/user/Documents/GitHub/9router/src/app/chat/hooks/useChatSession.js)), o objeto `telemetry` é armazenado no histórico de mensagens.
+     - No componente [MessageBubble.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/primitives/MessageBubble.jsx), adicionado um badge visual responsivo no rodapé do balão exibindo: `⏱️ 850ms | 📥 120t | 📤 340t | 💰 $0.0004`.
+  4. **Validação e Resiliência**:
+     - Criado o módulo de schemas [schemas.js](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/schemas.js) para validação ultra-leve de tipo e campos obrigatórios.
+     - No [nativeClient.js](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/channels/whatsapp/nativeClient.js), implementado o algoritmo de reconexão exponencial (`Math.pow(2, reconnectAttempts) * 1000`) para resiliência de rede do WhatsApp.
+  5. **Novos Módulos**:
+     - **Playground A/B** (`/dashboard/playground`): Interface para envio simultâneo de um mesmo prompt para até 3 LLMs lado a lado com medição de latência e cota de tokens.
+     - **RAG Local** (`/dashboard/rag` & [rag/index.js](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/rag/index.js)): Sistema em SQLite que realiza chunking de documentos de texto, armazenamento e busca por termos relevantes.
+  6. **Testes de Unidade**:
+     - Criada a suíte de testes [rag-and-playground.test.js](file:///c:/Users/user/Documents/GitHub/9router/tests/unit/rag-and-playground.test.js) aprovando 100% dos testes.
+
+---
+
+### Capítulo 31: Revisão do Capítulo 30 — Playground e RAG Não Funcionavam de Ponta a Ponta
+
+* **Contexto**: antes de commitar o trabalho descrito no Capítulo 30, revisei linha a linha (não só o diff — rodando o app, os testes e chamadas HTTP reais) e achei seis problemas que impediam o Playground e o RAG de funcionar como anunciado, apesar do código parecer correto à primeira vista.
+
+* **Por que ocorreram (Causa Raiz)**:
+  1. **Playground sempre respondia com o mesmo modelo em toda coluna**: [`playground/page.js`](src/app/(dashboard)/dashboard/playground/page.js) manda `model: modelId` no corpo de `/api/agent/chat`, mas nenhum ponto da cadeia (`index.js` → `processMessage` → `runAgentWithTools` → `complete()`) lia esse campo — o roteador sempre escolhia o modelo pela lista de prioridade interna, ignorando a seleção do usuário. A comparação lado a lado não comparava nada.
+  2. **RAG inacessível pela UI**: o proxy Next.js ([`route.js`](src/app/api/agent/[[...path]]/route.js)) mantém uma allowlist explícita de caminhos encaminhados ao agente Express; `/api/rag/*` nunca foi adicionado. Toda chamada de `/dashboard/rag` batia em 403 antes de chegar ao agente.
+  3. **Destaque errado no menu**: `Sidebar.js` tinha um caso especial `pathname === "/dashboard" → destaca "Endpoint"`, escrito quando `/dashboard` ainda renderizava a página de Endpoint. Com `/dashboard` agora mostrando o `Dashboard2Client`, esse caso especial ficou invertido — "Endpoint" e "Painel do Lucas" destacavam juntos.
+  4. **OAuth do Google perdia o indicador de sucesso**: o callback do Google (`apps/agent/src/index.js`) redireciona para `/dashboard2?google=connected` (documentado no Capítulo 15/16). O novo `redirect("/dashboard")` em [`dashboard2/page.js`](src/app/dashboard2/page.js) descartava a query string — `redirect()` do Next não a repassa sozinho.
+  5. **2 erros novos de lint**: aspas não escapadas em JSX (`playground/page.js`) e `setState` síncrono num efeito de carga inicial (`rag/page.js`) — este último é o mesmo padrão de análise "de componente inteiro" da regra `react-hooks/set-state-in-effect` já visto no Capítulo 25, que também acusou uma linha não tocada em `useChatSession.js` só por causa da adição do campo `telemetry` no mesmo arquivo.
+  6. **Lock intermitente do SQLite** (`database is locked`): a nova suíte [`rag-and-playground.test.js`](tests/unit/rag-and-playground.test.js) soma mais uma conexão concorrente de escrita ao `apps/agent/src/db.js` compartilhado pelos testes do agente — sem `busy_timeout`, uma escrita concorrente falha na hora em vez de esperar o lock liberar. Reproduzido em 2 de 4 execuções repetidas da suíte completa; 0 de 5 sem o arquivo novo no lote.
+
+* **Como foi resolvido**:
+  1. `complete()` em [`proxy.js`](apps/agent/src/proxy.js) ganha `opts.model`: quando informado, usa **só** esse modelo (sem fallback), em vez da lista de prioridade — o objetivo do Playground é testar exatamente o modelo escolhido. `runAgentWithTools` (orchestrator.js) e a rota `/api/chat` (index.js) foram atualizados para repassar `ctx.model`/`req.body.model` até lá.
+  2. Adicionadas `/api/agent/rag/` e `/api/rag/` à `ALLOWED_PATHS` do proxy.
+  3. `isActive()` corrigida para tratar `/dashboard` como match exato, não mais como alias de `/dashboard/endpoint`.
+  4. `dashboard2/page.js` agora lê `searchParams` (assíncrono no Next 16) e repassa a query string no redirect.
+  5. Aspas escapadas (`&quot;`); efeito de carga do RAG documentado com `eslint-disable-next-line` justificado, mesmo padrão já usado no Capítulo 25.
+  6. `db.pragma("busy_timeout = 5000")` adicionado a [`db.js`](apps/agent/src/db.js) — genérico, beneficia qualquer conexão concorrente ao mesmo arquivo, não só os testes novos.
+  7. Bônus de robustez (não um bug, mas uma armadilha real): `grid-cols-${selectedModels.length}` interpolado em `playground/page.js` só "funciona" hoje porque `md:grid-cols-2`/`md:grid-cols-3` já existem literalmente em outros arquivos do projeto (Tailwind só gera classes que aparecem como string literal em algum arquivo escaneado). Trocado por um mapa estático (`GRID_COLS_CLASS`) para não depender dessa coincidência.
+
+* **Verificação**: `/api/chat` com dois `model` diferentes agora de fato invoca modelos diferentes (confirmado via `result.model` na resposta); upload/busca/delete do RAG testados via HTTP real através do proxy Next (bloqueados apenas por um `hmac_mismatch` de infraestrutura local pré-existente, reproduzido também em rotas não tocadas nesta revisão — não relacionado a este trabalho); suíte completa de testes do agente (RAG + orchestrator + modules + proxy-route + github-memory) estável em 10 execuções consecutivas após o fix do `busy_timeout`; lint limpo em todos os arquivos tocados.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
 
 
 

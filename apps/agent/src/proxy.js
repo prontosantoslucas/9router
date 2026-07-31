@@ -139,7 +139,12 @@ async function complete(messages, opts = {}) {
       if (cached) return cached;
     }
 
-    const models = getPriorityList(Object.keys(required).length > 0 ? required : undefined);
+    // opts.model força um modelo especifico (ex.: comparacao A/B do Playground),
+    // sem a cadeia de fallback normal — o objetivo ali e testar EXATAMENTE o
+    // modelo escolhido, nao deixar o roteador substituir por outro em silencio.
+    const models = opts.model
+      ? [opts.model]
+      : getPriorityList(Object.keys(required).length > 0 ? required : undefined);
     if (models.length === 0) throw new Error("Nenhum modelo disponível" + (hasVision ? " com visão" : ""));
 
     for (const model of models) {
@@ -181,7 +186,7 @@ async function complete(messages, opts = {}) {
         throw err;
       }
     }
-    throw new Error("Todos os modelos falharam");
+    throw new Error(opts.model ? `Modelo "${opts.model}" falhou` : "Todos os modelos falharam");
   } finally {
     release();
   }

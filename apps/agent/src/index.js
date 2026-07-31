@@ -167,8 +167,11 @@ app.post("/api/chat", async (req, res) => {
   const chatId = req.body.chatId || "web:default";
   const name = userName || "Você";
   const ghToken = req.body.githubToken || "";
+  // model: forca um modelo especifico em vez do roteamento normal — usado pelo
+  // Playground A/B (/dashboard/playground) para comparar modelos de verdade.
+  const model = req.body.model || undefined;
   try {
-    const result = await processMessage(chatId, message || "", name, { githubToken: ghToken, images });
+    const result = await processMessage(chatId, message || "", name, { githubToken: ghToken, images, model });
     if (result.formatted) delete result.formatted;
     if (result.image && result.image.startsWith("/")) {
       const proto = req.headers["x-forwarded-proto"] || req.protocol;
@@ -220,6 +223,51 @@ app.post("/api/modules", (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── Endpoints de RAG e Base de Conhecimento Local ──
+const rag = require("./rag");
+
+app.get("/api/rag/documents", (req, res) => {
+  try {
+    const docs = rag.listDocuments();
+    res.json({ ok: true, documents: docs });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/rag/upload", (req, res) => {
+  try {
+    const { filename, content } = req.body || {};
+    if (!filename || !content) return res.status(400).json({ error: "filename e content obrigatórios" });
+    const result = rag.addDocument(filename, content);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/rag/search", (req, res) => {
+  try {
+    const { query } = req.body || {};
+    const results = rag.searchDocuments(query || "");
+    res.json({ ok: true, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/rag/documents", (req, res) => {
+  try {
+    const { filename } = req.body || {};
+    if (!filename) return res.status(400).json({ error: "filename obrigatório" });
+    rag.deleteDocument(filename);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 app.post("/api/upload", async (req, res) => {
   const { base64, mimeType, filename } = req.body;

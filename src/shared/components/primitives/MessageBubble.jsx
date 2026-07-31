@@ -91,7 +91,31 @@ export function MessageBubble({ message, onSaveNotion, onRetry }) {
               <audio controls src={ttsUrl || message.audioUrl} className="h-9 w-full" />
             </div>
           )}
+
+          {/* Badge de Telemetria (Latência, Tokens e Custo) */}
+          {message.telemetry && (
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 rounded-lg bg-black/10 dark:bg-white/10 px-2 py-1 text-[10px] font-mono text-text-muted select-none border border-border/30">
+              {message.telemetry.latencyMs != null && (
+                <span className="flex items-center gap-0.5" title="Tempo de Resposta">
+                  <span className="material-symbols-outlined text-[12px]">timer</span>
+                  {message.telemetry.latencyMs}ms
+                </span>
+              )}
+              {message.telemetry.promptTokens != null && (
+                <span title="Tokens de Entrada (Prompt)">📥 {message.telemetry.promptTokens}t</span>
+              )}
+              {message.telemetry.completionTokens != null && (
+                <span title="Tokens de Saída (Completion)">📤 {message.telemetry.completionTokens}t</span>
+              )}
+              {message.telemetry.estimatedCost != null && (
+                <span className="text-emerald-500 font-semibold" title="Custo Estimado">
+                  ${message.telemetry.estimatedCost}
+                </span>
+              )}
+            </div>
+          )}
         </div>
+
 
         {/* Ações (aparecem no hover) */}
         <div

@@ -12,6 +12,8 @@ let lastQrCodeRaw = null;
 let connectionState = "disconnected"; // 'disconnected' | 'connecting' | 'qrcode' | 'open'
 let isInitializing = false;
 let messageHandler = null;
+let reconnectAttempts = 0;
+
 
 function lazyBaileys() {
   try {
@@ -75,9 +77,13 @@ async function start(onMessage) {
         sock = null;
 
         if (shouldReconnect) {
+          reconnectAttempts += 1;
+          const delay = Math.min(60000, Math.pow(2, reconnectAttempts) * 1000);
+          console.log(`[WhatsAppNative] Agendando reconexão em ${delay / 1000}s (tentativa ${reconnectAttempts})...`);
           connectionState = "connecting";
-          setTimeout(() => start(messageHandler), 5000);
+          setTimeout(() => start(messageHandler), delay);
         } else {
+          reconnectAttempts = 0;
           connectionState = "disconnected";
           // Se foi deslogado, limpa as credenciais para permitir novo pareamento
           try { fs.rmSync(AUTH_DIR, { recursive: true, force: true }); } catch {}
@@ -85,9 +91,11 @@ async function start(onMessage) {
       } else if (connection === "open") {
         console.log("✅ [WhatsAppNative] WhatsApp conectado com sucesso!");
         connectionState = "open";
+        reconnectAttempts = 0;
         lastQrCodeBase64 = null;
         lastQrCodeRaw = null;
       }
+
     });
 
     // Handler de mensagens recebidas

@@ -19,6 +19,8 @@ const navItems = [
   { href: "/dashboard/endpoint", label: "Endpoint", icon: "api" },
   { href: "/dashboard/providers", label: "Providers", icon: "dns" },
   { href: "/dashboard/combos", label: "Combos", icon: "layers" },
+  { href: "/dashboard/playground", label: "Playground A/B", icon: "compare" },
+  { href: "/dashboard/rag", label: "RAG Documentos", icon: "folder_data" },
   { href: "/dashboard/scanner", label: "Scanner", icon: "search" },
   { href: "/dashboard/usage", label: "Usage", icon: "bar_chart" },
   { href: "/dashboard/analytics", label: "Analytics", icon: "insights" },
@@ -30,8 +32,9 @@ const navItems = [
 const lucasItems = [
   { href: "/chat", label: "Chat do Lucas", icon: "forum", highlight: true },
   { href: "/coder", label: "Coder do Lucas", icon: "code", highlight: true },
-  { href: "/dashboard2", label: "Painel do Lucas", icon: "smart_toy", highlight: true },
+  { href: "/dashboard", label: "Painel do Lucas", icon: "smart_toy", highlight: true },
 ];
+
 
 const systemItems = [
   { href: "/dashboard/proxy-pools", label: "Proxy Pools", icon: "lan" },
@@ -67,7 +70,10 @@ export default function Sidebar({ onClose }) {
   const INSTALL_CMD = UPDATER_CONFIG.installCmdLatest;
 
   const isActive = (href) => {
-    if (href === "/dashboard/endpoint") return pathname === "/dashboard" || pathname.startsWith("/dashboard/endpoint");
+    // "Painel do Lucas" agora vive em /dashboard (Dashboard2Client) em vez de
+    // Endpoint; sem este exato-match, /dashboard bate no startsWith("/dashboard/...")
+    // de varios outros itens do menu (Endpoint, Providers, etc.) e destaca tudo junto.
+    if (href === "/dashboard") return pathname === "/dashboard";
     return pathname.startsWith(href);
   };
 

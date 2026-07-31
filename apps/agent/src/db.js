@@ -33,6 +33,11 @@ try {
 // WAL mode for better concurrent read performance
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
+// Sem isso, um segundo processo/conexao escrevendo ao mesmo tempo recebe
+// "database is locked" na hora em vez de esperar a transacao em andamento
+// liberar o lock — reproduzido com os testes de unidade do agente rodando
+// vários arquivos (cada um com sua própria conexão) contra o mesmo app.db.
+db.pragma("busy_timeout = 5000");
 
 // ── Schema ──
 db.exec(`

@@ -125,7 +125,7 @@ async function runAgentWithTools(agent, msgs, chatId, ctx = {}) {
   let prevToolSig = "";
 
   for (let i = 0; i < MAX_TOOL_LOOPS; i++) {
-    const result = await complete(msgs, { tools, tool_choice: tools ? "auto" : undefined });
+    const result = await complete(msgs, { tools, tool_choice: tools ? "auto" : undefined, model: ctx.model });
 
     if (i > 0 && result.model) {
       console.log(`[Tools] Loop ${i}/${MAX_TOOL_LOOPS} — modelo: ${result.model}`);
@@ -162,6 +162,7 @@ async function runAgentWithTools(agent, msgs, chatId, ctx = {}) {
 }
 
 async function processMessage(chatId, text, userName, ctx = {}) {
+  const startTime = Date.now();
   const session = getHistory(chatId);
 
   // Reply-to-message: injeta contexto da mensagem original no histórico
@@ -375,9 +376,27 @@ Como psicanalista, faça uma análise breve (2-3 frases) destacando padrões de 
     formatted += `\n\n_${note}_`;
   }
 
+  const latencyMs = Date.now() - startTime;
+  const promptTokens = Math.max(1, Math.round((text || "").length / 4));
+  const completionTokens = Math.max(1, Math.round((content || "").length / 4));
+  const estimatedCost = Number(((promptTokens * 0.00000015) + (completionTokens * 0.0000006)).toFixed(6));
+
   persistHistories();
-  return { content, formatted, model: "9router", agent: activePrimaryId };
+  return {
+    content,
+    formatted,
+    model: "9router",
+    agent: activePrimaryId,
+    telemetry: {
+      latencyMs,
+      promptTokens,
+      completionTokens,
+      totalTokens: promptTokens + completionTokens,
+      estimatedCost
+    }
+  };
 }
+
 
 async function askAgent(agentId, prompt, userName) {
   const agent = getAgent(agentId);

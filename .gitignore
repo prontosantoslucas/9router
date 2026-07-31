@@ -80,5 +80,9 @@ open-sse.old/
 graphify-out/*
 .next-analyze/*
 
-# local DB backups (coder connections migration)
+# local DB backups & temporary draft files
 _db-backup-*/
+login.txt
+memoria.*
+*.tmp
+
