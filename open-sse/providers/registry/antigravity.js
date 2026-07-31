@@ -24,9 +24,10 @@ export default {
     headers: {
       "User-Agent": ANTIGRAVITY_IDE_USER_AGENT,
     },
+    // 429/503 use computeRetryDelay hook (Retry-After header/body → cap, else backoff)
     retry: {
       "429": {
-        attempts: 3,
+        attempts: 6,
       },
       "500": {
         attempts: 3,
