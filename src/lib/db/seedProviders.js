@@ -49,6 +49,7 @@ const MODEL_RANKING = [
   "cx/gpt-5.5",
   "cl/anthropic/claude-sonnet-4.6",
   "ag/claude-sonnet-4-6",
+  "ag/gemini-3.6-flash",                      // Antigravity: Gemini 3.6 Flash
   "cl/openai/gpt-5.3-codex",                  // ClinePass: codex specialist
 
   // Tier 3 — fast + cheap fallbacks with usage quotas

@@ -38,15 +38,43 @@ function isConfigured() {
   return !!(config.NOTION_TOKEN && config.NOTION_DATABASE_ID);
 }
 
+let _schema = null;
+async function getSchema() {
+  if (_schema) return _schema;
+  try {
+    const res = await fetch(`https://api.notion.com/v1/databases/${config.NOTION_DATABASE_ID}`, {
+      headers: getHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok) return null;
+    _schema = data.properties || {};
+    return _schema;
+  } catch {
+    return null;
+  }
+}
+
+function titlePropertyName(schema) {
+  if (!schema) return "title";
+  const entry = Object.entries(schema).find(([, v]) => v.type === "title");
+  return entry ? entry[0] : "title";
+}
+
 async function createPage(title, content, tags = [], source = "chat") {
   if (!isConfigured()) return { ok: false, error: "Notion não configurado" };
+  const schema = await getSchema();
+  const titleProp = titlePropertyName(schema);
+  const properties = {
+    [titleProp]: { title: [{ type: "text", text: { content: title.slice(0, 200) } }] },
+  };
+  if (schema?.Fonte) properties.Fonte = { select: { name: String(source).slice(0, 100) } };
+  if (schema?.Criado) properties.Criado = { date: { start: new Date().toISOString() } };
+  if (tags.length > 0 && schema?.Tags) {
+    properties.Tags = { multi_select: tags.slice(0, 10).map((t) => ({ name: String(t).slice(0, 100) })) };
+  }
   const body = {
     parent: { database_id: config.NOTION_DATABASE_ID },
-    properties: {
-      title: { title: [{ type: "text", text: { content: title.slice(0, 200) } }] },
-      Fonte: { select: { name: source } },
-      Criado: { date: { start: new Date().toISOString() } },
-    },
+    properties,
     children: [
       {
         object: "block",
@@ -57,9 +85,6 @@ async function createPage(title, content, tags = [], source = "chat") {
       },
     ],
   };
-  if (tags.length > 0) {
-    body.properties.Tags = { multi_select: tags.map((t) => ({ name: t })) };
-  }
   try {
     const res = await fetch("https://api.notion.com/v1/pages", {
       method: "POST",
