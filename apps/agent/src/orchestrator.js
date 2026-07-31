@@ -81,6 +81,44 @@ function isRelevantFor(question, agentId) {
   return scoreAgent(question, agentId) >= 5;
 }
 
+const BRAIN_CATEGORIES = [
+  "Conversas Profundas",
+  "Planos",
+  "Metas",
+  "Pontos Importantes",
+  "Viradas de Chave",
+  "Memórias",
+  "Ideias Não Trabalhadas",
+];
+
+const BRAIN_SIGNALS = /plano|meta|objetivo|ideia|sonho|virada|mudança|importante|lembrar|memóri|decidir|decidimos|vou começar|quero criar|quero construir|conversa profunda|segundo cérebro|anota|salva/i;
+
+async function captureToNotion(userText, agentAnswer, channel) {
+  const notion = require("./notion");
+  if (!notion.isConfigured()) return;
+  const combined = `${userText}\n${agentAnswer}`;
+  if (combined.length < 80 || !BRAIN_SIGNALS.test(combined)) return;
+  try {
+    const res = await complete([
+      {
+        role: "system",
+        content:
+          `Você é o classificador do segundo cérebro de Lucas. Analise a conversa e decida se merece ser salva no Notion (plano, meta, ideia, virada de chave, memória, insight ou algo importante). Se SIM, responda APENAS JSON sem markdown: {"categoria":"<uma das categorias>","titulo":"<título curto>","resumo":"<resumo 1-3 frases>"}. Se NÃO, responda apenas: null. Categorias: ${BRAIN_CATEGORIES.join(", ")}`,
+      },
+      { role: "user", content: `Usuário: ${userText.slice(0, 1500)}\n\nLucas: ${agentAnswer.slice(0, 1500)}` },
+    ]);
+    const content = (res?.content || "").trim();
+    if (!content || content === "null" || content.startsWith("null")) return;
+    const parsed = JSON.parse(content.replace(/^```json\s*|\s*```$/g, ""));
+    if (!parsed?.categoria || !parsed?.titulo || !BRAIN_CATEGORIES.includes(parsed.categoria)) return;
+    const nota = `${parsed.resumo || ""}\n\n---\n\nUsuário: ${userText}\nLucas: ${agentAnswer}`;
+    const r = await notion.saveToCategory(parsed.categoria, parsed.titulo, nota.slice(0, 2000), [], channel);
+    if (r.ok) console.log(`[Brain] Nota anexada (${parsed.categoria}): ${r.url || parsed.titulo}`);
+  } catch (err) {
+    console.warn(`[Brain] Captura falhou: ${err.message}`);
+  }
+}
+
 async function runAgentWithTools(agent, msgs, chatId, ctx = {}) {
   const tools = agent.tools.length > 0 ? TOOL_SCHEMAS : undefined;
   let answer = "";
@@ -241,6 +279,9 @@ async function processMessage(chatId, text, userName, ctx = {}) {
   // 3. Gravação Obrigatória no ai-memory
   const { recordInteraction } = require("./memory/interactionRecorder");
   recordInteraction(chatId, text, primaryAnswer, ctx.channel || "web");
+
+  // 3b. Segundo cérebro: captura automática de conteúdo relevante → Notion (não bloqueia resposta)
+  captureToNotion(text, primaryAnswer, ctx.channel || "web").catch(() => {});
 
   // 4. Se o modo Co-Piloto estiver ativado para canais externos (WhatsApp/Telegram), criar rascunho
   const { addDraft } = require("./copilot/copilotQueue");

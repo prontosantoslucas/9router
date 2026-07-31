@@ -425,6 +425,22 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 28: Segundo Cérebro — Captura Automática no Notion sem Depender de Propriedade de Schema
+
+* **Contexto**: o Agente Lucas já classificava conversas relevantes (planos, metas, ideias, viradas de chave, memórias, pontos importantes, conversas profundas) via LLM em `captureToNotion()` ([`apps/agent/src/orchestrator.js`](apps/agent/src/orchestrator.js)) e expunha a tool `notion_save` ([`apps/agent/src/tools/index.js`](apps/agent/src/tools/index.js)) para salvamento manual. Faltava decidir *onde* essas notas deveriam morar no Notion.
+
+* **Por que a abordagem original não era confiável**: o desenho inicial criava uma página nova por captura, numa tabela única, marcando a categoria via propriedade `Select` chamada `Categoria`. Essa propriedade depende de um passo manual na UI do Notion (criar a coluna e **confirmar** a criação, não só digitar o nome) — passo que já se mostrou frágil de esquecer/errar em duas tentativas anteriores. Além disso, uma tabela única com uma linha por captura não se comporta como um "segundo cérebro" que cresce organizado por tema — vira uma lista achatada.
+
+* **Como foi resolvido (Solução Técnica)**:
+  1. **Categorias viram páginas, não valores de propriedade**: em [`apps/agent/src/notion.js`](apps/agent/src/notion.js), `getCategoryPageId()` resolve o id da página do Notion correspondente a uma categoria buscando por título exato (`findPageByExactTitle`), com cache de 5 minutos (mesmo padrão do TTL de schema abaixo). Se a página não existir, `createPage()` a cria automaticamente como linha do database configurado — auto-provisionamento, sem exigir nenhuma ação manual no Notion além da configuração inicial do token/database.
+  2. **Anexar em vez de criar**: `appendEntry()` usa `PATCH /v1/blocks/{page_id}/children` para acrescentar um bloco de título (`heading_3`), metadado (data/hora + origem) e conteúdo ao final da página da categoria, seguido de um `divider`. Cada categoria (Planos, Metas, Memórias, ...) vira um documento único que cresce cronologicamente — o "se autopreencher" pedido para o segundo cérebro.
+  3. **`saveToCategory()`** é o novo ponto de entrada único: resolve a página da categoria, anexa a entrada, e só cai de volta para `createPage()` (comportamento antigo, linha nova na tabela) se a categoria não puder ser resolvida — para nunca perder uma captura silenciosamente. `captureToNotion()` e a tool `notion_save` foram atualizados para chamá-lo.
+  4. **Cache de schema com expiração** (relacionado, mesmo arquivo): `getSchema()` cacheava o schema do database **para sempre** (`if (_schema) return _schema`, sem invalidação). Uma propriedade criada no Notion depois do boot do agente ficava invisível até reiniciar o processo manualmente — foi exatamente o que aconteceu ao tentar criar a propriedade `Categoria`. Trocado por TTL de 5 minutos, e `setConfig()` agora invalida o cache imediatamente ao trocar de token/database.
+
+* **Verificação**: testado contra a API real do Notion com uma categoria descartável — duas chamadas a `saveToCategory()` na mesma categoria retornaram a mesma página (confirma reaproveitamento, não duplicação), com as duas entradas anexadas corretamente como blocos. Página de teste arquivada ao final.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 

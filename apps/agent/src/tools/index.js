@@ -239,20 +239,27 @@ const TOOLS = {
 const NOTION_TOOLS = {
   notion_save: {
     name: "notion_save",
-    desc: "Salva uma nota no Notion. Use quando o usuário pedir pra salvar informação, ou quando algo importante for discutido que mereça registro.",
+    desc: "Salva uma nota no Notion (segundo cérebro). Use quando o usuário pedir pra salvar informação, ou quando algo importante for discutido que mereça registro: planos, metas, ideias, viradas de chave, pontos importantes, memórias, conversas profundas.",
     args: {
       type: "object",
       properties: {
         title: { type: "string", description: "Título curto da nota" },
         content: { type: "string", description: "Conteúdo completo da nota" },
+        categoria: {
+          type: "string",
+          enum: ["Conversas Profundas", "Planos", "Metas", "Pontos Importantes", "Viradas de Chave", "Memórias", "Ideias Não Trabalhadas"],
+          description: "Categoria do segundo cérebro para classificar a nota",
+        },
         tags: { type: "array", items: { type: "string" }, description: "Tags para categorizar (opcional)" },
       },
       required: ["title", "content"],
     },
     run: async (args) => {
-      const r = await notion.createPage(args.title, args.content, args.tags || [], "agent");
+      const r = args.categoria
+        ? await notion.saveToCategory(args.categoria, args.title, args.content, args.tags || [], "agent")
+        : await notion.createPage(args.title, args.content, args.tags || [], "agent", "");
       return r.ok
-        ? `✅ Salvo no Notion: ${r.url}`
+        ? `✅ Salvo no Notion${r.appended ? ` (anexado em "${args.categoria}")` : ""}: ${r.url}`
         : `❌ Erro: ${r.error}`;
     },
   },
