@@ -543,11 +543,22 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 33: Construção e Empacotamento do App Android 'Lucas' (React Native / Expo Monorepo — Fases 0 a 4)
+
+* **Por que este plano foi executado e aprimorado (Causa Raiz & Desafios Técnicos Mapeados)**:
+  1. **Status do Backend na Fase 0**: O plano previa a validação da API no Railway. A auditoria via `git status` e `git log` confirmou que os commits do Cérebro Inteligente Notion (`1330862c` e `1480b714`) já estavam na `master`. Validou-se que `POST /api/auth/login` responde corretamente com a contagem de tentativas e bloqueio (lockout 429).
+  2. **Persistência de Sessão & Cookies no React Native**: No React Native/Expo, o `fetch` nativo no Android/iOS não repassa automaticamente os cookies de sessão (`Set-Cookie`). A solução exigiu a criação do módulo [`src/services/api.ts`](apps/mobile/src/services/api.ts) utilizando `expo-secure-store` para persistir o token e anexar o cabeçalho `Cookie: auth_token=<token>` em cada requisição.
+  3. **Configuração do Metro Bundler em Monorepo**: O app Expo em [`apps/mobile/`](apps/mobile/) exigia mapeamento explícito em [`metro.config.js`](apps/mobile/metro.config.js) (`watchFolders` e `nodeModulesPaths`) para resolver pacotes sem colisão de dependências hoisted na raiz do monorepo.
+  4. **Redesenho UI/UX Nível ChatGPT / Claude Mobile**: Para atender à exigência de uma interface de altíssimo nível profissional, rápida e prática, o Chat foi reformulado com tema escuro Obsidian (`#0b0f17`), cards de sugestão rápida (*Quick Prompts*), menu estilo *Bottom Sheet* ao pressionar mensagens para salvar no Notion ou compartilhar, cápsula flutuante de input com anexo de imagens (`expo-image-picker`) e feedback tátil (`expo-haptics`).
+
+* **Como foi resolvido (Solução Aplicada)**:
+  1. **Estrutura Monorepo & Configuração EAS**: Pacote [`apps/mobile/`](apps/mobile/) configurado em `package.json` com `app.json` (`com.lucas.brain`) e `eas.json` com perfil `preview` (`buildType: "apk"`).
+  2. **Autenticação & Auth Guard**: Módulo [`src/services/api.ts`](apps/mobile/src/services/api.ts), [`app/_layout.tsx`](apps/mobile/app/_layout.tsx) com `AuthContext` e tela [`app/login.tsx`](apps/mobile/app/login.tsx) com tratamento amigável de erros de lockout.
+  3. **Chat Multimodal Nível ChatGPT**: Tela [`app/(tabs)/index.tsx`](apps/mobile/app/(tabs)/index.tsx) com renderização Markdown nativa (`react-native-markdown-display`), histórico offline ([`src/services/storage.ts`](apps/mobile/src/services/storage.ts)), envio de fotos da câmera/galeria para visão do agente e menu de contexto rápido para transformar mensagens em notas do Notion.
+  4. **2º Cérebro Notion**: Tela [`app/(tabs)/brain.tsx`](apps/mobile/app/(tabs)/brain.tsx) com banner de métricas de sincronização, busca em tempo real, chips com badges coloridos das 7 categorias oficiais e modal de criação rápida com botão flutuante (+).
+
+* **Verificação**: Sintaxe limpa e verificada via `tsc`, estrutura de arquivos criada em `apps/mobile/`, documentação técnica gerada em `implementation_plan.md` e `walkthrough.md`.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
-
-
-
-
-
-
-

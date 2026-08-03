@@ -4,7 +4,8 @@
   "description": "MaxRouter web dashboard",
   "private": true,
   "workspaces": [
-    "apps/agent"
+    "apps/agent",
+    "apps/mobile"
   ],
   "scripts": {
     "dev": "next dev --port 20127",
