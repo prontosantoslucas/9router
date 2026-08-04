@@ -306,10 +306,17 @@ app.post("/api/notion/config", async (req, res) => {
 });
 
 app.post("/api/notion/save", async (req, res) => {
-  if (!require("./notion").isConfigured()) return res.status(400).json({ error: "Notion não configurado" });
-  const { title, content, tags, source } = req.body;
+  const notion = require("./notion");
+  if (!notion.isConfigured()) return res.status(400).json({ error: "Notion não configurado" });
+  const { title, content, tags, source, category, categoria } = req.body;
   if (!title || !content) return res.status(400).json({ error: "title e content obrigatórios" });
-  const r = await require("./notion").createPage(title, content, tags || [], source || "web");
+  // Se veio `category` (do app mobile) ou `categoria`, apende sob a página da
+  // categoria no segundo cérebro (comportamento pedido pela UI mobile). Sem
+  // categoria, mantém o antigo: cria linha nova no database principal.
+  const cat = (category || categoria || "").trim();
+  const r = cat
+    ? await notion.saveToCategory(cat, title, content, tags || [], source || "web")
+    : await notion.createPage(title, content, tags || [], source || "web");
   res.json(r);
 });
 

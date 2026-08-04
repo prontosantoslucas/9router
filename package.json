@@ -4,8 +4,7 @@
   "description": "MaxRouter web dashboard",
   "private": true,
   "workspaces": [
-    "apps/agent",
-    "apps/mobile"
+    "apps/agent"
   ],
   "scripts": {
     "dev": "next dev --port 20127",
@@ -71,5 +70,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "vitest": "^4.1.10"
-  }
+  },
+  "comment_mobile_workspace": "apps/mobile is intentionally NOT an npm workspace here (see its own package.json/README) — Expo/React Native's peer-dependency-heavy install graph doesn't hoist safely alongside the dashboard's own React 19 tree; hoisted transitive deps (expo-asset, @react-native/virtualized-lists, etc.) declare wildcard peerDependencies on 'expo'/'react-native' that npm's peer-auto-install then 'satisfies' by installing an unrelated latest major at the workspace root, shadowing apps/mobile's real pinned versions for anything doing hierarchical node_modules lookup. apps/mobile has its own fully self-contained node_modules + package-lock.json — run `npm install` inside apps/mobile directly, not from the repo root."
 }

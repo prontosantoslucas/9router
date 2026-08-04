@@ -16,7 +16,9 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
-// 4. Bloquear resolução duplicada de pacotes react e react-native
+// 4. Bloquear resolução duplicada de pacotes react e react-native — sem isso o Metro
+// caminha hierarquicamente até o node_modules raiz e pode resolver uma versão errada
+// de react-native (ex.: puxada transitivamente por outro pacote) em vez da fixada aqui.
 config.resolver.disableHierarchicalLookup = true;
 
 module.exports = config;

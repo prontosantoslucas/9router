@@ -37,15 +37,45 @@ function writeToAgentDb(token, databaseId) {
   }
 }
 
+// Lê a config direto do banco do agente — que é a fonte da verdade do que o
+// agente realmente usa em runtime. As settings do dashboard podem estar
+// dessincronizadas (ex.: instalação fresca, config feita antes desse endpoint
+// espelhar no dashboard, DB do dashboard nem criado ainda).
+function readFromAgentDb() {
+  try {
+    const fs = require("node:fs");
+    const p = agentDbPath();
+    if (!fs.existsSync(p)) return null;
+    const { DatabaseSync } = require("node:sqlite");
+    const db = new DatabaseSync(p);
+    let row = null;
+    try {
+      row = db.prepare("SELECT token, database_id FROM notion_config WHERE id = 1").get();
+    } catch {}
+    db.close();
+    return row || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET() {
   try {
     const settings = await getSettings();
-    const notionToken = settings?.notionToken || "";
-    const notionDatabaseId = settings?.notionDatabaseId || "";
+    let notionToken = settings?.notionToken || "";
+    let notionDatabaseId = settings?.notionDatabaseId || "";
+    let source = "dashboard";
+    if (!notionToken || !notionDatabaseId) {
+      const agentRow = readFromAgentDb();
+      if (agentRow?.token) notionToken = notionToken || agentRow.token;
+      if (agentRow?.database_id) notionDatabaseId = notionDatabaseId || agentRow.database_id;
+      if (agentRow) source = "agent-db";
+    }
     return NextResponse.json({
       configured: !!(notionToken && notionDatabaseId),
       hasToken: !!notionToken,
       hasDatabaseId: !!notionDatabaseId,
+      source,
     });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });

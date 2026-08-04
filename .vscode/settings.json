@@ -16,5 +16,7 @@
     "javascript:S3776": {
       "level": "off"
     }
-  }
+  },
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.compile.nullAnalysis.mode": "automatic"
 }
