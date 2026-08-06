@@ -614,10 +614,141 @@ const GOOGLE_TOOLS = {
   },
 };
 
+const linkedinMcp = require("./linkedinMcpClient");
+
+async function callLinkedin(toolName, args) {
+  if (!linkedinMcp.isConfigured()) {
+    return "❌ LinkedIn MCP não configurado. Defina LINKEDIN_MCP_URL no .env do agent e suba o sidecar (ver sidecars/linkedin-mcp/START.md).";
+  }
+  try {
+    const out = await linkedinMcp.callTool(toolName, args);
+    if (out == null) return "⚠️ LinkedIn MCP retornou vazio.";
+    if (typeof out === "string") return out;
+    try { return JSON.stringify(out, null, 2); } catch { return String(out); }
+  } catch (err) {
+    // sessão pode ter caducado se o sidecar reiniciou — invalida para o próximo call
+    linkedinMcp.resetSession();
+    return `❌ Erro no LinkedIn MCP: ${err.message}`;
+  }
+}
+
+const { runJobHunt } = require("./linkedinJobHunt");
+
+const LINKEDIN_TOOLS = {
+  linkedin_job_hunt: {
+    name: "linkedin_job_hunt",
+    desc: "Caça vagas no LinkedIn alinhadas com o perfil profissional do usuário (extraído dos repos GitHub), rankeia via LLM e opcionalmente gera cover letter para o top 5. Retorna lista com link direto de aplicação. NÃO se inscreve automaticamente — LinkedIn detecta e bane conta.",
+    args: {
+      type: "object",
+      properties: {
+        location: { type: "string", description: "Filtro de localidade (ex: 'Remote', 'São Paulo', 'Brazil')" },
+        seniority: { type: "string", description: "Nível: 'junior', 'mid', 'senior', 'staff'. Opcional." },
+        max_results: { type: "number", description: "Quantas vagas rankear (1-25, default 10)" },
+        cover_letters: { type: "boolean", description: "Gerar cover letter para top 5 (default true)" },
+        github_owner: { type: "string", description: "Handle GitHub para extrair perfil (default: prontosantoslucas)" },
+        queries_override: {
+          type: "array", items: { type: "string" },
+          description: "Se fornecido, pula geração automática e usa estas queries.",
+        },
+      },
+      required: [],
+    },
+    run: (args) => runJobHunt(args),
+  },
+  linkedin_person_profile: {
+    name: "linkedin_person_profile",
+    desc: "Busca o perfil público de uma pessoa no LinkedIn (via linkedin-mcp-server sidecar). Requer o username do LinkedIn.",
+    args: {
+      type: "object",
+      properties: {
+        linkedin_username: { type: "string", description: "Username do LinkedIn (ex: 'satyanadella', 'jeffweiner08')" },
+        sections: {
+          type: "string",
+          description: "Seções extras separadas por vírgula (experience, education, interests, honors, languages, contact_info, posts). Opcional.",
+        },
+      },
+      required: ["linkedin_username"],
+    },
+    run: (args) => callLinkedin("get_person_profile", {
+      linkedin_username: String(args.linkedin_username),
+      ...(args.sections ? { sections: String(args.sections) } : {}),
+    }),
+  },
+  linkedin_search_people: {
+    name: "linkedin_search_people",
+    desc: "Busca pessoas no LinkedIn por palavras-chave (via linkedin-mcp-server).",
+    args: {
+      type: "object",
+      properties: {
+        keywords: { type: "string", description: "Termos de busca (ex: 'product manager', 'ML engineer at Meta')" },
+        location: { type: "string", description: "Filtro opcional de localidade (ex: 'London', 'São Paulo')" },
+      },
+      required: ["keywords"],
+    },
+    run: (args) => callLinkedin("search_people", {
+      keywords: String(args.keywords),
+      ...(args.location ? { location: String(args.location) } : {}),
+    }),
+  },
+  linkedin_company_profile: {
+    name: "linkedin_company_profile",
+    desc: "Busca o perfil de uma empresa no LinkedIn pelo slug/username da company page.",
+    args: {
+      type: "object",
+      properties: {
+        company_username: { type: "string", description: "Slug da empresa (ex: 'microsoft', 'anthropicai')" },
+      },
+      required: ["company_username"],
+    },
+    run: (args) => callLinkedin("get_company_profile", { company_username: String(args.company_username) }),
+  },
+  linkedin_company_posts: {
+    name: "linkedin_company_posts",
+    desc: "Lista posts recentes de uma empresa no LinkedIn.",
+    args: {
+      type: "object",
+      properties: {
+        company_username: { type: "string", description: "Slug da empresa" },
+      },
+      required: ["company_username"],
+    },
+    run: (args) => callLinkedin("get_company_posts", { company_username: String(args.company_username) }),
+  },
+  linkedin_job_details: {
+    name: "linkedin_job_details",
+    desc: "Detalha uma vaga do LinkedIn a partir do ID (numérico) da vaga.",
+    args: {
+      type: "object",
+      properties: {
+        job_id: { type: "string", description: "ID numérico da vaga (extraído da URL /jobs/view/<id>)" },
+      },
+      required: ["job_id"],
+    },
+    run: (args) => callLinkedin("get_job_details", { job_id: String(args.job_id) }),
+  },
+  linkedin_search_jobs: {
+    name: "linkedin_search_jobs",
+    desc: "Busca vagas no LinkedIn por palavras-chave.",
+    args: {
+      type: "object",
+      properties: {
+        keywords: { type: "string", description: "Termos de busca (ex: 'senior backend engineer')" },
+        location: { type: "string", description: "Filtro opcional de localidade" },
+      },
+      required: ["keywords"],
+    },
+    run: (args) => callLinkedin("search_jobs", {
+      keywords: String(args.keywords),
+      ...(args.location ? { location: String(args.location) } : {}),
+    }),
+  },
+};
+
 Object.assign(TOOLS, PHONE_TOOLS);
 Object.assign(TOOLS, NOTION_TOOLS);
 Object.assign(TOOLS, CHANNEL_TOOLS);
 Object.assign(TOOLS, GOOGLE_TOOLS);
+Object.assign(TOOLS, LINKEDIN_TOOLS);
 
 const TOOL_LIST = Object.values(TOOLS).map((t) => ({
   name: t.name,
