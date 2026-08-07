@@ -15,7 +15,6 @@ const { runJobHunt } = require("./tools/linkedinJobHunt");
 
 const CHECK_INTERVAL_MS = 15 * 60 * 1000;   // check a cada 15 min
 const MAX_SEEN_HISTORY = 200;                // memória de job_ids por alerta
-const SENT_JOB_ID_RE = /(?:job_id["'\s:]*|jobs\/view\/)(\d{8,})/g;
 
 // Setup schema (idempotente)
 db.exec(`
@@ -31,7 +30,23 @@ db.exec(`
     enabled INTEGER NOT NULL DEFAULT 1,
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
   );
+  CREATE TABLE IF NOT EXISTS job_alert_notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    read INTEGER NOT NULL DEFAULT 0
+  );
 `);
+
+const NOTIFICATION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
+// Cleanup periódico — sem isso a tabela cresce sem limite (achado do audit:
+// mesma classe de bug do extension_jobs, cada notificação de webchat nunca
+// era removida mesmo depois de lida/expirada).
+setInterval(() => {
+  const cutoff = Math.floor((Date.now() - NOTIFICATION_MAX_AGE_MS) / 1000);
+  db.prepare(`DELETE FROM job_alert_notifications WHERE created_at < ?`).run(cutoff);
+}, 60 * 60 * 1000); // 1x por hora
 
 function createAlert({ chatId, criteria, intervalHours = 168, channel = "webchat", label = "" }) {
   if (!chatId) throw new Error("chatId obrigatório");
@@ -72,12 +87,6 @@ function cancelAlert(id) {
   return res.changes > 0;
 }
 
-function extractJobIds(text) {
-  const ids = new Set();
-  for (const m of String(text).matchAll(SENT_JOB_ID_RE)) ids.add(m[1]);
-  return [...ids];
-}
-
 async function sendVia(channel, chatId, message) {
   if (channel === "telegram") {
     try {
@@ -94,13 +103,6 @@ async function sendVia(channel, chatId, message) {
     return;
   }
   // Default: webchat — grava como notificação no DB. Frontend pode puxar.
-  db.exec(`CREATE TABLE IF NOT EXISTS job_alert_notifications (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    chat_id TEXT NOT NULL,
-    body TEXT NOT NULL,
-    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
-    read INTEGER NOT NULL DEFAULT 0
-  )`);
   db.prepare(`INSERT INTO job_alert_notifications (chat_id, body) VALUES (?, ?)`)
     .run(String(chatId), message);
 }
@@ -121,16 +123,20 @@ async function runOne(alert) {
     return { alert: alert.id, error: err.message };
   }
 
-  // runJobHunt retorna string formatada — extrai job_ids via regex
-  const foundIds = extractJobIds(raw);
+  // runJobHunt agora devolve { text, job_ids, items } — job_id de fonte
+  // externa (remoteok:123, arbeitnow:slug) não é numérico, então usamos a
+  // lista estruturada em vez de extrair via regex do texto formatado.
+  const foundIds = raw.job_ids;
   const newIds = foundIds.filter((id) => !seen.has(id));
 
   if (newIds.length > 0) {
-    // Extrai as sections das vagas novas do texto (regex por bloco numerado)
+    const newBlocks = raw.items
+      .filter((it) => newIds.includes(it.job_id))
+      .map((it) => it.block);
     const summary = [
       `🔔 *${alert.label}* — ${newIds.length} vaga(s) nova(s) esta semana`,
       "",
-      raw.split(/\n(?=\d+\. \*\*)/).filter((block) => newIds.some((id) => block.includes(id))).join("\n\n"),
+      newBlocks.join("\n\n"),
     ].join("\n");
     await sendVia(alert.channel, alert.chat_id, summary);
   } else {
@@ -170,10 +176,24 @@ async function runNow(id) {
 }
 
 let timer = null;
+let runDueInFlight = false;
 function start() {
   if (timer) return;
   timer = setInterval(() => {
-    runDue().catch((e) => console.error("[jobAlerts] runDue error:", e.message));
+    // Guarda de re-entrância: runOne() pode levar bem mais que 15min (rank
+    // LLM + até 90s de timeout de extensão por alerta, com múltiplos alertas
+    // due na mesma rodada + 30s de delay entre cada um). Sem essa guarda, o
+    // próximo tick do setInterval re-seleciona o mesmo alerta ainda em voo
+    // como "due" (last_run só é gravado quando runOne termina) e dispara
+    // notificação duplicada pro usuário.
+    if (runDueInFlight) {
+      console.warn("[jobAlerts] tick ignorado — rodada anterior ainda em andamento");
+      return;
+    }
+    runDueInFlight = true;
+    runDue()
+      .catch((e) => console.error("[jobAlerts] runDue error:", e.message))
+      .finally(() => { runDueInFlight = false; });
   }, CHECK_INTERVAL_MS);
   // Não roda immediatamente no boot — evita fatigar sessão em cada restart do container
   console.log(`[jobAlerts] iniciado (check a cada ${CHECK_INTERVAL_MS / 60000} min)`);

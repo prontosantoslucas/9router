@@ -5,7 +5,12 @@
 // (usa cookies da sessao logada) OU abre aba se precisar renderizar DOM.
 // Devolve resultado via POST /api/extension/job-result.
 
-const POLL_INTERVAL_MS = 8000; // 8s
+// Chrome clampa `chrome.alarms` com period < 30s pra 30s (extensões não
+// empacotadas/produção não conseguem período menor que isso) — 8s nunca
+// rodava de fato no cadência pedida, e um poll mais lento que o esperado
+// consumia parte do orçamento de JOB_TIMEOUT_MS lá no extensionBridge sem
+// ninguém perceber por quê. 30s aqui é o valor real, não só o nominal.
+const POLL_INTERVAL_MS = 30000; // 30s — piso do chrome.alarms
 const REQUEST_TIMEOUT_MS = 60000;
 
 // Via online (gateway Next.js): proxy exige prefixo /api/agent/.

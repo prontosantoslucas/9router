@@ -1,4 +1,5 @@
 require("dotenv").config();
+const crypto = require("node:crypto");
 const express = require("express");
 const cors = require("cors");
 const cfg = require("./config");
@@ -346,7 +347,13 @@ function extensionAuth(req, res) {
   }
   const h = req.headers["authorization"] || "";
   const token = h.startsWith("Bearer ") ? h.slice(7) : "";
-  if (token !== EXTENSION_TOKEN) {
+  // timingSafeEqual exige mesmo tamanho — compara buffer do token esperado
+  // (tamanho fixo) contra hash do recebido em vez do valor puro, então um
+  // token errado de tamanho diferente não estoura e ainda não há diferença
+  // de tempo detectável por tamanho do input.
+  const tokenHash = crypto.createHash("sha256").update(token).digest();
+  const expectedHash = crypto.createHash("sha256").update(EXTENSION_TOKEN).digest();
+  if (!crypto.timingSafeEqual(tokenHash, expectedHash)) {
     res.status(401).json({ error: "Unauthorized" });
     return false;
   }

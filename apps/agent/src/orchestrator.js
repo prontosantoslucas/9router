@@ -41,6 +41,7 @@ Você tem 10 ferramentas relacionadas ao LinkedIn:
 
 **Buscas de vaga:**
 - \`linkedin_job_hunt\` — busca vagas alinhadas com o perfil do dono (GitHub prontosantoslucas), rankeia via LLM, retorna top N com links de aplicação. Cover letters opcionais pro top 5.
+- Além do LinkedIn, busca em paralelo em fontes gratuitas sem login (RemoteOK, Remotive, Arbeitnow, Jobicy, WorkingNomads) — reduz chamadas ao LinkedIn (só as 2 primeiras queries vão pra lá) e cobre vaga remota que não tá no LinkedIn. Parâmetro \`sources\` filtra quais usar (default: todas).
 - Filtros default do dono: **remote ou Cotia**, **salário R$ 5-10k+**, **últimos 7 dias**. Se o usuário não especificar filtro, use esses.
 - Uso típico: "acha vagas AI engineer" → \`linkedin_job_hunt({location:"Remote", max_results:10})\`
 

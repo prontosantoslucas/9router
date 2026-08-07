@@ -38,8 +38,17 @@ async function callViaExtension(toolName, args) {
   if (!type) return { supported: false };
   const bridge = getBridge();
   if (!bridge) return { supported: false };
-  const result = await bridge.enqueue({ type, params: args || {} });
-  return { supported: true, result };
+  try {
+    const result = await bridge.enqueue({ type, params: args || {} });
+    return { supported: true, result };
+  } catch (err) {
+    // Extensão configurada mas offline/travada — enqueue() só rejeita depois
+    // de esperar o timeout inteiro (90s). Sem esse catch, o erro subia direto
+    // e quebrava callLinkedin antes de tentar o fallback MCP, anulando o
+    // propósito de ter um fallback.
+    console.warn(`[linkedinClient] extensão falhou pra ${toolName}: ${err.message} — tentando MCP`);
+    return { supported: false };
+  }
 }
 
 async function callViaMcp(toolName, args) {

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MAXROUTER LinkedIn Helper",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Ponte entre teu browser real e o agent MAXROUTER. Executa buscas/leituras no LinkedIn usando tua sessão logada — o LinkedIn não detecta porque é o teu browser real.",
   "permissions": ["storage", "activeTab", "scripting", "alarms", "cookies", "tabs"],
   "host_permissions": [

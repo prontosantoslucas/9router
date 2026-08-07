@@ -727,10 +727,14 @@ Rodará automático. Use "list_scheduled_hunts" pra ver, "run_scheduled_hunt_now
           type: "array", items: { type: "string" },
           description: "Se fornecido, pula geração automática e usa estas queries.",
         },
+        sources: {
+          type: "array", items: { type: "string" },
+          description: "Fontes a consultar: 'linkedin', 'remoteok', 'remotive', 'arbeitnow', 'jobicy', 'workingnomads'. Default: todas.",
+        },
       },
       required: [],
     },
-    run: (args) => runJobHunt(args),
+    run: async (args) => (await runJobHunt(args)).text,
   },
   linkedin_person_profile: {
     name: "linkedin_person_profile",

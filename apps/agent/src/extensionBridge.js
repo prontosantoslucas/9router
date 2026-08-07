@@ -11,7 +11,11 @@
 const crypto = require("node:crypto");
 const db = require("./db");
 
-const JOB_TIMEOUT_MS = 90_000;
+// Pior caso real do lado da extensão: até 30s de latência de pickup (piso do
+// chrome.alarms) + até 60s de execução (REQUEST_TIMEOUT_MS no background.js)
+// = 90s. 90_000 aqui batia exatamente nesse limite, sem margem — qualquer
+// variação fazia o agent desistir antes da extensão terminar. 120s dá folga.
+const JOB_TIMEOUT_MS = 120_000;
 const JOB_MAX_AGE_MS = 5 * 60_000;
 
 // Setup schema
@@ -33,10 +37,15 @@ db.exec(`
 // Waiters: { jobId: {resolve, reject, timer} }
 const waiters = new Map();
 
-// Cleanup periódico de jobs velhos
+// Cleanup periódico de jobs velhos — sem filtro de status: um job travado em
+// 'picked' (extensão morreu no meio) ou 'timeout' nunca deveria ficar pra
+// sempre na tabela só porque o status dele não estava na lista. Se passou de
+// JOB_MAX_AGE_MS, tá obsoleto de qualquer forma — inclusive 'pending'/'picked'
+// órfão de um restart do processo (o Map `waiters` é em memória; um restart
+// do container mata o timer de timeout, mas não a linha no SQLite).
 setInterval(() => {
   const cutoff = Date.now() - JOB_MAX_AGE_MS;
-  db.prepare("DELETE FROM extension_jobs WHERE created_at * 1000 < ? AND status IN ('done','error','pending')").run(cutoff);
+  db.prepare("DELETE FROM extension_jobs WHERE created_at * 1000 < ?").run(cutoff);
 }, 60_000);
 
 function enqueue({ type, params = {} }) {
