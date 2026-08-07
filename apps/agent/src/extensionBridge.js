@@ -40,11 +40,7 @@ setInterval(() => {
 }, 60_000);
 
 function enqueue({ type, params = {} }) {
-  if (!type) throw new Error("type obrigatório");
-  const id = crypto.randomBytes(8).toString("hex");
-  db.prepare(
-    "INSERT INTO extension_jobs (id, type, params) VALUES (?, ?, ?)"
-  ).run(id, type, JSON.stringify(params));
+  const id = enqueueNow({ type, params });
 
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -54,6 +50,16 @@ function enqueue({ type, params = {} }) {
     }, JOB_TIMEOUT_MS);
     waiters.set(id, { resolve, reject, timer });
   });
+}
+
+// Sincrono: insere e devolve o id (usado pelo endpoint de teste E2E).
+function enqueueNow({ type, params = {} }) {
+  if (!type) throw new Error("type obrigatório");
+  const id = crypto.randomBytes(8).toString("hex");
+  db.prepare(
+    "INSERT INTO extension_jobs (id, type, params) VALUES (?, ?, ?)"
+  ).run(id, type, JSON.stringify(params || {}));
+  return id;
 }
 
 // Endpoint GET /api/extension/next-job
@@ -105,4 +111,4 @@ function stats() {
   };
 }
 
-module.exports = { enqueue, pickNextJob, completeJob, stats };
+module.exports = { enqueue, enqueueNow, pickNextJob, completeJob, stats };

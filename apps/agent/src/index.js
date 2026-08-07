@@ -83,7 +83,7 @@ app.use(express.urlencoded({ limit: "200mb", extended: true }));
 app.use(
   createHmacMiddleware({
     secret: AGENT_INTERNAL_SECRET,
-    skipPrefixes: ["/health", "/api/webhook/evolution", "/api/google/callback", "/api/notion/config"],
+    skipPrefixes: ["/health", "/api/webhook/evolution", "/api/google/callback", "/api/notion/config", "/api/extension"],
   })
 );
 
@@ -357,6 +357,18 @@ app.get("/api/extension/next-job", (req, res) => {
   if (!extensionAuth(req, res)) return;
   const job = extensionBridge.pickNextJob();
   res.json({ job });
+});
+
+// Enqueue manual — usado para testes E2E da extensão sem rodada de chat.
+app.post("/api/extension/enqueue", (req, res) => {
+  if (!extensionAuth(req, res)) return;
+  const { type, params } = req.body || {};
+  try {
+    const id = extensionBridge.enqueueNow({ type, params });
+    res.json({ ok: true, job_id: id });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.post("/api/extension/job-result", (req, res) => {
