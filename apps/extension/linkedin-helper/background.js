@@ -135,6 +135,36 @@ const HANDLERS = {
     }
   },
 
+  async edit_profile({ headline, about }) {
+    if (!headline && !about) throw new Error("Envie headline e/ou about para editar");
+    const url = "https://www.linkedin.com/in/me/edit";
+    const tab = await chrome.tabs.create({ url, active: false });
+    try {
+      await new Promise((resolve) => {
+        const listener = (tabId, changeInfo) => {
+          if (tabId === tab.id && changeInfo.status === "complete") {
+            chrome.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }
+        };
+        chrome.tabs.onUpdated.addListener(listener);
+        setTimeout(resolve, 10_000);
+      });
+      // espera os campos da página de edição renderizarem
+      await new Promise((r) => setTimeout(r, 4000));
+      const [{ result }] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: editProfileFromPage,
+        args: [{ headline, about }],
+      });
+      // dá tempo do save commitar antes de fechar a aba
+      await new Promise((r) => setTimeout(r, 2500));
+      return result;
+    } finally {
+      chrome.tabs.remove(tab.id).catch(() => {});
+    }
+  },
+
   async ping() {
     return { pong: true, ts: Date.now() };
   },
@@ -188,6 +218,70 @@ function scrapeProfileFromPage() {
       .filter(Boolean),
     url: location.href,
   };
+}
+
+// Edita Headline + About na página de edição do LinkedIn (/in/me/edit).
+// Preenche via setter nativo (React-friendly) e clica em Save quando existe.
+function editProfileFromPage({ headline, about }) {
+  const report = { headline: null, about: null, saved: false, errors: [] };
+
+  const setNativeValue = (el, value) => {
+    const proto = el.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const descriptor = Object.getOwnPropertyDescriptor(proto, "value");
+    descriptor.set.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    // blur força o React/LinkedIn a registrar a edição
+    el.dispatchEvent(new Event("blur", { bubbles: true }));
+  };
+
+  const isVisible = (el) => el && el.offsetParent !== null;
+
+  // ── Headline ──
+  if (headline) {
+    const input = document.querySelector("input#headline") || document.querySelector("input[name='headline']");
+    if (isVisible(input)) {
+      setNativeValue(input, headline);
+      report.headline = "ok";
+    } else {
+      report.errors.push("input#headline não encontrado");
+    }
+  }
+
+  // ── About (textarea ou rich-text editor) ──
+  if (about) {
+    const ta = document.querySelector("textarea#about") ||
+               document.querySelector("textarea[name='about']") ||
+               document.querySelector("textarea.artdeco-text-input");
+    if (isVisible(ta)) {
+      setNativeValue(ta, about);
+      report.about = "ok";
+    } else {
+      const editor = document.querySelector(".ql-editor") ||
+                     document.querySelector("div[contenteditable='true'][role='textbox']") ||
+                     document.querySelector("#about-editor div[contenteditable]");
+      if (isVisible(editor)) {
+        editor.textContent = about;
+        editor.dispatchEvent(new Event("input", { bubbles: true }));
+        editor.dispatchEvent(new Event("blur", { bubbles: true }));
+        report.about = "ok (rich-text)";
+      } else {
+        report.errors.push("campo about não encontrado");
+      }
+    }
+  }
+
+  // ── Save ──
+  const saveBtn = Array.from(document.querySelectorAll("button"))
+    .find((b) => /^save$/i.test((b.textContent || "").trim()) && isVisible(b));
+  if (saveBtn) {
+    saveBtn.click();
+    report.saved = true;
+  } else if (report.errors.length === 0) {
+    report.errors.push("botão Save não encontrado (pode ter autosave)");
+  }
+
+  return report;
 }
 
 // ── Loop de polling ──────────────────────────────────────────────────────

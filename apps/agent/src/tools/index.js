@@ -757,6 +757,22 @@ Rodará automático. Use "list_scheduled_hunts" pra ver, "run_scheduled_hunt_now
       ...(args.sections ? { sections: String(args.sections) } : {}),
     }),
   },
+  linkedin_edit_profile: {
+    name: "linkedin_edit_profile",
+    desc: "Edita o PERFIL DO PRÓPRIO USUÁRIO no LinkedIn: Headline (manchete) e About (resumo). Executa no browser real do usuário via extensão MAXROUTER LinkedIn Helper. NÃO usar para editar perfil de terceiros.",
+    args: {
+      type: "object",
+      properties: {
+        headline: { type: "string", description: "Nova headline/manchete do perfil (ex: 'Engenheiro de IA | LLMs, Agentes e RAG')" },
+        about: { type: "string", description: "Novo texto da seção About/resumo (até ~2600 chars)" },
+      },
+      required: [],
+    },
+    run: (args) => callLinkedin("linkedin_edit_profile", {
+      ...(args.headline ? { headline: String(args.headline) } : {}),
+      ...(args.about ? { about: String(args.about) } : {}),
+    }),
+  },
   linkedin_search_people: {
     name: "linkedin_search_people",
     desc: "Busca pessoas no LinkedIn por palavras-chave (via linkedin-mcp-server).",

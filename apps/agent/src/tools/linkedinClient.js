@@ -14,6 +14,7 @@ const { EXTENSION_TOKEN, LINKEDIN_MCP_URL, LINKEDIN_MCP_TOKEN } = require("../co
 const EXTENSION_HANDLERS = {
   get_person_profile: "person_profile",
   search_jobs: "search_jobs",
+  linkedin_edit_profile: "edit_profile",
 };
 
 let extensionBridge = null;
