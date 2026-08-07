@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "MAXROUTER LinkedIn Helper",
+  "version": "0.1.0",
+  "description": "Ponte entre teu browser real e o agent MAXROUTER. Executa buscas/leituras no LinkedIn usando tua sessão logada — o LinkedIn não detecta porque é o teu browser real.",
+  "permissions": ["storage", "activeTab", "scripting", "alarms", "cookies", "tabs"],
+  "host_permissions": [
+    "https://*.linkedin.com/*",
+    "https://maxrouter-prod.up.railway.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "MAXROUTER LinkedIn Helper",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

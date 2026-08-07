@@ -54,11 +54,14 @@ function getInternalSecret() {
 // Endpoints públicos que não exigem auth JWT.
 // - webhook Evolution (WhatsApp) é chamado direto pela Evolution/Meta cloud, valida com apikey própria.
 // - Google OAuth callback recebe o redirect do usuário no browser (com state validado no handler).
+// - Extensão LinkedIn Helper autentica com Bearer EXTENSION_TOKEN (validado no dashboardGuard).
 const PUBLIC_WEBHOOK_PATHS = [
   "/api/agent/webhook/evolution",
   "/api/webhook/evolution",
   "/api/agent/google/callback",
   "/api/google/callback",
+  "/api/agent/extension/",
+  "/api/extension/",
 ];
 
 // Allowlist explícita dos caminhos permitidos no agente.
@@ -105,6 +108,8 @@ const ALLOWED_PATHS = [
   "/api/modules",
   "/api/agent/rag/",
   "/api/rag/",
+  "/api/agent/extension/",
+  "/api/extension/",
 ];
 
 function isPathAllowed(targetPath) {

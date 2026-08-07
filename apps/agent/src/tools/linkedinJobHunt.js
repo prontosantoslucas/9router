@@ -2,7 +2,7 @@
 // vagas alinhadas com os projetos do usuário, rankear, e (opcional) gerar
 // cover letter para as top 5.
 
-const linkedinMcp = require("./linkedinMcpClient");
+const { callLinkedin } = require("./linkedinClient");
 const { buildProfile, queriesFromProfile } = require("./linkedinProfileBuilder");
 const { chatCompletion } = require("../lib/llmGatewayClient");
 
@@ -143,10 +143,6 @@ NÃO invente experiências. Se a vaga pede algo que você não tem no perfil, ig
 
 // Handler principal
 async function runJobHunt(args = {}) {
-  if (!linkedinMcp.isConfigured()) {
-    return "❌ LinkedIn MCP não configurado. Defina LINKEDIN_MCP_URL no .env do agent.";
-  }
-
   const owner = args.github_owner || DEFAULT_OWNER;
   const location = args.location || null;
   const seniority = args.seniority || null;
@@ -181,16 +177,20 @@ async function runJobHunt(args = {}) {
   const all = [];
   for (const q of queries) {
     try {
-      const raw = await linkedinMcp.callTool("search_jobs", {
+      const raw = await callLinkedin("search_jobs", {
         keywords: q,
         ...(location ? { location } : {}),
       });
-      const jobs = normalizeJobs(raw);
+      // callLinkedin devolve string (formatado) — tenta parsear JSON
+      let parsed = raw;
+      if (typeof raw === "string") {
+        try { parsed = JSON.parse(raw); } catch { /* segue com string */ }
+      }
+      const jobs = normalizeJobs(parsed);
       push(`   → "${q}": ${jobs.length} vagas`);
       all.push(...jobs);
     } catch (err) {
       push(`   ⚠ "${q}" falhou: ${err.message}`);
-      linkedinMcp.resetSession();
     }
   }
 
@@ -214,8 +214,12 @@ async function runJobHunt(args = {}) {
       let detail = r.original;
       if (jobId) {
         try {
-          const raw = await linkedinMcp.callTool("get_job_details", { job_id: String(jobId) });
-          detail = { ...detail, ...(raw || {}) };
+          const raw = await callLinkedin("get_job_details", { job_id: String(jobId) });
+          let detail2 = raw;
+          if (typeof raw === "string") {
+            try { detail2 = JSON.parse(raw); } catch { /* segue */ }
+          }
+          detail = { ...detail, ...(detail2 || {}) };
         } catch { /* segue com o snippet que já temos */ }
       }
       covers[i] = await generateCoverLetter(detail, profile);

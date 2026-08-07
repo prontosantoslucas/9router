@@ -334,6 +334,48 @@ app.get("/api/notion/list", async (req, res) => {
   res.json(r);
 });
 
+// ── Extensão Chrome (LinkedIn Helper) ──
+// Auth: Bearer EXTENSION_TOKEN (env do agent). Sem token configurado → 503.
+const extensionBridge = require("./extensionBridge");
+const EXTENSION_TOKEN = (process.env.EXTENSION_TOKEN || "").trim();
+
+function extensionAuth(req, res) {
+  if (!EXTENSION_TOKEN) {
+    res.status(503).json({ error: "EXTENSION_TOKEN não configurado no .env do agent" });
+    return false;
+  }
+  const h = req.headers["authorization"] || "";
+  const token = h.startsWith("Bearer ") ? h.slice(7) : "";
+  if (token !== EXTENSION_TOKEN) {
+    res.status(401).json({ error: "Unauthorized" });
+    return false;
+  }
+  return true;
+}
+
+app.get("/api/extension/next-job", (req, res) => {
+  if (!extensionAuth(req, res)) return;
+  const job = extensionBridge.pickNextJob();
+  res.json({ job });
+});
+
+app.post("/api/extension/job-result", (req, res) => {
+  if (!extensionAuth(req, res)) return;
+  const { job_id, result, error } = req.body || {};
+  try {
+    const r = extensionBridge.completeJob({ job_id, result, error });
+    res.json(r);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get("/api/extension/stats", (req, res) => {
+  if (!extensionAuth(req, res)) return;
+  res.json(extensionBridge.stats());
+});
+
+
 // ════════════════════════════════════════════════════════════════
 // IMPORTANTE: TODAS as rotas abaixo usam `/api/<...>` (SEM `/agent/`)
 // porque o proxy do Next remove o prefixo `/api/agent/` ao encaminhar.

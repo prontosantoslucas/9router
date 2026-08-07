@@ -19,6 +19,7 @@ const cfg = {
   AI_MEMORY_TOKEN: process.env.AI_MEMORY_TOKEN || "",
   LINKEDIN_MCP_URL: process.env.LINKEDIN_MCP_URL || "",
   LINKEDIN_MCP_TOKEN: process.env.LINKEDIN_MCP_TOKEN || "",
+  EXTENSION_TOKEN: process.env.EXTENSION_TOKEN || "",
   EVOLUTION_API_URL: process.env.EVOLUTION_API_URL || "",
   EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY || "",
   EVOLUTION_INSTANCE_NAME: process.env.EVOLUTION_INSTANCE_NAME || "lucas",

@@ -614,23 +614,7 @@ const GOOGLE_TOOLS = {
   },
 };
 
-const linkedinMcp = require("./linkedinMcpClient");
-
-async function callLinkedin(toolName, args) {
-  if (!linkedinMcp.isConfigured()) {
-    return "❌ LinkedIn MCP não configurado. Defina LINKEDIN_MCP_URL no .env do agent e suba o sidecar (ver sidecars/linkedin-mcp/START.md).";
-  }
-  try {
-    const out = await linkedinMcp.callTool(toolName, args);
-    if (out == null) return "⚠️ LinkedIn MCP retornou vazio.";
-    if (typeof out === "string") return out;
-    try { return JSON.stringify(out, null, 2); } catch { return String(out); }
-  } catch (err) {
-    // sessão pode ter caducado se o sidecar reiniciou — invalida para o próximo call
-    linkedinMcp.resetSession();
-    return `❌ Erro no LinkedIn MCP: ${err.message}`;
-  }
-}
+const { callLinkedin } = require("./linkedinClient");
 
 const { runJobHunt } = require("./linkedinJobHunt");
 const jobAlerts = require("../jobAlerts");

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { getSettings, validateApiKey } from "@/lib/localDb";
 import { getConsistentMachineId } from "@/shared/utils/machineId";
 import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession";
@@ -165,6 +166,20 @@ async function hasValidToken(request) {
   return await verifyDashboardAuthToken(token);
 }
 
+// Extensão MAXROUTER LinkedIn Helper: autentica com Bearer EXTENSION_TOKEN
+// (env do servidor), sem cookie de sessão — chamada do browser do usuário.
+function hasValidExtensionToken(request) {
+  const expected = process.env.EXTENSION_TOKEN;
+  if (!expected) return false;
+  const h = request.headers.get("authorization") || "";
+  const token = h.startsWith("Bearer ") ? h.slice(7) : "";
+  if (!token) return false;
+  const a = Buffer.from(token);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
 // Read settings directly from DB to avoid self-fetch deadlock in proxy
 async function loadSettings() {
   try {
@@ -224,6 +239,10 @@ export async function proxy(request) {
 
   // Always protected - require valid JWT or local CLI token (machineId-based)
   if (ALWAYS_PROTECTED.some((p) => pathname.startsWith(p))) {
+    // Exceção: endpoints da extensão LinkedIn Helper autenticam com Bearer EXTENSION_TOKEN
+    if (pathname.startsWith("/api/agent/extension/") && hasValidExtensionToken(request)) {
+      return pageNoStore(request);
+    }
     if (await hasValidCliToken(request) || await hasValidToken(request))
       return pageNoStore(request);
     // Page routes (/dashboard2, /chat) send the browser back to the login
