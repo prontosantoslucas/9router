@@ -34,7 +34,33 @@ function persistHistories() {
 }
 
 const TOOLS_PROMPT = `## Ferramentas disponíveis
-Use tool_calls para invocar ferramentas quando necessário. O sistema executa e retorna o resultado.`;
+Use tool_calls para invocar ferramentas quando necessário. O sistema executa e retorna o resultado.
+
+## LinkedIn (job hunt + otimização de perfil)
+Você tem 10 ferramentas relacionadas ao LinkedIn:
+
+**Buscas de vaga:**
+- \`linkedin_job_hunt\` — busca vagas alinhadas com o perfil do dono (GitHub prontosantoslucas), rankeia via LLM, retorna top N com links de aplicação. Cover letters opcionais pro top 5.
+- Filtros default do dono: **remote ou Cotia**, **salário R$ 5-10k+**, **últimos 7 dias**. Se o usuário não especificar filtro, use esses.
+- Uso típico: "acha vagas AI engineer" → \`linkedin_job_hunt({location:"Remote", max_results:10})\`
+
+**Alertas recorrentes:**
+- \`schedule_job_hunt\` — cria alerta que roda automático (semanal por default). Envia só vagas NOVAS via webchat/Telegram/WhatsApp.
+- \`list_scheduled_hunts\` — lista alertas ativos.
+- \`cancel_scheduled_hunt\` — desabilita um alerta.
+- \`run_scheduled_hunt_now\` — executa alerta agora fora do horário.
+- Uso típico: "quero receber vagas AI engineer toda segunda" → \`schedule_job_hunt({label:"AI semanal", location:"Remote", interval_hours:168})\`
+
+**Leitura de perfis (para otimização):**
+- \`linkedin_person_profile\` — lê o perfil de alguém (inclusive o próprio dono, username "eusantoslucas") para análise. Use antes de sugerir headline/about/skills novos.
+- \`linkedin_company_profile\`, \`linkedin_company_posts\` — pesquisa empresas antes de aplicar.
+
+**IMPORTANTE — economia de sessão LinkedIn:**
+LinkedIn detecta scraping automatizado e pode invalidar a sessão. **Não faça buscas em cascata** (>3 chamadas em <5min) — se o usuário pedir múltiplas coisas relacionadas ao LinkedIn de uma vez, execute uma por uma com espaçamento, ou consolide numa única chamada (linkedin_job_hunt já faz múltiplas queries internas). Prefira agendar (schedule_job_hunt) em vez de rodar manualmente toda hora.
+
+**NUNCA use LinkedIn para:**
+- Escrita automatizada (posts, DMs, connection requests) — LinkedIn bane conta. Se pedirem, ofereça gerar RASCUNHO em texto para copiar manualmente.
+- Auto-aplicação em vagas ("Easy Apply" via bot) — mesmo motivo.`;
 
 function getHistory(chatId) {
   if (!histories.has(chatId)) histories.set(chatId, { msgs: [] });

@@ -865,6 +865,13 @@ async function start() {
     console.log("[Workers] AGENT_WORKERS desativado nesta instância.");
   }
 
+  // Job alerts (LinkedIn — buscas recorrentes)
+  try {
+    require("./jobAlerts").start();
+  } catch (err) {
+    console.warn("[jobAlerts] falha ao iniciar:", err.message);
+  }
+
   console.log(`[Agent] TG Bot: ${botManager.status().running ? "ativo" : "desativado"} · Workers: ${enableWorkers ? "on" : "off"}`);
 }
 

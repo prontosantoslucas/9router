@@ -633,8 +633,107 @@ async function callLinkedin(toolName, args) {
 }
 
 const { runJobHunt } = require("./linkedinJobHunt");
+const jobAlerts = require("../jobAlerts");
 
 const LINKEDIN_TOOLS = {
+  schedule_job_hunt: {
+    name: "schedule_job_hunt",
+    desc: "Agenda uma busca RECORRENTE de vagas no LinkedIn. Toda vez que rodar, dedup contra buscas anteriores e envia só vagas NOVAS. Ideal pra alertas semanais/diários. Guarda persistência em SQLite.",
+    args: {
+      type: "object",
+      properties: {
+        chat_id: { type: "string", description: "chatId do canal que recebera o alerta (default: chat atual)" },
+        channel: { type: "string", description: "'webchat' | 'telegram' | 'whatsapp'. Default: webchat." },
+        label: { type: "string", description: "nome descritivo (ex: 'AI engineer remoto weekly')" },
+        interval_hours: { type: "number", description: "Frequência em horas. 168=semanal, 24=diário, 72=cada 3 dias. Default: 168." },
+        keywords_override: { type: "array", items: { type: "string" }, description: "Se quiser fixar queries LinkedIn. Se omitido, deriva do perfil do usuário via GitHub." },
+        location: { type: "string" },
+        seniority: { type: "string", description: "junior|mid|senior|staff" },
+        max_results: { type: "number", description: "Default 10" },
+        cover_letters: { type: "boolean", description: "Default false — em alerts, so link+score é mais util" },
+      },
+      required: [],
+    },
+    run: (args, ctx) => {
+      const chatId = args.chat_id || ctx?.chatId;
+      if (!chatId) return "❌ chatId não determinado. Passa chat_id ou chama do webchat.";
+      const criteria = {
+        location: args.location,
+        seniority: args.seniority,
+        max_results: args.max_results || 10,
+        cover_letters: args.cover_letters === true,
+        github_owner: "prontosantoslucas",
+        ...(args.keywords_override ? { queries_override: args.keywords_override } : {}),
+      };
+      const alert = jobAlerts.createAlert({
+        chatId, channel: args.channel || "webchat",
+        label: args.label || "Vagas LinkedIn",
+        criteria,
+        intervalHours: args.interval_hours || 168,
+      });
+      return `✅ Alerta criado.
+  ID: ${alert.id}
+  Label: ${alert.label}
+  Frequência: ${alert.intervalHours}h (${alert.intervalHours === 168 ? "semanal" : alert.intervalHours === 24 ? "diário" : "cada " + alert.intervalHours + "h"})
+  Canal: ${alert.channel}
+  Criteria: ${JSON.stringify(criteria)}
+
+Rodará automático. Use "list_scheduled_hunts" pra ver, "run_scheduled_hunt_now" pra forçar execução, "cancel_scheduled_hunt ${alert.id}" pra parar.`;
+    },
+  },
+  list_scheduled_hunts: {
+    name: "list_scheduled_hunts",
+    desc: "Lista os alertas de vagas ativos do usuário.",
+    args: {
+      type: "object",
+      properties: {
+        chat_id: { type: "string", description: "Filtra por chatId (default: chat atual)" },
+      },
+    },
+    run: (args, ctx) => {
+      const chatId = args.chat_id || ctx?.chatId;
+      if (!chatId) return "❌ chatId não determinado.";
+      const alerts = jobAlerts.listAlerts(chatId);
+      if (alerts.length === 0) return "Nenhum alerta agendado.";
+      return alerts.map((a, i) =>
+        `${i + 1}. [${a.id}] ${a.label}\n   ${a.enabled ? "🟢 ativo" : "🔴 pausado"} | a cada ${a.interval_hours}h via ${a.channel}\n   Último run: ${a.last_run || "nunca"}\n   Criteria: ${JSON.stringify(a.criteria)}`
+      ).join("\n\n");
+    },
+  },
+  cancel_scheduled_hunt: {
+    name: "cancel_scheduled_hunt",
+    desc: "Cancela (desabilita) um alerta de vagas pelo ID.",
+    args: {
+      type: "object",
+      properties: {
+        alert_id: { type: "string", description: "ID do alerta (obtido via list_scheduled_hunts)" },
+      },
+      required: ["alert_id"],
+    },
+    run: (args) => {
+      const ok = jobAlerts.cancelAlert(String(args.alert_id));
+      return ok ? `✅ Alerta ${args.alert_id} cancelado.` : `❌ Alerta ${args.alert_id} não encontrado.`;
+    },
+  },
+  run_scheduled_hunt_now: {
+    name: "run_scheduled_hunt_now",
+    desc: "Executa um alerta AGORA (fora do horário), útil pra testar antes do primeiro trigger automático.",
+    args: {
+      type: "object",
+      properties: {
+        alert_id: { type: "string" },
+      },
+      required: ["alert_id"],
+    },
+    run: async (args) => {
+      try {
+        const r = await jobAlerts.runNow(String(args.alert_id));
+        return `✅ Executado: ${r.found} vagas encontradas, ${r.new} novas (o resto já foi visto).`;
+      } catch (e) {
+        return `❌ ${e.message}`;
+      }
+    },
+  },
   linkedin_job_hunt: {
     name: "linkedin_job_hunt",
     desc: "Caça vagas no LinkedIn alinhadas com o perfil profissional do usuário (extraído dos repos GitHub), rankeia via LLM e opcionalmente gera cover letter para o top 5. Retorna lista com link direto de aplicação. NÃO se inscreve automaticamente — LinkedIn detecta e bane conta.",
