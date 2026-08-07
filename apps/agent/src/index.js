@@ -908,15 +908,22 @@ async function start() {
       }
     });
 
+    const channelSender = require("./channelSender");
     scheduler.start(async (task) => {
-      console.log(`[Scheduler] Executando: ${task.label} (chatId: ${task.meta?.chatId || "none"})`);
+      const recurring = task.meta?.repeat_seconds ? ` (recorrente ${task.meta.repeat_seconds}s)` : "";
+      console.log(`[Scheduler] Executando: ${task.label}${recurring} (chatId: ${task.meta?.chatId || "none"})`);
       const chatId = task.meta?.chatId;
-      if (!chatId) return;
+      if (!chatId) {
+        console.warn(`[Scheduler] tarefa ${task.id} sem chatId — pulando`);
+        return;
+      }
       try {
         const result = await processMessage(chatId, task.label, "Scheduler");
-        const bot = botManager.getBot();
-        if (bot) {
-          await bot.telegram.sendMessage(chatId, result.content, { parse_mode: "Markdown" }).catch(() => {});
+        const text = result?.content || result?.message || "(sem conteúdo)";
+        // channelSender detecta canal por chatId + fail-soft (fallback pra webchat)
+        const send = await channelSender.send(chatId, text);
+        if (!send.ok) {
+          console.warn(`[Scheduler] send falhou pra chat=${chatId}: ${send.error}`);
         }
       } catch (err) {
         console.error(`[Scheduler] Erro ao processar tarefa: ${err.message}`);
@@ -924,6 +931,13 @@ async function start() {
     });
   } else {
     console.log("[Workers] AGENT_WORKERS desativado nesta instância.");
+  }
+
+  // Consumer da fila de notificações proativas (agent → user autônomo)
+  try {
+    require("./autonomous/proactiveNotifier").start();
+  } catch (err) {
+    console.warn("[proactiveNotifier] falha ao iniciar:", err.message);
   }
 
   // Job alerts (LinkedIn — buscas recorrentes)
