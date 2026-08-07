@@ -20,12 +20,19 @@ function extPath(agentUrl, sub) {
 
 async function getConfig() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(["agentUrl", "token", "enabled"], (r) => resolve({
+    chrome.storage.local.get(["agentUrl", "token", "enabled", "invisibleOnly"], (r) => resolve({
       agentUrl: r.agentUrl || "",
       token: r.token || "",
       enabled: r.enabled !== false, // default true
+      invisibleOnly: r.invisibleOnly === true, // default false
     }));
   });
+}
+
+// Fallback por aba: pulado no modo "só invisível".
+function withTabFallback(cfg, apiResult, fn) {
+  if (cfg.invisibleOnly || apiResult.ok) return apiResult;
+  return fn();
 }
 
 async function setStatus(patch) {
@@ -70,21 +77,147 @@ async function linkedinFetch(pathOrUrl, opts = {}) {
   return res.text();
 }
 
+// ── API-first: chamadas voyager direto do service worker ───────────────
+// Sem abrir aba nenhuma. Usa cookies da sessão + csrf-token.
+
+// Normaliza qualquer resposta voyager em { ok, data }.
+function ok(data) { return { ok: true, data }; }
+function fail() { return { ok: false }; }
+
+// Modo invisível: API falhou e não podemos abrir aba — devolve erro claro.
+function failWithNoFallback(via, type) {
+  return {
+    error: `LinkedIn recusou a chamada via ${via} para ${type} e o modo invisível impede abrir aba. Desative "só invisível" no popup para fallback automático.`,
+  };
+}
+
+// Busca de vagas via API interna (voyager/api/jobSearch) — mesmos endpoints
+// que o site usa no client-side.
+async function apiSearchJobs(keywords, location, count = 25) {
+  try {
+    const params = new URLSearchParams({
+      keywords: keywords || "",
+      start: "0",
+      count: String(count),
+    });
+    if (location) params.set("location", location);
+    const data = await linkedinFetch(`/voyager/api/jobSearch?${params.toString()}`);
+    if (!data || !Array.isArray(data.elements)) return fail();
+    const jobs = data.elements
+      .map((el) => {
+        const title = el?.title || el?.title?.text || el?.title?.name || "";
+        const company = el?.companyDetails?.company?.name || el?.companyName || "";
+        const loc = el?.formattedLocation || el?.location || "";
+        const jobId = String(el?.trackingUrn || el?.entityUrn || "")
+          .match(/(\d+)$/)?.[1] || null;
+        return {
+          job_id: jobId,
+          title: String(title).trim(),
+          company: String(company).trim(),
+          location: String(loc).trim(),
+          url: jobId ? `https://www.linkedin.com/jobs/view/${jobId}/` : null,
+        };
+      })
+      .filter((j) => j.job_id || j.title);
+    return ok({ count: jobs.length, jobs, via: "api" });
+  } catch {
+    return fail();
+  }
+}
+
+// Perfil público via API (voyager/api/identity/profiles/<username>).
+async function apiPersonProfile(username) {
+  try {
+    const data = await linkedinFetch(
+      `/voyager/api/identity/profiles/${encodeURIComponent(username)}?projection=(firstName,lastName,headline,summary,locationName,industryName,positions,profilePicture(displayImage~))`
+    );
+    if (!data || typeof data !== "object") return fail();
+
+    const name = [data.firstName, data.lastName].filter(Boolean).join(" ").trim();
+    const picture = data?.profilePicture?.["displayImage~"]?.elements?.slice(-1)[0]?.identifiers?.[0]?.identifier || null;
+    const experience = Array.isArray(data.positions)
+      ? data.positions.slice(0, 12).map((p) => {
+          const company = p?.companyName || p?.company?.name || "";
+          const title = p?.title || "";
+          const period = p?.timeRange?.start?.year
+            ? `${p.timeRange.start.year}–${p.timeRange?.end?.year ?? "hoje"}`
+            : "";
+          return [title, company, period].filter(Boolean).join(" · ");
+        }).filter(Boolean)
+      : [];
+
+    return ok({
+      name,
+      headline: data.headline || "",
+      summary: data.summary || "",
+      location: data.locationName || "",
+      industry: data.industryName || "",
+      profile_picture: picture,
+      experience,
+      url: `https://www.linkedin.com/in/${encodeURIComponent(username)}/`,
+      via: "api",
+    });
+  } catch {
+    return fail();
+  }
+}
+
+// Edição de Headline + About via API (voyager/api/me — PATCH).
+// Mesma chamada que o site faz ao salvar a página de edição.
+async function apiEditProfile({ headline, about }) {
+  try {
+    const patch = { patch: { $set: {} } };
+    if (headline) patch.patch.$set.headline = headline;
+    if (about) patch.patch.$set.summary = about;
+
+    const csrf = await getLinkedInCsrf();
+    if (!csrf) return fail();
+
+    const res = await fetch("https://www.linkedin.com/voyager/api/me", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Accept": "application/vnd.linkedin.normalized+json+2.1",
+        "Content-Type": "application/json",
+        "csrf-token": csrf,
+        "x-restli-protocol-version": "2.0.0",
+        "x-restli-method": "partial_update",
+        "x-li-lang": "pt_BR",
+      },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) return fail();
+    return ok({
+      headline: headline ? "ok" : null,
+      about: about ? "ok" : null,
+      saved: true,
+      via: "api",
+    });
+  } catch {
+    return fail();
+  }
+}
+
 // ── Handlers de job por tipo ─────────────────────────────────────────────
+//
+// Estratégia: API-first. Todas as operações tentam as APIs internas do
+// LinkedIn (voyager) direto do service worker — 100% invisível, sem abrir
+// aba. Se o LinkedIn recusar (anti-bot), cai no fallback por aba (DOM).
 
 const HANDLERS = {
-  async search_jobs({ keywords, location, count = 25 }) {
+  async search_jobs({ keywords, location, count = 25 }, cfg) {
+    const apiResult = await apiSearchJobs(keywords, location, count);
+    if (cfg.invisibleOnly) return apiResult.ok ? apiResult.data : failWithNoFallback("api", "search_jobs");
+    if (apiResult.ok) return apiResult.data;
+    // fallback: abre aba invisível e scrappa o DOM
     const params = new URLSearchParams({
       keywords: keywords || "",
       ...(location ? { location } : {}),
       start: "0",
     });
     const url = `https://www.linkedin.com/jobs/search/?${params.toString()}`;
-    // Abre aba invisivelmente pra renderizar (LinkedIn tem defesas contra
-    // chamar API direta sem DOM). Usa content script pra scrapar.
     const tab = await chrome.tabs.create({ url, active: false });
     try {
-      // aguarda carregar
       await new Promise((resolve) => {
         const listener = (tabId, changeInfo) => {
           if (tabId === tab.id && changeInfo.status === "complete") {
@@ -95,9 +228,7 @@ const HANDLERS = {
         chrome.tabs.onUpdated.addListener(listener);
         setTimeout(resolve, 10_000); // fallback
       });
-      // aguarda mais 3s pro lazyload da lista
       await new Promise((r) => setTimeout(r, 3000));
-      // executa scraper no tab
       const [{ result }] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: scrapeJobsFromPage,
@@ -109,8 +240,12 @@ const HANDLERS = {
     }
   },
 
-  async person_profile({ linkedin_username }) {
+  async person_profile({ linkedin_username }, cfg) {
     if (!linkedin_username) throw new Error("linkedin_username obrigatorio");
+    const apiResult = await apiPersonProfile(linkedin_username);
+    if (cfg.invisibleOnly) return apiResult.ok ? apiResult.data : failWithNoFallback("api", "person_profile");
+    if (apiResult.ok) return apiResult.data;
+    // fallback por aba
     const url = `https://www.linkedin.com/in/${encodeURIComponent(linkedin_username)}/`;
     const tab = await chrome.tabs.create({ url, active: false });
     try {
@@ -135,8 +270,12 @@ const HANDLERS = {
     }
   },
 
-  async edit_profile({ headline, about }) {
+  async edit_profile({ headline, about }, cfg) {
     if (!headline && !about) throw new Error("Envie headline e/ou about para editar");
+    const apiResult = await apiEditProfile({ headline, about });
+    if (cfg.invisibleOnly) return apiResult.ok ? apiResult.data : failWithNoFallback("api", "edit_profile");
+    if (apiResult.ok) return apiResult.data;
+    // fallback por aba
     const url = "https://www.linkedin.com/in/me/edit";
     const tab = await chrome.tabs.create({ url, active: false });
     try {
@@ -150,14 +289,12 @@ const HANDLERS = {
         chrome.tabs.onUpdated.addListener(listener);
         setTimeout(resolve, 10_000);
       });
-      // espera os campos da página de edição renderizarem
       await new Promise((r) => setTimeout(r, 4000));
       const [{ result }] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: editProfileFromPage,
         args: [{ headline, about }],
       });
-      // dá tempo do save commitar antes de fechar a aba
       await new Promise((r) => setTimeout(r, 2500));
       return result;
     } finally {
@@ -322,7 +459,7 @@ async function pollOnce() {
     try {
       if (!handler) throw new Error(`Handler desconhecido: ${body.job.type}`);
       result = await Promise.race([
-        handler(body.job.params || {}),
+        handler(body.job.params || {}, cfg),
         new Promise((_, rej) => setTimeout(() => rej(new Error("Timeout")), REQUEST_TIMEOUT_MS)),
       ]);
     } catch (err) {

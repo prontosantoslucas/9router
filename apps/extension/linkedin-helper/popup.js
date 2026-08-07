@@ -3,10 +3,11 @@
 const $ = (id) => document.getElementById(id);
 
 async function loadConfig() {
-  const cfg = await new Promise((r) => chrome.storage.local.get(["agentUrl", "token", "enabled"], r));
+  const cfg = await new Promise((r) => chrome.storage.local.get(["agentUrl", "token", "enabled", "invisibleOnly"], r));
   $("agentUrl").value = cfg.agentUrl || "https://maxrouter-prod.up.railway.app";
   $("token").value = cfg.token || "";
   $("toggle-enabled").textContent = cfg.enabled === false ? "Ativar" : "Pausar";
+  $("toggle-invisible").checked = cfg.invisibleOnly === true;
 }
 
 async function saveConfig() {
@@ -35,12 +36,14 @@ async function checkLinkedInSession() {
 
 async function refreshStatus() {
   const status = await new Promise((r) => chrome.storage.local.get(["status"], (x) => r(x.status || {})));
-  const cfg = await new Promise((r) => chrome.storage.local.get(["agentUrl", "token", "enabled"], r));
+  const cfg = await new Promise((r) => chrome.storage.local.get(["agentUrl", "token", "enabled", "invisibleOnly"], r));
 
   const linkedIn = await checkLinkedInSession();
   $("s-linkedin").innerHTML = linkedIn
     ? '<span class="dot ok"></span>logado'
     : '<span class="dot err"></span>desconectado';
+
+  $("s-mode").textContent = cfg.invisibleOnly === true ? "invisível (sem abas)" : "api + fallback aba";
 
   let state = status.state || "—";
   let stateDot = "warn";
@@ -61,6 +64,10 @@ $("poll-now").addEventListener("click", () => {
   chrome.runtime.sendMessage({ type: "poll-now" }, () => refreshStatus());
 });
 $("toggle-enabled").addEventListener("click", toggleEnabled);
+$("toggle-invisible").addEventListener("change", async (e) => {
+  await new Promise((r) => chrome.storage.local.set({ invisibleOnly: e.target.checked }, r));
+  refreshStatus();
+});
 
 loadConfig().then(refreshStatus);
 setInterval(refreshStatus, 3000);

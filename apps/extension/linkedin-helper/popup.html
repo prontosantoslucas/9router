@@ -25,11 +25,12 @@
   </style>
 </head>
 <body>
-  <h1>9router LinkedIn Helper</h1>
+  <h1>MAXROUTER LinkedIn Helper</h1>
 
   <div class="status">
     <div class="row"><span class="label">Status</span><span class="value" id="s-state">—</span></div>
     <div class="row"><span class="label">LinkedIn</span><span class="value" id="s-linkedin">—</span></div>
+    <div class="row"><span class="label">Modo</span><span class="value" id="s-mode">—</span></div>
     <div class="row"><span class="label">Ultimo job</span><span class="value" id="s-job">—</span></div>
     <div class="row"><span class="label">Ultimo erro</span><span class="value" id="s-err">—</span></div>
   </div>
@@ -47,8 +48,12 @@
     <button class="secondary" id="toggle-enabled">Pausar</button>
   </div>
 
+  <label style="display:flex; align-items:center; gap:6px; margin-top:10px;">
+    <input type="checkbox" id="toggle-invisible" style="width:auto;"> Só invisível (nunca abrir aba)
+  </label>
+
   <div class="footer">
-    v0.1.0 · <a href="https://github.com/prontosantoslucas/9router" target="_blank">docs</a>
+    v0.2.0 · <a href="https://github.com/prontosantoslucas/9router" target="_blank">docs</a>
   </div>
 
   <script src="popup.js"></script>
