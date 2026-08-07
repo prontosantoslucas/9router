@@ -29,11 +29,7 @@ async function getConfig() {
   });
 }
 
-// Fallback por aba: pulado no modo "só invisível".
-function withTabFallback(cfg, apiResult, fn) {
-  if (cfg.invisibleOnly || apiResult.ok) return apiResult;
-  return fn();
-}
+// Fallback por aba é decidido inline em cada handler via cfg.invisibleOnly.
 
 async function setStatus(patch) {
   const cur = await new Promise((r) => chrome.storage.local.get(["status"], (x) => r(x.status || {})));
