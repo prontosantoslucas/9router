@@ -296,7 +296,18 @@ async function processMessage(chatId, text, userName, ctx = {}) {
   const { retrieveContext } = require("./memory/contextRetriever");
   const memoryContext = await retrieveContext(text, chatId, { isFirstTurn });
 
-  const systemPrompt = `${agentSystem(activePrimary, userName)}\n\n## Diretrizes de Personalidade:\n${githubPersonality}${memoryContext}`;
+  // 2b. Perfil psicológico auto-gerado semanalmente (autonomous/psychProfile).
+  // Injeta o resumo comportamental mais recente pra o LLM ter contexto de
+  // padrões do usuário sem precisar re-derivar a cada turno.
+  let psychContext = "";
+  try {
+    const profile = require("./autonomous/psychProfile").getCurrent(chatId);
+    if (profile?.content) {
+      psychContext = `\n\n## Perfil comportamental do usuário (última síntese semanal):\n${profile.content}\n\nUse isso como pano de fundo — não repita ao usuário, use para ajustar tom/sugestões.`;
+    }
+  } catch { /* modulo pode não ter subido ainda */ }
+
+  const systemPrompt = `${agentSystem(activePrimary, userName)}\n\n## Diretrizes de Personalidade:\n${githubPersonality}${memoryContext}${psychContext}`;
 
   const msgs = [
     { role: "system", content: systemPrompt },
@@ -332,6 +343,14 @@ async function processMessage(chatId, text, userName, ctx = {}) {
 
   // 3b. Segundo cérebro: captura automática de conteúdo relevante → Notion (não bloqueia resposta)
   captureToNotion(text, primaryAnswer, ctx.channel || "web").catch(() => {});
+
+  // 3c. autoMemory: LLM decide se algo dessa troca vale salvar como fato do
+  // usuário (memoryStore SQLite). Fire-and-forget, com rate limit e filtro
+  // heurístico contra mensagens triviais.
+  try {
+    require("./autonomous/autoMemory")
+      .evaluateFireAndForget(chatId, text, primaryAnswer, ctx.channel || "web");
+  } catch { /* módulo ausente ou erro de load — não bloqueia resposta */ }
 
   // 4. Se o modo Co-Piloto estiver ativado para canais externos (WhatsApp/Telegram), criar rascunho
   const { addDraft } = require("./copilot/copilotQueue");

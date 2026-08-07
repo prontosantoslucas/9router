@@ -947,6 +947,20 @@ async function start() {
     console.warn("[automations] falha ao iniciar:", err.message);
   }
 
+  // Perfil psicológico auto-gerado (refresh diário sintetizando 7d de interações)
+  try {
+    require("./autonomous/psychProfile").start();
+  } catch (err) {
+    console.warn("[psychProfile] falha ao iniciar:", err.message);
+  }
+
+  // Insights matutinos espontâneos (cron ~8h BRT, empurra via proactiveNotifier)
+  try {
+    require("./autonomous/dailyInsights").start();
+  } catch (err) {
+    console.warn("[dailyInsights] falha ao iniciar:", err.message);
+  }
+
   // Job alerts (LinkedIn — buscas recorrentes)
   try {
     require("./jobAlerts").start();
