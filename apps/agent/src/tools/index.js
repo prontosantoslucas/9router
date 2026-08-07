@@ -5,6 +5,7 @@ const memoryStore = require("../memoryStore");
 const { ROUTER_BASE_URL, PHONE_AGENT_URL, PHONE_TOKEN, BOT_TOKEN } = require("../config");
 const keyrotator = require("../keyrotator");
 const notion = require("../notion");
+const { searchWeb } = require("./webSearch");
 const { BRAIN_ENTRY_BY_LABEL, BRAIN_LABELS } = require("../brainCategories");
 const fs = require("fs");
 const path = require("path");
@@ -31,15 +32,8 @@ const TOOLS = {
       required: ["query"],
     },
     run: async (args) => {
-      const url = `${ROUTER_BASE_URL.replace(/\/v1$/, "")}/v1/search`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${keyrotator.getKey()}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "tavily", query: String(args.query), max_results: 5 }),
-      });
-      if (!res.ok) return `Erro na busca: ${res.status}`;
-      const data = await res.json();
-      return (data.results || []).map((r, i) =>
+      const results = await searchWeb(String(args.query), 5);
+      return results.map((r, i) =>
         `${i + 1}. [${r.title}](${r.url})\n   ${r.snippet || ""}`
       ).join("\n\n") || "Nenhum resultado encontrado.";
     },

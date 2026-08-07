@@ -85,20 +85,7 @@ function get(id) {
 }
 
 async function searchWeb(query) {
-  const url = `${ROUTER_BASE_URL.replace(/\/v1$/, "")}/v1/search`;
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${keyrotator.getKey()}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "tavily", query, max_results: MAX_RESULTS }),
-      signal: AbortSignal.timeout(30000),
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.results || []).map((r) => ({ title: r.title || "", url: r.url || "", snippet: r.snippet || "" }));
-  } catch {
-    return [];
-  }
+  return require("./tools/webSearch").searchWeb(query, MAX_RESULTS);
 }
 
 async function tick() {
