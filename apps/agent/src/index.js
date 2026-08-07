@@ -940,6 +940,13 @@ async function start() {
     console.warn("[proactiveNotifier] falha ao iniciar:", err.message);
   }
 
+  // Engine de automações por conversa (gmail_new, schedule → send_message etc.)
+  try {
+    require("./automations").start();
+  } catch (err) {
+    console.warn("[automations] falha ao iniciar:", err.message);
+  }
+
   // Job alerts (LinkedIn — buscas recorrentes)
   try {
     require("./jobAlerts").start();

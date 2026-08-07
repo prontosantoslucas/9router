@@ -841,11 +841,98 @@ Rodará automático. Use "list_scheduled_hunts" pra ver, "run_scheduled_hunt_now
   },
 };
 
+const automations = require("../automations");
+
+const AUTOMATION_TOOLS = {
+  create_automation: {
+    name: "create_automation",
+    desc: `Cria uma automação que dispara sozinha quando um evento acontece. Use quando o usuário disser "sempre que X, faça Y", "toda vez que", "todo dia às", "quando chegar email de", etc. Antes de chamar, entenda EXATAMENTE trigger + action com o usuário. Depois de criar, avise o ID pro caso de ele querer cancelar.
+
+Exemplos de uso:
+  - "toda vez que chegar email com 'urgente' no gmail, me manda no whatsapp"
+    → trigger: gmail_new / query="urgente"
+    → action: send_message / chat_id=<wa>, template="📧 {{trigger.from}}: {{trigger.subject}} — {{trigger.snippet}}"
+  - "toda segunda 9h roda um resumo dos meus emails da semana"
+    → trigger: schedule / repeat_seconds=604800, first_at="próxima segunda 9h ISO"
+    → action: process_message / prompt_template="me faz resumo dos emails importantes da semana"`,
+    args: {
+      type: "object",
+      properties: {
+        label: { type: "string", description: "Nome curto descritivo (ex: 'emails urgentes → wa')" },
+        trigger: {
+          type: "object",
+          description: "type='schedule'|'gmail_new'. Config: schedule={repeat_seconds:604800, first_at?:ISO}; gmail_new={query:'string Gmail search'}.",
+        },
+        action: {
+          type: "object",
+          description: "type='send_message'|'run_tool'|'process_message'. Config depende do type — ver desc da tool.",
+        },
+      },
+      required: ["label", "trigger", "action"],
+    },
+    run: (args, ctx) => {
+      try {
+        const a = automations.createAutomation({
+          chatId: ctx?.chatId || args.chat_id,
+          label: args.label,
+          trigger: args.trigger,
+          action: args.action,
+        });
+        return `✅ Automação criada: ${a.id} (${a.label})\n\nUse 'list_automations' pra ver todas, 'cancel_automation ${a.id}' pra parar, 'run_automation_now ${a.id}' pra testar agora.`;
+      } catch (e) {
+        return `❌ Erro: ${e.message}`;
+      }
+    },
+  },
+  list_automations: {
+    name: "list_automations",
+    desc: "Lista automações ativas do usuário atual.",
+    args: { type: "object", properties: {} },
+    run: (_, ctx) => {
+      const chatId = ctx?.chatId;
+      if (!chatId) return "❌ chatId não determinado.";
+      const items = automations.listAutomations(chatId);
+      if (!items.length) return "Nenhuma automação criada.";
+      return items.map((a, i) =>
+        `${i + 1}. [${a.id}] ${a.label} ${a.enabled ? "🟢" : "🔴"}\n   Trigger: ${a.trigger.type} ${JSON.stringify(a.trigger.config).slice(0, 60)}\n   Action: ${a.action.type} → ${JSON.stringify(a.action.config).slice(0, 60)}\n   Último run: ${a.last_run || "nunca"}${a.last_error ? " · ⚠ " + a.last_error : ""}`
+      ).join("\n\n");
+    },
+  },
+  cancel_automation: {
+    name: "cancel_automation",
+    desc: "Desativa uma automação pelo ID.",
+    args: {
+      type: "object",
+      properties: { automation_id: { type: "string" } },
+      required: ["automation_id"],
+    },
+    run: (args) => automations.cancelAutomation(String(args.automation_id))
+      ? `✅ Automação ${args.automation_id} desativada.`
+      : `❌ Automação ${args.automation_id} não encontrada.`,
+  },
+  run_automation_now: {
+    name: "run_automation_now",
+    desc: "Força execução imediata de uma automação (útil pra testar).",
+    args: {
+      type: "object",
+      properties: { automation_id: { type: "string" } },
+      required: ["automation_id"],
+    },
+    run: async (args) => {
+      try {
+        const r = await automations.runNow(String(args.automation_id));
+        return `✅ Executado: ${r.matches} match(es), ${r.executed} ação(ões) disparadas.`;
+      } catch (e) { return `❌ ${e.message}`; }
+    },
+  },
+};
+
 Object.assign(TOOLS, PHONE_TOOLS);
 Object.assign(TOOLS, NOTION_TOOLS);
 Object.assign(TOOLS, CHANNEL_TOOLS);
 Object.assign(TOOLS, GOOGLE_TOOLS);
 Object.assign(TOOLS, LINKEDIN_TOOLS);
+Object.assign(TOOLS, AUTOMATION_TOOLS);
 
 const TOOL_LIST = Object.values(TOOLS).map((t) => ({
   name: t.name,

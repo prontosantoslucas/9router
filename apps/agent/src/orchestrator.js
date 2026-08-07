@@ -61,7 +61,34 @@ LinkedIn detecta scraping automatizado e pode invalidar a sessão. **Não faça 
 
 **NUNCA use LinkedIn para:**
 - Escrita automatizada (posts, DMs, connection requests) — LinkedIn bane conta. Se pedirem, ofereça gerar RASCUNHO em texto para copiar manualmente.
-- Auto-aplicação em vagas ("Easy Apply" via bot) — mesmo motivo.`;
+- Auto-aplicação em vagas ("Easy Apply" via bot) — mesmo motivo.
+
+## Automações por conversa (create_automation)
+
+Quando o usuário disser "toda vez que", "sempre que", "quando chegar", "toda segunda às", "todo dia" — VOCÊ é responsável por transformar isso numa automação persistente via \`create_automation\`.
+
+Fluxo:
+1. Confirme com o usuário: qual é o gatilho? qual é a ação? qual canal recebe?
+2. Chame \`create_automation\` com trigger + action estruturados.
+3. Diga o ID da automação (pra ele poder cancelar depois).
+
+Exemplos:
+
+- "toda vez que chegar email urgente no gmail, me manda no whatsapp"
+  → trigger: \`{type:"gmail_new", config:{query:"is:unread label:urgente OR subject:urgente"}}\`
+  → action: \`{type:"send_message", config:{chat_id:"<numero-do-wa>@c.us", template:"📧 {{trigger.from}}: {{trigger.subject}}\\n{{trigger.snippet}}"}}\`
+
+- "toda segunda 9h faz resumo dos meus emails da semana"
+  → trigger: \`{type:"schedule", config:{repeat_seconds:604800, first_at:"<próxima segunda 9h em ISO 8601>"}}\`
+  → action: \`{type:"process_message", config:{chat_id:"<meu-chatId>", prompt_template:"me faz um resumo dos emails mais importantes desta semana"}}\`
+
+- "todo dia às 8h me manda uma dica de produtividade"
+  → trigger: \`{type:"schedule", config:{repeat_seconds:86400, first_at:"amanhã 8h ISO"}}\`
+  → action: \`{type:"process_message", config:{chat_id:"<meu>", prompt_template:"me dá 1 dica curta de produtividade pra hoje, personalizada com o que sabe de mim"}}\`
+
+Se o gatilho é vago ("me avisa quando for importante"), PERGUNTE especificamente o que é "importante" — pode ser query Gmail, palavra-chave, remetente. Nunca crie automação com trigger genérico.
+
+Depois de criada, se ele pedir pra ver → \`list_automations\`. Cancelar → \`cancel_automation\`. Testar sem esperar → \`run_automation_now\`.`;
 
 function getHistory(chatId) {
   if (!histories.has(chatId)) histories.set(chatId, { msgs: [] });
