@@ -154,13 +154,23 @@ function isRelevantFor(question, agentId) {
 
 const { BRAIN_ENTRY_BY_LABEL, BRAIN_LABELS } = require("./brainCategories");
 
-const BRAIN_SIGNALS = /plano|meta|objetivo|ideia|sonho|virada|mudança|importante|lembrar|memóri|decidir|decidimos|vou começar|quero criar|quero construir|conversa profunda|segundo cérebro|anota|salva|agenda|compromisso|reunião|tarefa|to-?do|financ|gasto|receita|dinheiro|orçamento|comi|comida|refeição|almoço|jantar|dieta|atalho|link útil/i;
+const BRAIN_SIGNALS = /plano|meta|objetivo|ideia|sonho|virada|mudança|importante|lembrar|memóri|decidir|decidimos|vou começar|vou fazer|quero criar|quero construir|comecei|assinei|contratei|contratar|comprei|vendi|conversa profunda|segundo cérebro|anota|salva|agenda|compromisso|reunião|entrevista|tarefa|to-?do|financ|gasto|receita|dinheiro|orçamento|salário|salario|comi|comida|refeição|almoço|jantar|dieta|atalho|link útil|projeto|cliente|proposta|contrato|deadline|prazo|mvp|feature|bug|deploy|estudei|aprendi|descoberta|insight/i;
 
 async function captureToNotion(userText, agentAnswer, channel) {
   const notion = require("./notion");
-  if (!notion.isConfigured()) return;
+  if (!notion.isConfigured()) {
+    console.log("[Brain] SKIP: notion não configurado (falta NOTION_TOKEN ou NOTION_DATABASE_ID)");
+    return;
+  }
   const combined = `${userText}\n${agentAnswer}`;
-  if (combined.length < 80 || !BRAIN_SIGNALS.test(combined)) return;
+  if (combined.length < 80) {
+    console.log(`[Brain] SKIP: texto curto (${combined.length} chars, min 80)`);
+    return;
+  }
+  if (!BRAIN_SIGNALS.test(combined)) {
+    console.log(`[Brain] SKIP: nenhum sinal de "importância" bate. Preview: ${combined.slice(0, 120)}...`);
+    return;
+  }
   try {
     const res = await complete([
       {
@@ -171,15 +181,37 @@ async function captureToNotion(userText, agentAnswer, channel) {
       { role: "user", content: `Usuário: ${userText.slice(0, 1500)}\n\nLucas: ${agentAnswer.slice(0, 1500)}` },
     ]);
     const content = (res?.content || "").trim();
-    if (!content || content === "null" || content.startsWith("null")) return;
+    if (!content || content === "null" || content.startsWith("null")) {
+      console.log(`[Brain] SKIP: LLM classifier disse não (${content.slice(0, 50)})`);
+      return;
+    }
     const parsed = JSON.parse(content.replace(/^```json\s*|\s*```$/g, ""));
     const entry = parsed?.categoria && BRAIN_ENTRY_BY_LABEL.get(parsed.categoria);
-    if (!entry || !parsed?.titulo) return;
+    if (!entry || !parsed?.titulo) {
+      console.log(`[Brain] SKIP: categoria inválida ou sem título. LLM devolveu: ${JSON.stringify(parsed).slice(0, 100)}`);
+      return;
+    }
     const targetDb = entry.db();
-    if (!targetDb) return; // família sem database configurado — não perde silenciosamente, só não tenta
+    if (!targetDb) {
+      console.log(`[Brain] SKIP: categoria "${entry.label}" sem database configurado no env (NOTION_${entry.envKey || "?_DATABASE_ID"})`);
+      return;
+    }
     const nota = `${parsed.resumo || ""}\n\n---\n\nUsuário: ${userText}\nLucas: ${agentAnswer}`;
     const r = await notion.saveToCategory(entry.categoria, parsed.titulo, nota.slice(0, 2000), [], channel, targetDb);
-    if (r.ok) console.log(`[Brain] Nota anexada (${entry.label}): ${r.url || parsed.titulo}`);
+    if (r.ok) {
+      console.log(`[Brain] ✅ Salvo (${entry.label}): ${r.url || parsed.titulo}`);
+      // Espelha local (SQLite) — permite listar no app estilo Evernote sem
+      // depender da API Notion pra puxar
+      try {
+        require("./memoryStore").save(
+          `[${entry.label}] ${parsed.titulo}\n\n${parsed.resumo || ""}`,
+          [entry.label, "brain", `notion:${r.url || "no-url"}`],
+          "brain-auto"
+        );
+      } catch {}
+    } else {
+      console.warn(`[Brain] ❌ Notion save falhou: ${r.error || "unknown"}`);
+    }
   } catch (err) {
     console.warn(`[Brain] Captura falhou: ${err.message}`);
   }

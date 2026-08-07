@@ -335,6 +335,109 @@ app.get("/api/notion/list", async (req, res) => {
   res.json(r);
 });
 
+// ── Segundo cérebro: API unificada (Notion + memoryStore local) ──
+// Serve como backend do app "estilo Evernote". Lista notas de ambas as
+// fontes (local + Notion), permite abrir e editar. Se Notion não estiver
+// configurado, cai só no local — nunca falha silencioso.
+app.get("/api/brain/list", async (req, res) => {
+  const category = req.query.category || null;
+  const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+  const items = [];
+
+  // Local (memoryStore) — mais rápido, sempre disponível
+  try {
+    const db = require("./db");
+    const rows = category
+      ? db.prepare(`SELECT id, text, tags, source, created_at FROM memories WHERE tags LIKE ? ORDER BY created_at DESC LIMIT ?`).all(`%${category}%`, limit)
+      : db.prepare(`SELECT id, text, tags, source, created_at FROM memories ORDER BY created_at DESC LIMIT ?`).all(limit);
+    for (const r of rows) {
+      const tags = JSON.parse(r.tags || "[]");
+      const notionUrl = tags.find((t) => t.startsWith("notion:"))?.slice(7);
+      items.push({
+        id: `local:${r.id}`,
+        source: r.source || "local",
+        title: r.text.slice(0, 80).replace(/\n.*$/s, "").trim(),
+        preview: r.text.slice(0, 200),
+        tags: tags.filter((t) => !t.startsWith("notion:") && !t.startsWith("chat:")),
+        notion_url: notionUrl && notionUrl !== "no-url" ? notionUrl : null,
+        created_at: r.created_at,
+      });
+    }
+  } catch (e) {
+    console.warn("[brain] list local falhou:", e.message);
+  }
+
+  res.json({ items, count: items.length });
+});
+
+app.get("/api/brain/get/:id", async (req, res) => {
+  const id = req.params.id;
+  if (id.startsWith("local:")) {
+    try {
+      const localId = parseInt(id.slice(6));
+      const row = require("./db").prepare(`SELECT * FROM memories WHERE id = ?`).get(localId);
+      if (!row) return res.status(404).json({ error: "não encontrado" });
+      const tags = JSON.parse(row.tags || "[]");
+      return res.json({
+        id, source: row.source, text: row.text, tags,
+        notion_url: tags.find((t) => t.startsWith("notion:"))?.slice(7) || null,
+        created_at: row.created_at,
+      });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+  return res.status(400).json({ error: "id format inválido — use local:N" });
+});
+
+app.post("/api/brain/save", async (req, res) => {
+  const { id, text, tags = [] } = req.body || {};
+  if (!text || text.length < 5) return res.status(400).json({ error: "text obrigatório (min 5 chars)" });
+  const memoryStore = require("./memoryStore");
+  try {
+    if (id && id.startsWith("local:")) {
+      const localId = parseInt(id.slice(6));
+      const db = require("./db");
+      db.prepare(`UPDATE memories SET text = ?, tags = ? WHERE id = ?`)
+        .run(text, JSON.stringify(tags), localId);
+      return res.json({ ok: true, id, updated: true });
+    }
+    // Cria novo
+    memoryStore.save(text, tags, "manual");
+    const row = require("./db").prepare(`SELECT last_insert_rowid() as id`).get();
+    return res.json({ ok: true, id: `local:${row.id}`, created: true });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
+app.delete("/api/brain/:id", async (req, res) => {
+  const id = req.params.id;
+  if (!id.startsWith("local:")) return res.status(400).json({ error: "só local: suportado" });
+  try {
+    require("./memoryStore").remove(parseInt(id.slice(6)));
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Diagnóstico do Notion — mostra por que não está salvando
+app.get("/api/brain/diagnose", async (req, res) => {
+  const notion = require("./notion");
+  const cfg = require("./config");
+  const { BRAIN_LABELS, BRAIN_ENTRY_BY_LABEL } = require("./brainCategories");
+  const dbConfig = {};
+  for (const label of BRAIN_LABELS) {
+    const entry = BRAIN_ENTRY_BY_LABEL.get(label);
+    dbConfig[label] = entry?.db?.() ? "✅" : "❌ (env não setada)";
+  }
+  res.json({
+    notion_token: !!cfg.NOTION_TOKEN,
+    primary_database_id: !!cfg.NOTION_DATABASE_ID,
+    second_database_id: !!cfg.NOTION_SECOND_DATABASE_ID,
+    is_configured: notion.isConfigured(),
+    categories: dbConfig,
+    note: notion.isConfigured()
+      ? "Notion ok. Se não sincroniza, veja logs [Brain] SKIP para descobrir gate. Ampliei BRAIN_SIGNALS com mais palavras (contrato, deadline, projeto, cliente, etc.)"
+      : "Configure NOTION_TOKEN + NOTION_DATABASE_ID no .env do agent Railway.",
+  });
+});
+
 // ── Extensão Chrome (LinkedIn Helper) ──
 // Auth: Bearer EXTENSION_TOKEN (env do agent). Sem token configurado → 503.
 const extensionBridge = require("./extensionBridge");
