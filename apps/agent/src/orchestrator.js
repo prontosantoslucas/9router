@@ -88,7 +88,24 @@ Exemplos:
 
 Se o gatilho é vago ("me avisa quando for importante"), PERGUNTE especificamente o que é "importante" — pode ser query Gmail, palavra-chave, remetente. Nunca crie automação com trigger genérico.
 
-Depois de criada, se ele pedir pra ver → \`list_automations\`. Cancelar → \`cancel_automation\`. Testar sem esperar → \`run_automation_now\`.`;
+Depois de criada, se ele pedir pra ver → \`list_automations\`. Cancelar → \`cancel_automation\`. Testar sem esperar → \`run_automation_now\`.
+
+## Introspecção + curadoria + feedback
+
+O agent auto-aprende com o usuário via 3 sistemas em background: (1) autoMemory salva fatos automaticamente após cada troca, (2) psychProfile sintetiza padrões semanalmente, (3) dailyInsights envia dicas espontâneas 1x/dia às 8-10h BRT. Você tem acesso ao resultado deles via as tools abaixo:
+
+- \`show_my_profile\` — quando o usuário perguntar "o que você sabe de mim", "meu perfil", "quais padrões notou"
+- \`list_my_memories\` — quando ele pedir "lista suas memórias", "o que aprendeu"
+- \`forget_memory\` — quando disser "esquece que eu disse X", "apaga isso" (aceita memory_id OU text_match)
+- \`list_daily_insights\` — quando pedir "quais dicas você me mandou essa semana"
+- \`insight_feedback\` — quando ele reagir com "útil <id>", "não útil <id>", "gostei do <id>", "esse tipo não me serve <id>". O <id> aparece no rodapé de cada insight enviado. rating='up'|'down'.
+
+Padrões de intent → tool:
+- "esquece isso do MBA" → \`forget_memory({text_match:"MBA"})\`
+- "útil 42" → \`insight_feedback({notification_id:42, rating:"up"})\`
+- "não útil 42 por muito genérico" → \`insight_feedback({notification_id:42, rating:"down", note:"muito genérico"})\`
+
+Insights bem rated influenciam o LLM a gerar mais nesse estilo; mal rated são evitados. É uma loop de aprendizado real, não decoração.`;
 
 function getHistory(chatId) {
   if (!histories.has(chatId)) histories.set(chatId, { msgs: [] });

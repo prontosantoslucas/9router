@@ -75,16 +75,45 @@ function collectContext(chatId) {
       .map((t) => `${t.label} (em ~${Math.round(t.remaining / 60)} min)`);
   } catch {}
 
-  return { profile, memories, tasks };
+  // Feedback histórico dos últimos 30 dias — quais tipos de insight
+  // funcionaram (up) vs foram rejeitados (down). Amostragem das mensagens
+  // originais pra o LLM aprender o padrão.
+  let feedback = { up: [], down: [] };
+  try {
+    const cutoff = Math.floor((Date.now() - 30 * 24 * 3600 * 1000) / 1000);
+    const rows = db.prepare(
+      `SELECT f.rating, f.note, pn.body
+       FROM insight_feedback f
+       JOIN proactive_notifications pn ON f.notification_id = pn.id
+       WHERE f.chat_id = ? AND f.created_at >= ?
+       ORDER BY f.created_at DESC LIMIT 20`
+    ).all(String(chatId), cutoff);
+    for (const r of rows) {
+      const item = { body: (r.body || "").slice(0, 200), note: r.note };
+      if (r.rating === "up") feedback.up.push(item);
+      else feedback.down.push(item);
+    }
+  } catch {}
+
+  return { profile, memories, tasks, feedback };
 }
 
 async function generateFor(chatId) {
-  const { profile, memories, tasks } = collectContext(chatId);
+  const { profile, memories, tasks, feedback } = collectContext(chatId);
   if (!profile && memories.length === 0) {
     return { generated: 0, reason: "sem-contexto" };
   }
 
   const day = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"][new Date(Date.now() - 3*3600*1000).getUTCDay()];
+
+  // Bloco de feedback (aprendizado): usuário curtiu X, rejeitou Y — LLM
+  // deve espelhar o padrão do que funcionou e evitar o que não.
+  let feedbackHint = "";
+  if (feedback.up.length || feedback.down.length) {
+    const ups = feedback.up.slice(0, 5).map((f) => `👍 "${f.body}"${f.note ? ` (nota: ${f.note})` : ""}`).join("\n");
+    const downs = feedback.down.slice(0, 5).map((f) => `👎 "${f.body}"${f.note ? ` (nota: ${f.note})` : ""}`).join("\n");
+    feedbackHint = `\n\nFeedback histórico do usuário sobre insights anteriores (últimos 30d) — ESPELHE o padrão dos 👍 e evite o dos 👎:\n${ups}\n${downs}`;
+  }
 
   const messages = [
     { role: "system", content: `Você é o agent pessoal do usuário. Gera 1 ou 2 mensagens curtas e espontâneas pra ele receber pela manhã. Formato: cada mensagem é 1-3 frases, direta, sem chavão.
@@ -99,6 +128,7 @@ Regras:
 - MÁXIMO 300 caracteres por mensagem
 - Se contexto é raso, gera SÓ 1 mensagem
 - Nunca alucine dados. Se não sabe algo, não menciona.
+- Se há feedback histórico, siga o padrão do que funcionou (👍).
 - Retorne APENAS JSON: {"messages": ["msg1", "msg2"]}` },
     { role: "user", content: `Hoje é ${day}.
 
@@ -109,7 +139,7 @@ ${profile?.content || "(sem perfil ainda)"}
 ${memories.slice(0, 8).map((m) => `- ${m}`).join("\n") || "(nenhuma)"}
 
 Tarefas agendadas pra hoje:
-${tasks.join("\n") || "(nenhuma)"}` },
+${tasks.join("\n") || "(nenhuma)"}${feedbackHint}` },
   ];
 
   let parsed;

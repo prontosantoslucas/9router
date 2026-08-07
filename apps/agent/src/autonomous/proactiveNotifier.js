@@ -68,7 +68,13 @@ async function drain() {
   console.log(`[ProactiveNotifier] drenando ${rows.length} notificações pendentes`);
   for (const row of rows) {
     try {
-      const res = await channelSender.send(row.chat_id, row.body);
+      // Anexa hint de feedback no body — usuário pode responder com o comando
+      // pra classificar. Só pra notifications com tag daily-insight.
+      const rowTag = db.prepare("SELECT tag FROM proactive_notifications WHERE id = ?").get(row.id)?.tag || "";
+      const feedbackHint = rowTag.startsWith("daily-insight-")
+        ? `\n\n_(id ${row.id} — responde "útil ${row.id}" ou "não útil ${row.id}")_`
+        : "";
+      const res = await channelSender.send(row.chat_id, row.body + feedbackHint);
       if (res.ok) {
         db.prepare("UPDATE proactive_notifications SET sent_at = (unixepoch()) WHERE id = ?")
           .run(row.id);

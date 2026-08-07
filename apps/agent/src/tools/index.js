@@ -842,6 +842,150 @@ Rodará automático. Use "list_scheduled_hunts" pra ver, "run_scheduled_hunt_now
 };
 
 const automations = require("../automations");
+const db = require("../db");
+
+// Setup schema feedback (idempotente — outros módulos podem já ter criado)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS insight_feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    notification_id INTEGER,
+    chat_id TEXT NOT NULL,
+    rating TEXT NOT NULL,
+    note TEXT,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+`);
+
+const INTROSPECTION_TOOLS = {
+  show_my_profile: {
+    name: "show_my_profile",
+    desc: "Mostra o perfil comportamental atual do usuário (síntese semanal auto-gerada). Use quando ele perguntar 'o que você sabe sobre mim', 'qual meu perfil', 'quais padrões você notou'.",
+    args: { type: "object", properties: {} },
+    run: (_, ctx) => {
+      const chatId = ctx?.chatId;
+      if (!chatId) return "❌ chatId não determinado.";
+      let profile;
+      try { profile = require("../autonomous/psychProfile").getCurrent(chatId); }
+      catch { return "⏳ Perfil comportamental ainda não gerado (precisa de ~5 interações substanciais + 24h desde a última síntese)."; }
+      if (!profile?.content) return "⏳ Perfil comportamental ainda não gerado. O sistema sintetiza automaticamente 1x/dia com base nos últimos 7 dias.";
+      const when = new Date(profile.generated_at * 1000).toLocaleString("pt-BR");
+      return `📊 **Perfil comportamental** (gerado em ${when})\n\n${profile.content}`;
+    },
+  },
+  list_my_memories: {
+    name: "list_my_memories",
+    desc: "Lista o que o agent lembra sobre o usuário. Use quando ele perguntar 'quais memórias você tem sobre mim', 'o que você sabe', 'lista o que aprendeu'.",
+    args: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Filtro opcional. Se omitido, retorna as 20 mais recentes." },
+        limit: { type: "number", description: "Default 20, max 100" },
+      },
+    },
+    run: (args, ctx) => {
+      const chatId = ctx?.chatId;
+      const limit = Math.min(args.limit || 20, 100);
+      const tag = chatId ? `%chat:${chatId}%` : "%";
+      let rows;
+      if (args.query) {
+        rows = db.prepare(
+          `SELECT id, text, tags, source, created_at FROM memories
+           WHERE tags LIKE ? AND text LIKE ?
+           ORDER BY created_at DESC LIMIT ?`
+        ).all(tag, `%${args.query}%`, limit);
+      } else {
+        rows = db.prepare(
+          `SELECT id, text, tags, source, created_at FROM memories
+           WHERE tags LIKE ?
+           ORDER BY created_at DESC LIMIT ?`
+        ).all(tag, limit);
+      }
+      if (rows.length === 0) return "Nenhuma memória salva ainda.";
+      return rows.map((r) => `[${r.id}] (${r.source}) ${r.text}`).join("\n\n");
+    },
+  },
+  forget_memory: {
+    name: "forget_memory",
+    desc: "Apaga uma memória específica. Use quando o usuário disser 'esquece que eu disse X', 'apaga essa lembrança', 'remove essa memória'. Aceita ID exato OU busca por texto (apaga a mais recente que bate).",
+    args: {
+      type: "object",
+      properties: {
+        memory_id: { type: "number", description: "ID exato (visto em list_my_memories)" },
+        text_match: { type: "string", description: "Ou busca por trecho do texto — apaga a memória mais recente que contém isso" },
+      },
+    },
+    run: (args, ctx) => {
+      const chatId = ctx?.chatId;
+      const tag = chatId ? `%chat:${chatId}%` : "%";
+      if (args.memory_id) {
+        const row = db.prepare(`SELECT id, text FROM memories WHERE id = ? AND tags LIKE ?`).get(args.memory_id, tag);
+        if (!row) return `❌ Memória ${args.memory_id} não encontrada (ou não pertence a esse chat).`;
+        memoryStore.remove(row.id);
+        return `✅ Esquecido: "${row.text.slice(0, 100)}"`;
+      }
+      if (args.text_match) {
+        const row = db.prepare(
+          `SELECT id, text FROM memories WHERE tags LIKE ? AND text LIKE ? ORDER BY created_at DESC LIMIT 1`
+        ).get(tag, `%${args.text_match}%`);
+        if (!row) return `❌ Nenhuma memória com "${args.text_match}" encontrada.`;
+        memoryStore.remove(row.id);
+        return `✅ Esquecido (id ${row.id}): "${row.text.slice(0, 100)}"`;
+      }
+      return "❌ Passe memory_id ou text_match.";
+    },
+  },
+  list_daily_insights: {
+    name: "list_daily_insights",
+    desc: "Lista os insights matutinos espontâneos que o agent gerou recentemente pra o usuário (incluindo feedback dado, se houver).",
+    args: {
+      type: "object",
+      properties: { limit: { type: "number", description: "Default 10" } },
+    },
+    run: (args, ctx) => {
+      const chatId = ctx?.chatId;
+      if (!chatId) return "❌ chatId não determinado.";
+      const limit = args.limit || 10;
+      const rows = db.prepare(
+        `SELECT pn.id, pn.body, pn.tag, pn.created_at,
+                (SELECT rating FROM insight_feedback WHERE notification_id = pn.id LIMIT 1) as feedback
+         FROM proactive_notifications pn
+         WHERE pn.chat_id = ? AND pn.tag LIKE 'daily-insight-%'
+         ORDER BY pn.created_at DESC LIMIT ?`
+      ).all(String(chatId), limit);
+      if (rows.length === 0) return "Ainda não gerei nenhum insight matutino pra você.";
+      return rows.map((r) => {
+        const when = new Date(r.created_at * 1000).toLocaleString("pt-BR");
+        const fb = r.feedback ? ` [${r.feedback === "up" ? "👍" : "👎"}]` : "";
+        return `[${r.id}] ${when}${fb}\n${r.body}`;
+      }).join("\n\n");
+    },
+  },
+  insight_feedback: {
+    name: "insight_feedback",
+    desc: "Grava feedback do usuário sobre um insight recebido. Use quando ele escrever 'útil <id>', 'não útil <id>', 'gostei do <id>', 'ignora esse tipo de sugestão'. O rating vira input pra gerar melhores insights no futuro.",
+    args: {
+      type: "object",
+      properties: {
+        notification_id: { type: "number", description: "ID do insight (aparece no rodapé da mensagem)" },
+        rating: { type: "string", enum: ["up", "down"], description: "up=útil, down=não-útil" },
+        note: { type: "string", description: "Comentário opcional do usuário sobre o porquê" },
+      },
+      required: ["notification_id", "rating"],
+    },
+    run: (args, ctx) => {
+      const chatId = ctx?.chatId;
+      if (!chatId) return "❌ chatId não determinado.";
+      const notif = db.prepare(
+        `SELECT id FROM proactive_notifications WHERE id = ? AND chat_id = ?`
+      ).get(args.notification_id, String(chatId));
+      if (!notif) return `❌ Insight ${args.notification_id} não encontrado.`;
+      db.prepare(
+        `INSERT INTO insight_feedback (notification_id, chat_id, rating, note) VALUES (?, ?, ?, ?)`
+      ).run(args.notification_id, String(chatId), args.rating, args.note || null);
+      return `✅ Feedback registrado. Vou usar isso pra melhorar próximos insights.`;
+    },
+  },
+};
 
 const AUTOMATION_TOOLS = {
   create_automation: {
@@ -933,6 +1077,7 @@ Object.assign(TOOLS, CHANNEL_TOOLS);
 Object.assign(TOOLS, GOOGLE_TOOLS);
 Object.assign(TOOLS, LINKEDIN_TOOLS);
 Object.assign(TOOLS, AUTOMATION_TOOLS);
+Object.assign(TOOLS, INTROSPECTION_TOOLS);
 
 const TOOL_LIST = Object.values(TOOLS).map((t) => ({
   name: t.name,
