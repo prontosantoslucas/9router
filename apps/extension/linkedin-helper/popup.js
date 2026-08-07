@@ -56,7 +56,9 @@ async function refreshStatus() {
 
   $("s-state").innerHTML = `<span class="dot ${stateDot}"></span>${state}`;
   $("s-job").textContent = status.lastJobId || "—";
-  $("s-err").textContent = status.lastError ? String(status.lastError).slice(0, 40) : "—";
+  const errText = status.lastError ? String(status.lastError) : "—";
+  $("s-err").textContent = errText.length > 60 ? errText.slice(0, 60) + "…" : errText;
+  $("s-err").title = errText;
 }
 
 $("save").addEventListener("click", saveConfig);

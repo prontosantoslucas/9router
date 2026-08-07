@@ -423,8 +423,9 @@ let polling = false;
 async function pollOnce() {
   if (polling) return;
   polling = true;
+  let cfg;
   try {
-    const cfg = await getConfig();
+    cfg = await getConfig();
     if (!cfg.enabled || !cfg.agentUrl || !cfg.token) {
       await setStatus({ state: "idle-unconfigured" });
       return;
@@ -471,7 +472,10 @@ async function pollOnce() {
     await setStatus({ state: "waiting", lastResult: error ? "error" : "ok", lastError: error || null });
   } catch (err) {
     console.error("[9router-ext] poll error:", err);
-    await setStatus({ state: "poll-error", lastError: err.message });
+    await setStatus({
+      state: "poll-error",
+      lastError: `${err.message} (agentUrl: ${cfg?.agentUrl || "?"})`,
+    });
   } finally {
     polling = false;
   }
