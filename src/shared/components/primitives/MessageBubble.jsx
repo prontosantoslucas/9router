@@ -117,11 +117,9 @@ export function MessageBubble({ message, onSaveNotion, onRetry }) {
         </div>
 
 
-        {/* Ações (aparecem no hover) */}
+        {/* Ações (sempre visíveis) */}
         <div
-          className={`mt-1 flex items-center gap-3 px-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 ${
-            isUser ? "flex-row-reverse" : ""
-          }`}
+          className={`mt-1 flex items-center gap-3 px-1 ${isUser ? "flex-row-reverse" : ""}`}
         >
           <button
             onClick={handleCopy}
