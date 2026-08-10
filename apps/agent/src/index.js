@@ -416,6 +416,91 @@ app.delete("/api/brain/:id", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Notificações pendentes (agent → app mobile / webchat) ──
+// Consumido pelo app Android via polling. Une:
+//   - proactive_notifications (insights, dailyInsights) — já entregues ou não
+//   - job_alert_notifications (alertas LinkedIn recorrentes)
+//
+// Semântica de "pendente": sent_at IS NULL (nunca enviada) OU read=0 (não lida).
+// App decide se marca como lida quando exibe (via POST /mark-read).
+
+app.get("/api/notifications/pending", async (req, res) => {
+  const chatId = req.query.chatId ? String(req.query.chatId) : null;
+  if (!chatId) return res.status(400).json({ error: "chatId obrigatório" });
+  const limit = Math.min(parseInt(req.query.limit) || 30, 100);
+  const db = require("./db");
+
+  const items = [];
+  try {
+    // proactive_notifications: se sent_at null OU se ainda não tem feedback (usuário não interagiu)
+    const rows1 = db.prepare(
+      `SELECT id, body, tag, priority, created_at, sent_at
+       FROM proactive_notifications
+       WHERE chat_id = ?
+         AND (sent_at IS NULL OR created_at > unixepoch() - 86400 * 3)
+       ORDER BY created_at DESC LIMIT ?`
+    ).all(chatId, limit);
+    for (const r of rows1) {
+      items.push({
+        id: `proactive:${r.id}`,
+        source: "proactive",
+        tag: r.tag,
+        priority: r.priority,
+        body: r.body,
+        created_at: r.created_at * 1000,
+        delivered: !!r.sent_at,
+      });
+    }
+  } catch {}
+
+  try {
+    const rows2 = db.prepare(
+      `SELECT id, body, created_at FROM job_alert_notifications
+       WHERE chat_id = ? AND read = 0
+       ORDER BY created_at DESC LIMIT ?`
+    ).all(chatId, limit);
+    for (const r of rows2) {
+      items.push({
+        id: `alert:${r.id}`,
+        source: "job_alert",
+        tag: "linkedin-alert",
+        priority: 3,
+        body: r.body,
+        created_at: r.created_at * 1000,
+        delivered: false,
+      });
+    }
+  } catch {}
+
+  items.sort((a, b) => b.created_at - a.created_at);
+  res.json({ count: items.length, items: items.slice(0, limit) });
+});
+
+app.post("/api/notifications/mark-read", async (req, res) => {
+  const { id, chatId } = req.body || {};
+  if (!id || !chatId) return res.status(400).json({ error: "id e chatId obrigatórios" });
+  const db = require("./db");
+  const [source, rawId] = String(id).split(":");
+  const numId = parseInt(rawId);
+  if (!Number.isFinite(numId)) return res.status(400).json({ error: "id inválido" });
+
+  try {
+    if (source === "proactive") {
+      // Marca como "entregue" (sent_at) mesmo que já estivesse — libera dedup dos próximos ticks
+      db.prepare("UPDATE proactive_notifications SET sent_at = unixepoch() WHERE id = ? AND chat_id = ? AND sent_at IS NULL")
+        .run(numId, String(chatId));
+    } else if (source === "alert") {
+      db.prepare("UPDATE job_alert_notifications SET read = 1 WHERE id = ? AND chat_id = ?")
+        .run(numId, String(chatId));
+    } else {
+      return res.status(400).json({ error: "source desconhecido" });
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Diagnóstico do Notion — mostra por que não está salvando
 app.get("/api/brain/diagnose", async (req, res) => {
   const notion = require("./notion");

@@ -152,4 +152,44 @@ export const apiService = {
     });
     return { success: true, pageId: data.id || data.pageId };
   },
+
+  // ──────── API DE NOTIFICAÇÕES PROATIVAS ────────
+  // Insights matutinos, alertas de vaga, mensagens agendadas — tudo que o
+  // agent gera espontaneamente enquanto o app está fechado ou dormindo.
+  async getPendingNotifications(chatId: string, limit = 30): Promise<{
+    count: number;
+    items: Array<{
+      id: string;
+      source: string;
+      tag: string | null;
+      priority: number;
+      body: string;
+      created_at: number;
+      delivered: boolean;
+    }>;
+  }> {
+    try {
+      const data = await this.request(
+        `/api/agent/notifications/pending?chatId=${encodeURIComponent(chatId)}&limit=${limit}`,
+        { method: 'GET' }
+      );
+      return {
+        count: data?.count ?? 0,
+        items: Array.isArray(data?.items) ? data.items : [],
+      };
+    } catch (err) {
+      console.warn('getPendingNotifications erro:', err);
+      return { count: 0, items: [] };
+    }
+  },
+
+  async markNotificationRead(id: string, chatId: string): Promise<boolean> {
+    try {
+      await this.request('/api/agent/notifications/mark-read', {
+        method: 'POST',
+        body: JSON.stringify({ id, chatId }),
+      });
+      return true;
+    } catch { return false; }
+  },
 };
