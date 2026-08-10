@@ -5,8 +5,14 @@
 const { ROUTER_BASE_URL } = require("../config");
 const keyrotator = require("../keyrotator");
 
-const TTS_MODEL = process.env.TTS_MODEL || "tts-1";
-const TTS_VOICE = process.env.TTS_VOICE || "alloy";
+// Default: Edge TTS (Microsoft) — grátis, PT-BR natural, sem depender de API key.
+// Vozes PT-BR conhecidas: FranciscaNeural (fem), AntonioNeural (masc),
+// BrendaNeural (fem jovem), DonatoNeural (masc), ElzaNeural, FabioNeural,
+// GiovannaNeural, HumbertoNeural, JulioNeural, LeilaNeural, LeticiaNeural,
+// ManuelaNeural, NicolauNeural, ThalitaNeural, ValerioNeural, YaraNeural.
+// Override via env TTS_MODEL / TTS_VOICE.
+const TTS_MODEL = process.env.TTS_MODEL || "edge-tts";
+const TTS_VOICE = process.env.TTS_VOICE || "pt-BR-FranciscaNeural";
 
 async function synthesizeSpeech(text, { voice, format = "mp3" } = {}) {
   if (!text || !text.trim()) return null;
