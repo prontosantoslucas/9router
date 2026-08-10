@@ -5,10 +5,9 @@ import { TouchableOpacity, View, Text } from 'react-native';
 import { useAuth } from '../_layout';
 import { apiService } from '../../src/services/api';
 
-const CHAT_ID = 'mobile-user';
-
 // Badge com contagem de notificações pendentes — polling em segundo plano
 // (foreground do app). Alimenta o ícone da tab "Insights".
+// chatId resolvido via apiService.getChatId() (cache + fetch de /api/auth/me).
 function InsightsBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
@@ -40,7 +39,8 @@ export default function TabsLayout() {
   useEffect(() => {
     let cancelled = false;
     async function poll() {
-      const data = await apiService.getPendingNotifications(CHAT_ID, 30);
+      const chatId = await apiService.getChatId();
+      const data = await apiService.getPendingNotifications(chatId, 30);
       if (!cancelled) setPendingCount(data.count);
     }
     poll();

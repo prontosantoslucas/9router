@@ -8,7 +8,24 @@ const MAX_HISTORY = 200;
 export function useChatSession(sessionId = "default") {
   const [messages, setMessages] = useState([]);
   const [isSending, setIsSending] = useState(false);
+  // chatId unificado (user:<email>|<hash>) — puxa uma vez de /api/auth/me.
+  // Antes usava `web:${sessionId}` (isolado por aba), agora é estável por
+  // conta e casa com o app mobile, permitindo dailyInsights/jobAlerts
+  // gerarem notificações que aparecem em qualquer canal do mesmo user.
+  const [chatId, setChatId] = useState(null);
   const storageKey = `chat_msgs_${sessionId}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && d?.chatId) setChatId(d.chatId);
+        else if (!cancelled) setChatId(`web:${sessionId}`); // fallback legado
+      })
+      .catch(() => { if (!cancelled) setChatId(`web:${sessionId}`); });
+    return () => { cancelled = true; };
+  }, [sessionId]);
 
   // Carregar histórico inicial do localStorage. localStorage não existe no
   // SSR, então precisa ser um efeito (não dá pra ler no render nem num
@@ -58,7 +75,7 @@ export function useChatSession(sessionId = "default") {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          chatId: `web:${sessionId}`,
+          chatId: chatId || `web:${sessionId}`, // fallback só se /me falhou
           userName: "Você",
           ...options,
         }),

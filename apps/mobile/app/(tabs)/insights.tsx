@@ -21,9 +21,9 @@ type Item = {
   delivered: boolean;
 };
 
-// Sem chatId real do usuário no app, usa um alias consistente. Se você
-// tiver id de user autenticado disponível em algum lugar, troca aqui.
-const CHAT_ID = 'mobile-user';
+// ChatId puxado de /api/auth/me (mesmo do webchat) — cacheado no
+// SecureStore. Cross-device: qualquer notificação gerada pra este user
+// aparece aqui, independente do canal que a criou.
 
 function relativeTime(ts: number): string {
   const s = Math.max(1, Math.floor((Date.now() - ts) / 1000));
@@ -47,31 +47,41 @@ export default function InsightsScreen() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [chatId, setChatId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const data = await apiService.getPendingNotifications(CHAT_ID, 50);
+  const load = useCallback(async (id: string) => {
+    const data = await apiService.getPendingNotifications(id, 50);
     setItems(data.items);
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    load();
+    let cancelled = false;
+    apiService.getChatId().then((id) => {
+      if (cancelled) return;
+      setChatId(id);
+      load(id);
+    });
     // Polling em foreground a cada 45s. Não é push real (foreground-only),
     // mas capta insights matutinos e alertas em janela razoável.
-    const t = setInterval(load, 45_000);
-    return () => clearInterval(t);
+    const t = setInterval(() => {
+      apiService.getChatId().then((id) => { if (!cancelled) load(id); });
+    }, 45_000);
+    return () => { cancelled = true; clearInterval(t); };
   }, [load]);
 
   async function markRead(item: Item) {
-    await apiService.markNotificationRead(item.id, CHAT_ID);
+    if (!chatId) return;
+    await apiService.markNotificationRead(item.id, chatId);
     setItems((prev) => prev.filter((x) => x.id !== item.id));
   }
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
+    const id = chatId || (await apiService.getChatId());
+    await load(id);
     setRefreshing(false);
-  }, [load]);
+  }, [load, chatId]);
 
   if (loading) {
     return (

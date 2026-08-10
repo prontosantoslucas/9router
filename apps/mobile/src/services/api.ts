@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { NotionNote, SaveNoteInput } from '../types';
 
 const TOKEN_KEY = 'lucas_auth_token';
+const CHAT_ID_KEY = 'lucas_chat_id';
 const DEFAULT_BASE_URL = 'https://maxrouter-prod.up.railway.app';
 
 let customBaseUrl = DEFAULT_BASE_URL;
@@ -29,6 +30,30 @@ export const apiService = {
 
   async removeToken(): Promise<void> {
     await SecureStore.deleteItemAsync(TOKEN_KEY);
+    await SecureStore.deleteItemAsync(CHAT_ID_KEY);
+  },
+
+  // ChatId unificado — igual ao que o webchat usa após login.
+  // Puxado de /api/auth/me e cacheado localmente pra reuso rápido.
+  async getChatId(): Promise<string> {
+    try {
+      const cached = await SecureStore.getItemAsync(CHAT_ID_KEY);
+      if (cached) return cached;
+    } catch {}
+    try {
+      const data = await this.request<{ chatId?: string }>('/api/auth/me', { method: 'GET' });
+      if (data?.chatId) {
+        await SecureStore.setItemAsync(CHAT_ID_KEY, data.chatId);
+        return data.chatId;
+      }
+    } catch {}
+    return 'user:anonymous';
+  },
+
+  async refreshChatId(): Promise<string> {
+    // Força re-fetch (usar após login/logout)
+    try { await SecureStore.deleteItemAsync(CHAT_ID_KEY); } catch {}
+    return this.getChatId();
   },
 
   async request<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -91,6 +116,8 @@ export const apiService = {
 
     if (data.token) {
       await this.setToken(data.token);
+      // Re-fetch chatId — depende do token novo pra derivar hash correto
+      await this.refreshChatId();
     }
     return { success: true, token: data.token };
   },
