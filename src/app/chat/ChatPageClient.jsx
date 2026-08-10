@@ -59,11 +59,66 @@ function ChatShell() {
   const [copilotDrafts, setCopilotDrafts] = useState([]);
   const messagesEndRef = useRef(null);
 
+  // Modo conversação por voz. Toggle no composer; state fica aqui pra que:
+  //   - resposta do agent seja auto-tocada via TTS
+  //   - após audio terminar, incrementamos autoRecordSignal → composer grava
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [autoRecordSignal, setAutoRecordSignal] = useState(0);
+  const currentAudioRef = useRef(null);
+  const lastAutoPlayedIdRef = useRef(null);
+
   const { messages, isSending, sendMessage, clearSession } = mainSession;
   // Auto-scroll ao receber novas mensagens
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Modo conversação: quando chega msg nova do agent E voiceMode está on,
+  // gera TTS via /api/agent/audio/tts, toca automático e, ao terminar,
+  // sinaliza pro composer gravar de novo (loop hands-free).
+  useEffect(() => {
+    if (!voiceMode || messages.length === 0) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "assistant" || !last.content) return;
+    if (last.isError) return;
+    if (lastAutoPlayedIdRef.current === last.id) return;
+    lastAutoPlayedIdRef.current = last.id;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        // Interrompe player anterior se ainda tocando
+        if (currentAudioRef.current) {
+          try { currentAudioRef.current.pause(); } catch {}
+        }
+        const res = await fetch("/api/agent/audio/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: last.content }),
+        });
+        const data = await res.json();
+        if (!res.ok || cancelled) return;
+        const src = `data:${data.mimeType || "audio/mpeg"};base64,${data.base64}`;
+        const audio = new Audio(src);
+        currentAudioRef.current = audio;
+        audio.onended = () => {
+          if (voiceMode && !cancelled) setAutoRecordSignal((n) => n + 1);
+        };
+        audio.play().catch((e) => console.warn("[voice] auto-play falhou:", e.message));
+      } catch (err) {
+        console.warn("[voice] TTS falhou:", err.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [messages, voiceMode]);
+
+  // Ao sair do modo voz, para o audio corrente
+  useEffect(() => {
+    if (!voiceMode && currentAudioRef.current) {
+      try { currentAudioRef.current.pause(); } catch {}
+      currentAudioRef.current = null;
+    }
+  }, [voiceMode]);
 
   // Polling de rascunhos pendentes do modo Co-Piloto
   const fetchDrafts = useCallback(async () => {
@@ -295,7 +350,10 @@ function ChatShell() {
                   onSend={handleSend}
                   onUpload={handleUpload}
                   isSending={isSending}
-                  placeholder="Converse com o Lucas..."
+                  placeholder={voiceMode ? "Modo conversa por voz ativo — fale após o áudio da resposta" : "Converse com o Lucas..."}
+                  voiceMode={voiceMode}
+                  onToggleVoiceMode={() => setVoiceMode((v) => !v)}
+                  autoRecordSignal={autoRecordSignal}
                 />
               </div>
             </footer>

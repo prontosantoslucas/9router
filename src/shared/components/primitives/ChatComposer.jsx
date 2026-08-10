@@ -16,10 +16,18 @@ function blobToBase64(blob) {
   });
 }
 
-export function ChatComposer({ onSend, onUpload, isSending, placeholder = "Converse com o Lucas...", value, onChange }) {
-  // Controlled mode (value/onChange passed): parent owns the draft text (e.g. to
-  // let a "melhorar prompt" action fill the box without auto-sending). Omit both
-  // to keep the original uncontrolled/internal-state behavior.
+export function ChatComposer({
+  onSend, onUpload, isSending,
+  placeholder = "Converse com o Lucas...",
+  value, onChange,
+  // Modo conversação hands-free: quando ON, transcrição vai DIRETO pro send
+  // (não preenche textbox). O parent também deve fazer auto-play do TTS da
+  // resposta e chamar startAutoRecord() quando terminar de tocar.
+  voiceMode = false,
+  onToggleVoiceMode,
+  // Ref opcional pra parent forçar iniciar gravação após TTS terminar
+  autoRecordSignal = 0,
+}) {
   const isControlled = value !== undefined;
   const [internalText, setInternalText] = useState("");
   const text = isControlled ? value : internalText;
@@ -127,11 +135,16 @@ export function ChatComposer({ onSend, onUpload, isSending, placeholder = "Conve
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       const transcript = (data.text || "").trim();
-      if (transcript) {
+      if (!transcript) {
+        if (!voiceMode) alert("Não entendi o áudio. Tente falar mais perto do microfone.");
+        return;
+      }
+      if (voiceMode) {
+        // Hands-free: envia direto, não passa pelo textbox
+        onSend(transcript);
+      } else {
         setText((prev) => (prev ? `${prev} ${transcript}` : transcript));
         textareaRef.current?.focus();
-      } else {
-        alert("Não entendi o áudio. Tente falar mais perto do microfone.");
       }
     } catch (err) {
       alert(`Falha na transcrição: ${err.message}`);
@@ -139,6 +152,14 @@ export function ChatComposer({ onSend, onUpload, isSending, placeholder = "Conve
       setIsTranscribing(false);
     }
   };
+
+  // Parent aciona nova gravação após TTS terminar (loop conversação)
+  useEffect(() => {
+    if (autoRecordSignal > 0 && voiceMode && !isRecording && !isSending && !isTranscribing) {
+      startRecording();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRecordSignal]);
 
   const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(1, "0")}:${String(s % 60).padStart(2, "0")}`;
 
@@ -205,6 +226,25 @@ export function ChatComposer({ onSend, onUpload, isSending, placeholder = "Conve
             className="custom-scrollbar max-h-40 min-h-[40px] flex-1 resize-none bg-transparent px-1 py-2.5 text-sm leading-relaxed text-text-main placeholder-text-muted/70 focus:outline-none disabled:opacity-60"
           />
 
+          {/* Toggle modo conversação (auto-envia + auto-play + loop) */}
+          {onToggleVoiceMode && (
+            <button
+              type="button"
+              onClick={onToggleVoiceMode}
+              disabled={isTranscribing || isRecording}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors disabled:opacity-40 ${
+                voiceMode
+                  ? "bg-brand-500 text-white shadow-soft hover:bg-brand-600"
+                  : "text-text-muted hover:bg-bg-alt hover:text-brand-500"
+              }`}
+              title={voiceMode ? "Sair do modo voz" : "Modo conversa por voz (hands-free)"}
+            >
+              <span className="material-symbols-outlined text-[22px]">
+                {voiceMode ? "headset_mic" : "headset"}
+              </span>
+            </button>
+          )}
+
           {text.trim() ? (
             <button
               type="submit"
@@ -220,7 +260,7 @@ export function ChatComposer({ onSend, onUpload, isSending, placeholder = "Conve
               onClick={startRecording}
               disabled={isTranscribing}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-bg-alt hover:text-brand-500 disabled:opacity-40"
-              title="Gravar áudio"
+              title="Gravar áudio (transcrever pro campo de texto)"
             >
               <span className="material-symbols-outlined text-[22px]">
                 {isTranscribing ? "sync" : "mic"}
