@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { AgentBadge } from "./AgentBadge";
+import { getSelectedVoice } from "@/shared/constants/edgeTtsVoices";
 
 export function MessageBubble({ message, onSaveNotion, onRetry }) {
   const isUser = message.role === "user";
@@ -16,7 +17,7 @@ export function MessageBubble({ message, onSaveNotion, onRetry }) {
       const res = await fetch("/api/agent/audio/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: message.content }),
+        body: JSON.stringify({ text: message.content, voice: getSelectedVoice() }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);

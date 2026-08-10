@@ -13,6 +13,8 @@ import { useFileUpload } from "./hooks/useFileUpload";
 import { useNotionSave } from "./hooks/useNotionSave";
 
 import { ChannelInbox } from "./components/ChannelInbox";
+import { VoiceSelectorModal } from "@/shared/components/VoiceSelectorModal";
+import { getSelectedVoice } from "@/shared/constants/edgeTtsVoices";
 import { translate as t } from "@/i18n/runtime";
 
 const i18nLabels = {
@@ -64,6 +66,7 @@ function ChatShell() {
   //   - após audio terminar, incrementamos autoRecordSignal → composer grava
   const [voiceMode, setVoiceMode] = useState(false);
   const [autoRecordSignal, setAutoRecordSignal] = useState(0);
+  const [voiceModalOpen, setVoiceModalOpen] = useState(false);
   const currentAudioRef = useRef(null);
   const lastAutoPlayedIdRef = useRef(null);
 
@@ -94,7 +97,7 @@ function ChatShell() {
         const res = await fetch("/api/agent/audio/tts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: last.content }),
+          body: JSON.stringify({ text: last.content, voice: getSelectedVoice() }),
         });
         const data = await res.json();
         if (!res.ok || cancelled) return;
@@ -353,12 +356,15 @@ function ChatShell() {
                   placeholder={voiceMode ? "Modo conversa por voz ativo — fale após o áudio da resposta" : "Converse com o Lucas..."}
                   voiceMode={voiceMode}
                   onToggleVoiceMode={() => setVoiceMode((v) => !v)}
+                  onOpenVoiceSettings={() => setVoiceModalOpen(true)}
                   autoRecordSignal={autoRecordSignal}
                 />
               </div>
             </footer>
           </div>
       </div>
+
+      <VoiceSelectorModal open={voiceModalOpen} onClose={() => setVoiceModalOpen(false)} />
     </div>
   );
 }

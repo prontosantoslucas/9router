@@ -25,6 +25,8 @@ export function ChatComposer({
   // resposta e chamar startAutoRecord() quando terminar de tocar.
   voiceMode = false,
   onToggleVoiceMode,
+  // Abre modal de escolha de voz TTS
+  onOpenVoiceSettings,
   // Ref opcional pra parent forçar iniciar gravação após TTS terminar
   autoRecordSignal = 0,
 }) {
@@ -242,6 +244,19 @@ export function ChatComposer({
               <span className="material-symbols-outlined text-[22px]">
                 {voiceMode ? "headset_mic" : "headset"}
               </span>
+            </button>
+          )}
+
+          {/* Ajustes de voz (escolher qual voz TTS usa) */}
+          {onOpenVoiceSettings && (
+            <button
+              type="button"
+              onClick={onOpenVoiceSettings}
+              disabled={isRecording}
+              className="flex h-10 w-8 shrink-0 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-bg-alt hover:text-brand-500 disabled:opacity-40"
+              title="Escolher voz do Lucas"
+            >
+              <span className="material-symbols-outlined text-[20px]">tune</span>
             </button>
           )}
 
