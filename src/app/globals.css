@@ -6,116 +6,120 @@
 .fonts-loaded .material-symbols-outlined { visibility: visible; }
 
 :root {
-  --color-brand-50: #fffbeb;
-  --color-brand-100: #fef3c7;
-  --color-brand-200: #fde68a;
-  --color-brand-300: #fcd34d;
-  --color-brand-400: #fbbf24;
-  --color-brand-500: #f59e0b;
-  --color-brand-600: #d97706;
-  --color-brand-700: #b45309;
-  --color-brand-800: #92400e;
-  --color-brand-900: #78350f;
+  /* Paleta grayscale estilo ChatGPT — brand vira o verde-cinza OpenAI
+     (#10a37f) só onde há AÇÃO (botões primários, links); superfícies
+     ficam neutras. */
+  --color-brand-50: #f0f9f6;
+  --color-brand-100: #d9f0e5;
+  --color-brand-200: #b3e1cc;
+  --color-brand-300: #7dcaa8;
+  --color-brand-400: #3fb387;
+  --color-brand-500: #10a37f;
+  --color-brand-600: #0d8a6a;
+  --color-brand-700: #0b6f56;
+  --color-brand-800: #085744;
+  --color-brand-900: #063f31;
 
   --color-primary: var(--color-brand-500);
   --color-primary-hover: var(--color-brand-600);
 
-  --color-bg: #FCF8F3;
-  --color-bg-alt: #F5F0E8;
+  /* Superfícies — light "ChatGPT-like": branco puro + cinza levemente frio */
+  --color-bg: #ffffff;
+  --color-bg-alt: #f9f9f9;
   --color-surface: #ffffff;
-  --color-surface-2: #f0ece6;
-  --color-surface-3: #e5dfd7;
-  --color-sidebar: rgba(245, 240, 232, 0.75);
+  --color-surface-2: #f7f7f8;
+  --color-surface-3: #ececec;
+  --color-sidebar: #f9f9f9;
 
-  --color-border: #e0d8ce;
-  --color-border-subtle: #ede8e0;
+  --color-border: #e5e5e5;
+  --color-border-subtle: #ececec;
 
-  --color-text: #1A1410;
-  --color-text-main: #1A1410;
-  --color-text-muted: #7A7068;
-  --color-text-subtle: #A09890;
+  --color-text: #0d0d0d;
+  --color-text-main: #0d0d0d;
+  --color-text-muted: #5d5d5d;
+  --color-text-subtle: #8e8ea0;
 
-  --color-danger: #dc2626;
-  --color-success: #16a34a;
+  --color-danger: #ef4444;
+  --color-success: #10a37f;
   --color-warning: #d97706;
   --color-info: #2563eb;
 
   --color-accent: var(--color-brand-500);
-  --color-accent-secondary: #0891b2;
+  --color-accent-secondary: #6e6e80;
 
-  --color-chat-user-bg: #f59e0b;
-  --color-chat-user-text: #ffffff;
-  --color-chat-assistant-bg: #ffffff;
-  --color-chat-code-bg: #1e1e1e;
-  --color-drop-overlay: rgba(245, 158, 11, 0.15);
+  --color-chat-user-bg: #f4f4f4;
+  --color-chat-user-text: #0d0d0d;
+  --color-chat-assistant-bg: transparent;
+  --color-chat-code-bg: #0d0d0d;
+  --color-drop-overlay: rgba(16, 163, 127, 0.12);
 
-  --radius-brand: 4px;
-  --radius-brand-lg: 8px;
+  --radius-brand: 8px;
+  --radius-brand-lg: 12px;
 
-  --shadow-soft: 0 1px 2px 0 rgba(60, 40, 20, 0.04);
-  --shadow-warm: 0 2px 12px -2px rgba(217, 119, 6, 0.12);
-  --shadow-elevated: 0 12px 28px -4px rgba(40, 30, 20, 0.08);
+  --shadow-soft: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --shadow-warm: 0 1px 3px 0 rgba(0, 0, 0, 0.06);
+  --shadow-elevated: 0 4px 16px -2px rgba(0, 0, 0, 0.06);
   --shadow-elev:
-    inset 0 1px 0 0 rgba(255,255,255,0.9),
-    0 1px 2px rgba(40,30,20,0.04),
-    0 12px 36px -8px rgba(40,30,20,0.10);
-  --shadow-focus: 0 0 0 3px rgba(245, 158, 11, 0.18);
+    0 1px 2px rgba(0,0,0,0.04),
+    0 8px 24px -6px rgba(0,0,0,0.08);
+  --shadow-focus: 0 0 0 3px rgba(16, 163, 127, 0.18);
 
   color-scheme: light;
 }
 
 .dark {
-  --color-brand-50: #fffbeb;
-  --color-brand-100: #fef3c7;
-  --color-brand-200: #fde68a;
-  --color-brand-300: #fcd34d;
-  --color-brand-400: #fbbf24;
-  --color-brand-500: #f59e0b;
-  --color-brand-600: #d97706;
-  --color-brand-700: #b45309;
-  --color-brand-800: #92400e;
-  --color-brand-900: #78350f;
+  /* Paleta dark estilo ChatGPT — cinza-quase-preto liso, sem laranja.
+     Main chat: #212121. Sidebar: #171717. User bubble: #2f2f2f. */
+  --color-brand-50: #f0f9f6;
+  --color-brand-100: #d9f0e5;
+  --color-brand-200: #b3e1cc;
+  --color-brand-300: #7dcaa8;
+  --color-brand-400: #3fb387;
+  --color-brand-500: #19c37d;
+  --color-brand-600: #10a37f;
+  --color-brand-700: #0d8a6a;
+  --color-brand-800: #085744;
+  --color-brand-900: #063f31;
 
-  --color-primary: #f59e0b;
-  --color-primary-hover: #d97706;
+  --color-primary: #10a37f;
+  --color-primary-hover: #0d8a6a;
 
-  --color-bg: #0F0D0A;
-  --color-bg-alt: #1A1714;
-  --color-surface: #1F1C18;
-  --color-surface-2: #28241F;
-  --color-surface-3: #322D27;
-  --color-sidebar: rgba(20, 18, 15, 0.85);
+  --color-bg: #212121;         /* main chat */
+  --color-bg-alt: #2f2f2f;
+  --color-surface: #212121;
+  --color-surface-2: #2f2f2f;   /* user bubble, dropdowns */
+  --color-surface-3: #3d3d3d;
+  --color-sidebar: #171717;    /* sidebar mais escura */
 
-  --color-border: #2D2822;
-  --color-border-subtle: #231F1A;
+  --color-border: #2f2f2f;
+  --color-border-subtle: #262626;
 
-  --color-text: #F0EAE4;
-  --color-text-main: #F0EAE4;
-  --color-text-muted: #8A8078;
-  --color-text-subtle: #6A625A;
+  --color-text: #ececec;
+  --color-text-main: #ececec;
+  --color-text-muted: #b4b4b4;
+  --color-text-subtle: #8e8e8e;
 
   --color-danger: #ef4444;
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
-  --color-info: #38bdf8;
+  --color-success: #10a37f;
+  --color-warning: #d97706;
+  --color-info: #7dd3fc;
 
-  --color-accent: #f59e0b;
-  --color-accent-secondary: #22d3ee;
+  --color-accent: #10a37f;
+  --color-accent-secondary: #8e8ea0;
 
-  --color-chat-user-bg: #d97706;
-  --color-chat-user-text: #ffffff;
-  --color-chat-assistant-bg: #1f1c18;
-  --color-chat-code-bg: #14120f;
-  --color-drop-overlay: rgba(245, 158, 11, 0.25);
+  --color-chat-user-bg: #2f2f2f;
+  --color-chat-user-text: #ececec;
+  --color-chat-assistant-bg: transparent;
+  --color-chat-code-bg: #0d0d0d;
+  --color-drop-overlay: rgba(16, 163, 127, 0.15);
 
-  --shadow-soft: 0 1px 2px 0 rgba(0,0,0,0.3);
-  --shadow-warm: 0 2px 12px -2px rgba(245, 158, 11, 0.15);
-  --shadow-elevated: 0 12px 28px -4px rgba(0,0,0,0.5);
+  --shadow-soft: 0 1px 2px 0 rgba(0,0,0,0.4);
+  --shadow-warm: 0 1px 3px 0 rgba(0,0,0,0.4);
+  --shadow-elevated: 0 4px 16px -2px rgba(0,0,0,0.5);
   --shadow-elev:
-    inset 0 1px 0 0 rgba(255,255,255,0.04),
     0 1px 2px rgba(0,0,0,0.4),
-    0 16px 48px -8px rgba(0,0,0,0.6);
-  --shadow-focus: 0 0 0 3px rgba(245, 158, 11, 0.25);
+    0 8px 24px -6px rgba(0,0,0,0.5);
+  --shadow-focus: 0 0 0 3px rgba(16, 163, 127, 0.25);
 
   color-scheme: dark;
 }

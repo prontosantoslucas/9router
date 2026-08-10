@@ -99,7 +99,7 @@ export default function Sidebar({ onClose }) {
         {/* Logo */}
         <div className="px-4 py-5">
           <Link href="/dashboard" className="flex items-center gap-3 group">
-            <div className="flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-amber-500 to-amber-700 shadow-[0_2px_8px_-2px_rgba(245,158,11,0.3)] group-hover:shadow-[0_2px_12px_-2px_rgba(245,158,11,0.5)] transition-shadow duration-300">
+            <div className="flex items-center justify-center size-8 rounded-md bg-gradient-to-br from-brand-500 to-brand-700 shadow-[0_2px_8px_-2px_rgba(16,163,127,0.3)] group-hover:shadow-[0_2px_12px_-2px_rgba(16,163,127,0.5)] transition-shadow duration-300">
               <span className="material-symbols-outlined text-white text-[18px]">hub</span>
             </div>
             <div className="flex flex-col">
@@ -108,10 +108,10 @@ export default function Sidebar({ onClose }) {
             </div>
           </Link>
           {updateInfo && (
-            <div className="mt-3 flex items-center gap-2 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2">
-              <span className="material-symbols-outlined text-amber-400 text-[14px]">system_update</span>
-              <span className="text-[11px] text-amber-400/90 font-medium flex-1">v{updateInfo.latestVersion}</span>
-              <button onClick={() => setShowUpdateModal(true)} className="text-[10px] font-semibold text-amber-500 hover:text-amber-400 transition-colors uppercase tracking-wider">Update</button>
+            <div className="mt-3 flex items-center gap-2 rounded-md border border-brand-500/20 bg-brand-500/5 px-3 py-2">
+              <span className="material-symbols-outlined text-brand-400 text-[14px]">system_update</span>
+              <span className="text-[11px] text-brand-400/90 font-medium flex-1">v{updateInfo.latestVersion}</span>
+              <button onClick={() => setShowUpdateModal(true)} className="text-[10px] font-semibold text-brand-500 hover:text-brand-400 transition-colors uppercase tracking-wider">Update</button>
             </div>
           )}
         </div>

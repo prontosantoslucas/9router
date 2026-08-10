@@ -252,7 +252,7 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-border bg-surface hover:bg-surface-2 text-text-muted hover:text-text-main text-xs font-semibold transition-all active:scale-95 shadow-soft"
             title="Voltar para a página anterior"
           >
-            <span className="material-symbols-outlined text-[16px] text-amber-500">arrow_back</span>
+            <span className="material-symbols-outlined text-[16px] text-brand-500">arrow_back</span>
             <span className="hidden sm:inline">Voltar</span>
           </button>
         )}
