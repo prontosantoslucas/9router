@@ -131,7 +131,7 @@ export default function MediaProviderDetailPage() {
 
       {/* Kind-specific notice (e.g. codex/image requires Plus) */}
       {!isCustom && provider.kindNotice?.[kind] && (
-        <div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400">
+        <div className="flex items-start gap-3 px-4 py-3 rounded-lg bg-brand-500/10 border border-brand-500/30 text-amber-700 dark:text-brand-400">
           <span className="material-symbols-outlined text-[20px] mt-0.5">warning</span>
           <p className="text-sm">{provider.kindNotice[kind]}</p>
         </div>

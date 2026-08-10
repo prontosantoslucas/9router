@@ -25,7 +25,7 @@ const ALL_SOURCES = [
 
 const STATUS_STYLES = {
   valid: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/20",
-  insufficient_quota: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20",
+  insufficient_quota: "bg-brand-500/15 text-brand-600 dark:text-brand-400 border-brand-500/20",
   invalid: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/20",
   rate_limited: "bg-surface-3 text-text-muted border-border",
   error: "bg-surface-3 text-text-muted border-border",
@@ -44,7 +44,7 @@ function StatCard({ icon, label, value, tone = "default" }) {
   const tones = {
     default: "text-text-main",
     green: "text-green-600 dark:text-green-400",
-    amber: "text-amber-600 dark:text-amber-400",
+    amber: "text-brand-600 dark:text-brand-400",
     red: "text-red-600 dark:text-red-400",
   };
   return (
@@ -139,8 +139,8 @@ export default function ScannerPage() {
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center size-9 rounded-md bg-amber-500/10 border border-amber-500/20">
-              <span className="material-symbols-outlined text-amber-500 text-[20px]">radar</span>
+            <div className="flex items-center justify-center size-9 rounded-md bg-brand-500/10 border border-brand-500/20">
+              <span className="material-symbols-outlined text-brand-500 text-[20px]">radar</span>
             </div>
             <h1 className="text-2xl font-display font-bold tracking-tight text-text-main">API Key Scanner</h1>
           </div>
@@ -157,21 +157,21 @@ export default function ScannerPage() {
         <div className="flex gap-2 flex-col sm:flex-row">
           <input
             type="text"
-            className="flex-1 rounded-md border border-border bg-bg px-3 py-2 text-sm font-mono text-text-main placeholder:text-text-subtle focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 transition-all"
+            className="flex-1 rounded-md border border-border bg-bg px-3 py-2 text-sm font-mono text-text-main placeholder:text-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all"
             placeholder="Paste an API key to test…"
             value={testKey}
             onChange={e => setTestKey(e.target.value)}
           />
-          <select value={testProvider} onChange={e => setTestProvider(e.target.value)} className="rounded-md border border-border bg-bg px-3 py-2 text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-amber-500/30">
+          <select value={testProvider} onChange={e => setTestProvider(e.target.value)} className="rounded-md border border-border bg-bg px-3 py-2 text-sm text-text-main focus:outline-none focus:ring-2 focus:ring-brand-500/30">
             {Object.entries(ALL_PROVIDERS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
-          <button onClick={testManualKey} disabled={testing || !testKey.trim()} className="inline-flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-md text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed">
+          <button onClick={testManualKey} disabled={testing || !testKey.trim()} className="inline-flex items-center justify-center gap-1.5 bg-brand-500 hover:bg-brand-600 text-white px-5 py-2 rounded-md text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed">
             {testing ? <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span> : <span className="material-symbols-outlined text-[16px]">bolt</span>}
             {testing ? "Testing…" : "Test Key"}
           </button>
         </div>
         {testResult && (
-          <div className={`mt-3 p-3 rounded-md text-sm border flex items-center gap-2 ${testResult.status === "valid" ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20" : testResult.status === "insufficient_quota" ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20" : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"}`}>
+          <div className={`mt-3 p-3 rounded-md text-sm border flex items-center gap-2 ${testResult.status === "valid" ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20" : testResult.status === "insufficient_quota" ? "bg-brand-500/10 text-amber-700 dark:text-brand-400 border-brand-500/20" : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"}`}>
             <span className="material-symbols-outlined text-[18px]">{testResult.status === "valid" ? "check_circle" : testResult.status === "insufficient_quota" ? "warning" : "cancel"}</span>
             <span className="font-mono text-xs">{testResult.key}</span>
             <span className="opacity-60">→</span>
@@ -188,7 +188,7 @@ export default function ScannerPage() {
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-text-main">Providers to Scan</h2>
             <div className="flex gap-2 text-xs">
-              <button onClick={selectAll} className="text-amber-600 dark:text-amber-400 hover:underline font-medium">All</button>
+              <button onClick={selectAll} className="text-brand-600 dark:text-brand-400 hover:underline font-medium">All</button>
               <span className="text-border">·</span>
               <button onClick={selectNone} className="text-text-muted hover:underline font-medium">None</button>
             </div>
@@ -200,8 +200,8 @@ export default function ScannerPage() {
                 onClick={() => toggleProvider(id)}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
                   selectedProviders.includes(id)
-                    ? "bg-amber-500 text-white border-amber-500 shadow-sm"
-                    : "bg-transparent text-text-muted border-border hover:border-amber-500/40 hover:text-text-main"
+                    ? "bg-brand-500 text-white border-brand-500 shadow-sm"
+                    : "bg-transparent text-text-muted border-border hover:border-brand-500/40 hover:text-text-main"
                 }`}
               >
                 {name}
@@ -214,8 +214,8 @@ export default function ScannerPage() {
           <h2 className="text-sm font-semibold text-text-main mb-3">Sources</h2>
           <div className="space-y-2 flex-1">
             {ALL_SOURCES.map(s => (
-              <label key={s.id} className={`flex items-center gap-2.5 text-sm cursor-pointer rounded-md border px-3 py-2 transition-all ${selectedSources.includes(s.id) ? "border-amber-500/40 bg-amber-500/5" : "border-border hover:bg-surface-2"}`}>
-                <input type="checkbox" checked={selectedSources.includes(s.id)} onChange={() => toggleSource(s.id)} className="rounded border-border accent-amber-500" />
+              <label key={s.id} className={`flex items-center gap-2.5 text-sm cursor-pointer rounded-md border px-3 py-2 transition-all ${selectedSources.includes(s.id) ? "border-brand-500/40 bg-brand-500/5" : "border-border hover:bg-surface-2"}`}>
+                <input type="checkbox" checked={selectedSources.includes(s.id)} onChange={() => toggleSource(s.id)} className="rounded border-border accent-brand-500" />
                 <span className="material-symbols-outlined text-[16px] text-text-muted">{s.icon}</span>
                 <span className="text-text-main">{s.label}</span>
               </label>
@@ -224,7 +224,7 @@ export default function ScannerPage() {
           <button
             onClick={startScan}
             disabled={scanning || selectedProviders.length === 0 || selectedSources.length === 0}
-            className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-md text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2.5 rounded-md text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {scanning ? <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span> : <span className="material-symbols-outlined text-[18px]">travel_explore</span>}
             {scanning ? "Scanning…" : "Run Scan"}
@@ -251,7 +251,7 @@ export default function ScannerPage() {
       {/* Results Table */}
       <div className="rounded-lg border border-border bg-surface overflow-hidden">
         <div className="p-3 border-b border-border flex gap-2 items-center flex-wrap">
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="rounded-md border border-border bg-bg px-2.5 py-1.5 text-xs text-text-main focus:outline-none focus:ring-2 focus:ring-amber-500/30">
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="rounded-md border border-border bg-bg px-2.5 py-1.5 text-xs text-text-main focus:outline-none focus:ring-2 focus:ring-brand-500/30">
             <option value="">All status</option>
             <option value="valid">Valid</option>
             <option value="insufficient_quota">Zero Balance</option>
@@ -259,11 +259,11 @@ export default function ScannerPage() {
             <option value="rate_limited">Rate Limited</option>
             <option value="error">Error</option>
           </select>
-          <select value={filterProvider} onChange={e => setFilterProvider(e.target.value)} className="rounded-md border border-border bg-bg px-2.5 py-1.5 text-xs text-text-main focus:outline-none focus:ring-2 focus:ring-amber-500/30">
+          <select value={filterProvider} onChange={e => setFilterProvider(e.target.value)} className="rounded-md border border-border bg-bg px-2.5 py-1.5 text-xs text-text-main focus:outline-none focus:ring-2 focus:ring-brand-500/30">
             <option value="">All providers</option>
             {Object.entries(ALL_PROVIDERS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
-          <button onClick={fetchKeys} className="ml-auto inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:underline font-medium">
+          <button onClick={fetchKeys} className="ml-auto inline-flex items-center gap-1 text-xs text-brand-600 dark:text-brand-400 hover:underline font-medium">
             <span className="material-symbols-outlined text-[14px]">refresh</span>
             Refresh
           </button>
@@ -293,7 +293,7 @@ export default function ScannerPage() {
                   <td className="px-4 py-3 text-xs text-text-muted">{ALL_PROVIDERS[k.provider] || k.provider}</td>
                   <td className="px-4 py-3"><StatusBadge status={k.status} /></td>
                   <td className="px-4 py-3">
-                    {k.repoUrl ? <a href={k.repoUrl} target="_blank" rel="noopener noreferrer" className="text-amber-600 dark:text-amber-400 hover:underline text-xs inline-flex items-center gap-0.5">{k.source}<span className="material-symbols-outlined text-[12px]">open_in_new</span></a>
+                    {k.repoUrl ? <a href={k.repoUrl} target="_blank" rel="noopener noreferrer" className="text-brand-600 dark:text-brand-400 hover:underline text-xs inline-flex items-center gap-0.5">{k.source}<span className="material-symbols-outlined text-[12px]">open_in_new</span></a>
                     : <span className="text-xs text-text-muted">{k.source}</span>}
                   </td>
                   <td className="px-4 py-3 text-xs text-text-muted">{k.scanDate ? new Date(k.scanDate).toLocaleString() : "-"}</td>

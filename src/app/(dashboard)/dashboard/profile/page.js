@@ -905,13 +905,13 @@ export default function ProfilePage() {
             )}
 
             {settings.authMode === "oidc" && (
-              <p className="text-xs sm:text-sm text-amber-600 dark:text-amber-400">
+              <p className="text-xs sm:text-sm text-brand-600 dark:text-brand-400">
                 OIDC login is currently active. Password login is disabled until you switch back.
               </p>
             )}
 
             {settings.authMode === "both" && (
-              <p className="text-xs sm:text-sm text-amber-600 dark:text-amber-400">
+              <p className="text-xs sm:text-sm text-brand-600 dark:text-brand-400">
                 Password and OIDC login are both active.
               </p>
             )}

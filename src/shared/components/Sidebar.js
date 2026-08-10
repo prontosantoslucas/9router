@@ -126,14 +126,14 @@ export default function Sidebar({ onClose }) {
               className={cn(
                 "flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-all duration-150 group",
                 isActive(item.href)
-                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 font-medium"
+                  ? "bg-brand-500/10 text-brand-600 dark:text-brand-400 font-medium"
                   : "text-text-muted hover:bg-surface-2 hover:text-text-main"
               )}
               style={mounted ? { animationDelay: `${i * 0.03}s` } : {}}
             >
               <span className={cn(
                 "material-symbols-outlined text-[18px] transition-all",
-                isActive(item.href) ? "text-amber-500" : "text-text-muted/60 group-hover:text-amber-400 group-hover:scale-110"
+                isActive(item.href) ? "text-brand-500" : "text-text-muted/60 group-hover:text-brand-400 group-hover:scale-110"
               )}>
                 {item.icon}
               </span>
@@ -143,7 +143,7 @@ export default function Sidebar({ onClose }) {
 
           {/* Agente Lucas Section */}
           <div className="pt-3 mt-2 space-y-0.5 border-t border-border">
-            <p className="px-3 pb-1 text-[10px] font-bold text-amber-500 uppercase tracking-[0.15em] flex items-center gap-1">
+            <p className="px-3 pb-1 text-[10px] font-bold text-brand-500 uppercase tracking-[0.15em] flex items-center gap-1">
               <span className="material-symbols-outlined text-[12px]">smart_toy</span>
               <span>Agente Lucas</span>
             </p>
@@ -155,11 +155,11 @@ export default function Sidebar({ onClose }) {
                 className={cn(
                   "flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-all duration-150 group font-semibold",
                   isActive(item.href)
-                    ? "bg-amber-500 text-white shadow-soft"
-                    : "text-amber-500 hover:bg-amber-500/10 dark:text-amber-400"
+                    ? "bg-brand-500 text-white shadow-soft"
+                    : "text-brand-500 hover:bg-brand-500/10 dark:text-brand-400"
                 )}
               >
-                <span className="material-symbols-outlined text-[18px] text-amber-500 dark:text-amber-400 group-hover:scale-110 transition-transform">
+                <span className="material-symbols-outlined text-[18px] text-brand-500 dark:text-brand-400 group-hover:scale-110 transition-transform">
                   {item.icon}
                 </span>
                 <span className="text-[13px]">{item.label}</span>
@@ -175,10 +175,10 @@ export default function Sidebar({ onClose }) {
               onClick={() => setMediaOpen((v) => !v)}
               className={cn(
                 "w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-all group",
-                pathname.startsWith("/dashboard/media-providers") ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "text-text-muted hover:bg-surface-2 hover:text-text-main"
+                pathname.startsWith("/dashboard/media-providers") ? "bg-brand-500/10 text-brand-600 dark:text-brand-400" : "text-text-muted hover:bg-surface-2 hover:text-text-main"
               )}
             >
-              <span className="material-symbols-outlined text-[18px] text-text-muted/60 group-hover:text-amber-400">perm_media</span>
+              <span className="material-symbols-outlined text-[18px] text-text-muted/60 group-hover:text-brand-400">perm_media</span>
               <span className="text-[13px] flex-1 text-left">Media</span>
               <span className="material-symbols-outlined text-[14px] transition-transform text-text-muted/40" style={{ transform: mediaOpen ? "rotate(180deg)" : "rotate(0deg)" }}>expand_more</span>
             </button>
@@ -188,7 +188,7 @@ export default function Sidebar({ onClose }) {
                   <Link key={kind.id} href={`/dashboard/media-providers/${kind.id}`} onClick={onClose}
                     className={cn(
                       "flex items-center gap-2.5 px-3 py-1 rounded-md transition-all group text-sm",
-                      pathname.startsWith(`/dashboard/media-providers/${kind.id}`) ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "text-text-muted hover:bg-surface-2 hover:text-text-main"
+                      pathname.startsWith(`/dashboard/media-providers/${kind.id}`) ? "bg-brand-500/10 text-brand-600 dark:text-brand-400" : "text-text-muted hover:bg-surface-2 hover:text-text-main"
                     )}
                   >
                     <span className="material-symbols-outlined text-[16px]">{kind.icon}</span>
@@ -198,7 +198,7 @@ export default function Sidebar({ onClose }) {
                 <Link key={COMBINED_WEB_ITEM.id} href={COMBINED_WEB_ITEM.href} onClick={onClose}
                   className={cn(
                     "flex items-center gap-2.5 px-3 py-1 rounded-md transition-all group text-sm",
-                    pathname.startsWith(COMBINED_WEB_ITEM.href) ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "text-text-muted hover:bg-surface-2 hover:text-text-main"
+                    pathname.startsWith(COMBINED_WEB_ITEM.href) ? "bg-brand-500/10 text-brand-600 dark:text-brand-400" : "text-text-muted hover:bg-surface-2 hover:text-text-main"
                   )}
                 >
                   <span className="material-symbols-outlined text-[16px]">{COMBINED_WEB_ITEM.icon}</span>
@@ -211,10 +211,10 @@ export default function Sidebar({ onClose }) {
               <Link key={item.href} href={item.href} onClick={onClose}
                 className={cn(
                   "flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-all group",
-                  isActive(item.href) ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "text-text-muted hover:bg-surface-2 hover:text-text-main"
+                  isActive(item.href) ? "bg-brand-500/10 text-brand-600 dark:text-brand-400" : "text-text-muted hover:bg-surface-2 hover:text-text-main"
                 )}
               >
-                <span className={cn("material-symbols-outlined text-[18px]", isActive(item.href) ? "text-amber-500" : "text-text-muted/60 group-hover:text-amber-400")}>{item.icon}</span>
+                <span className={cn("material-symbols-outlined text-[18px]", isActive(item.href) ? "text-brand-500" : "text-text-muted/60 group-hover:text-brand-400")}>{item.icon}</span>
                 <span className="text-[13px]">{item.label}</span>
               </Link>
             ))}
@@ -225,10 +225,10 @@ export default function Sidebar({ onClose }) {
                 <Link key={item.href} href={item.href} onClick={onClose}
                   className={cn(
                     "flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-all group",
-                    isActive(item.href) ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "text-text-muted hover:bg-surface-2 hover:text-text-main"
+                    isActive(item.href) ? "bg-brand-500/10 text-brand-600 dark:text-brand-400" : "text-text-muted hover:bg-surface-2 hover:text-text-main"
                   )}
                 >
-                  <span className={cn("material-symbols-outlined text-[18px]", isActive(item.href) ? "text-amber-500" : "text-text-muted/60 group-hover:text-amber-400")}>{item.icon}</span>
+                  <span className={cn("material-symbols-outlined text-[18px]", isActive(item.href) ? "text-brand-500" : "text-text-muted/60 group-hover:text-brand-400")}>{item.icon}</span>
                   <span className="text-[13px]">{item.label}</span>
                 </Link>
               ) : null;
@@ -237,17 +237,17 @@ export default function Sidebar({ onClose }) {
             <button onClick={() => setShowRemoteModal(true)}
               className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-all group text-text-muted hover:bg-surface-2 hover:text-text-main"
             >
-              <span className="material-symbols-outlined text-[18px] text-text-muted/60 group-hover:text-amber-400">computer</span>
+              <span className="material-symbols-outlined text-[18px] text-text-muted/60 group-hover:text-brand-400">computer</span>
               <span className="text-[13px]">Remote</span>
             </button>
 
             <Link href="/dashboard/profile" onClick={onClose}
               className={cn(
                 "flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-all group",
-                isActive("/dashboard/profile") ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "text-text-muted hover:bg-surface-2 hover:text-text-main"
+                isActive("/dashboard/profile") ? "bg-brand-500/10 text-brand-600 dark:text-brand-400" : "text-text-muted hover:bg-surface-2 hover:text-text-main"
               )}
             >
-              <span className={cn("material-symbols-outlined text-[18px]", isActive("/dashboard/profile") ? "text-amber-500" : "text-text-muted/60 group-hover:text-amber-400")}>settings</span>
+              <span className={cn("material-symbols-outlined text-[18px]", isActive("/dashboard/profile") ? "text-brand-500" : "text-text-muted/60 group-hover:text-brand-400")}>settings</span>
               <span className="text-[13px]">Settings</span>
             </Link>
           </div>
@@ -291,7 +291,7 @@ function ManualUpdatePanel({ latestVersion, installCmd, copied, onCopyAndShutdow
   return (
     <div className="w-full max-w-lg rounded-xl bg-[#1F1C18] border border-white/10 p-6 text-white shadow-elev">
       <div className="flex items-center gap-3 mb-4">
-        <div className="flex items-center justify-center size-11 rounded-md bg-amber-500/15 text-amber-400">
+        <div className="flex items-center justify-center size-11 rounded-md bg-brand-500/15 text-brand-400">
           <span className="material-symbols-outlined text-[24px]">content_copy</span>
         </div>
         <div>
@@ -301,12 +301,12 @@ function ManualUpdatePanel({ latestVersion, installCmd, copied, onCopyAndShutdow
       </div>
       <p className="text-sm text-white/80 mb-2">Install command:</p>
       <div className="w-full px-3 py-2 rounded bg-white/5 mb-4">
-        <code className="text-xs font-mono text-amber-300 break-all">{installCmd}</code>
+        <code className="text-xs font-mono text-brand-300 break-all">{installCmd}</code>
       </div>
       <ol className="text-xs text-white/60 space-y-1 list-decimal list-inside mb-4">
         <li>Click <strong>Copy & Shutdown</strong> below.</li>
         <li>Paste the command into your terminal and press Enter.</li>
-        <li>Run <code className="px-1 rounded bg-white/10 text-amber-400">9router</code> again after install.</li>
+        <li>Run <code className="px-1 rounded bg-white/10 text-brand-400">9router</code> again after install.</li>
       </ol>
       {isDisconnected ? (
         <Button variant="secondary" fullWidth onClick={() => globalThis.location.reload()}>Reload Page</Button>

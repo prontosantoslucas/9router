@@ -5,8 +5,8 @@ import { useState, useEffect } from "react";
 function StatusBadge({ status }) {
   const styles = {
     paid: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/20",
-    refunded: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20",
-    pending: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    refunded: "bg-brand-500/15 text-brand-600 dark:text-brand-400 border-brand-500/20",
+    pending: "bg-brand-500/15 text-brand-600 dark:text-brand-400 border-brand-500/20",
   };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${styles[status] || "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/20"}`}>
@@ -49,15 +49,15 @@ export default function InvoicesPage() {
   return (
     <div className="max-w-6xl mx-auto p-6 animate-fade-up">
       <div className="mb-6 flex items-center gap-2.5">
-        <div className="flex items-center justify-center size-9 rounded-md bg-amber-500/10 border border-amber-500/20">
-          <span className="material-symbols-outlined text-amber-500 text-[20px]">receipt_long</span>
+        <div className="flex items-center justify-center size-9 rounded-md bg-brand-500/10 border border-brand-500/20">
+          <span className="material-symbols-outlined text-brand-500 text-[20px]">receipt_long</span>
         </div>
         <h1 className="text-2xl font-display font-bold tracking-tight text-text-main">Invoices &amp; Payments</h1>
       </div>
 
       <div className="flex gap-1 mb-6 border-b border-border">
-        <button onClick={() => setTab("payments")} className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${tab === "payments" ? "border-amber-500 text-amber-600 dark:text-amber-400" : "border-transparent text-text-muted hover:text-text-main"}`}>Payments</button>
-        <button onClick={() => setTab("invoices")} className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${tab === "invoices" ? "border-amber-500 text-amber-600 dark:text-amber-400" : "border-transparent text-text-muted hover:text-text-main"}`}>Usage Invoices</button>
+        <button onClick={() => setTab("payments")} className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${tab === "payments" ? "border-brand-500 text-brand-600 dark:text-brand-400" : "border-transparent text-text-muted hover:text-text-main"}`}>Payments</button>
+        <button onClick={() => setTab("invoices")} className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${tab === "invoices" ? "border-brand-500 text-brand-600 dark:text-brand-400" : "border-transparent text-text-muted hover:text-text-main"}`}>Usage Invoices</button>
       </div>
 
       {tab === "payments" && (
@@ -65,9 +65,9 @@ export default function InvoicesPage() {
           <form onSubmit={lookupPayments} className="flex gap-3 items-end flex-wrap">
             <div className="flex-1 max-w-sm min-w-[200px]">
               <label className="block text-sm font-medium mb-1.5 text-text-muted">Email used at checkout</label>
-              <input type="email" className="w-full px-3 py-2 rounded-md border border-border bg-bg text-sm text-text-main placeholder:text-text-subtle focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 transition-all" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
+              <input type="email" className="w-full px-3 py-2 rounded-md border border-border bg-bg text-sm text-text-main placeholder:text-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" required />
             </div>
-            <button type="submit" disabled={loading} className="inline-flex items-center gap-1.5 px-5 py-2 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-50">
+            <button type="submit" disabled={loading} className="inline-flex items-center gap-1.5 px-5 py-2 rounded-md bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-50">
               <span className="material-symbols-outlined text-[16px]">search</span>
               {loading ? "…" : "Search"}
             </button>
@@ -107,7 +107,7 @@ export default function InvoicesPage() {
 
       {tab === "invoices" && (
         <div className="space-y-4">
-          <button onClick={fetchInvoices} disabled={loading} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-50">
+          <button onClick={fetchInvoices} disabled={loading} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-50">
             <span className="material-symbols-outlined text-[16px]">refresh</span>
             Refresh
           </button>

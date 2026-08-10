@@ -80,8 +80,8 @@ function SuccessContent() {
       )}
 
       {result?.tempPassword && (
-        <div className="text-left mb-6 p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
-          <p className="text-sm font-medium mb-1 text-amber-600 dark:text-amber-400">Temporary Password</p>
+        <div className="text-left mb-6 p-4 rounded-lg bg-brand-500/10 border border-brand-500/20">
+          <p className="text-sm font-medium mb-1 text-brand-600 dark:text-brand-400">Temporary Password</p>
           <code className="block text-xs font-mono bg-black/5 dark:bg-white/5 p-2 rounded break-all">{result.tempPassword}</code>
           <p className="text-xs text-text-muted mt-2">Save this password. It will not be shown again.</p>
         </div>

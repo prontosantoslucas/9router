@@ -121,8 +121,8 @@ export default function LoginPage() {
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-[#0F0D0A] items-center justify-center p-12">
         <div className="landing-grid absolute inset-0 pointer-events-none" aria-hidden="true" />
         <div className="relative z-10 max-w-xl text-center">
-          <div className={`inline-flex items-center justify-center size-16 rounded-lg bg-amber-500/10 border border-amber-500/20 mb-8 ${mounted ? "animate-scale-in" : "opacity-0"}`}>
-            <span className="material-symbols-outlined text-amber-400 text-[32px]">hub</span>
+          <div className={`inline-flex items-center justify-center size-16 rounded-lg bg-brand-500/10 border border-brand-500/20 mb-8 ${mounted ? "animate-scale-in" : "opacity-0"}`}>
+            <span className="material-symbols-outlined text-brand-400 text-[32px]">hub</span>
           </div>
           <h1 className={`text-5xl font-display font-bold tracking-tight text-white mb-4 ${mounted ? "animate-fade-up" : "opacity-0"}`} style={mounted ? { animationDelay: "0.1s" } : {}}>
             MaxRouter
@@ -133,7 +133,7 @@ export default function LoginPage() {
           <div className={`grid grid-cols-2 gap-3 max-w-sm mx-auto ${mounted ? "animate-fade-up" : "opacity-0"}`} style={mounted ? { animationDelay: "0.3s" } : {}}>
             {features.map((f) => (
               <div key={f.label} className="flex items-center gap-2.5 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-left">
-                <span className="material-symbols-outlined text-amber-400/70 text-[18px]">{f.icon}</span>
+                <span className="material-symbols-outlined text-brand-400/70 text-[18px]">{f.icon}</span>
                 <span className="text-sm text-white/70">{f.label}</span>
               </div>
             ))}
@@ -186,7 +186,7 @@ export default function LoginPage() {
                 {passwordAvailable && (
                   <form onSubmit={handleLogin} className="flex flex-col gap-4">
                     {(authMode === "oidc" && !oidcConfigured) || (authMode === "both" && !oidcConfigured) ? (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 text-center">OIDC not configured yet. Password login available.</p>
+                      <p className="text-xs text-brand-600 dark:text-brand-400 text-center">OIDC not configured yet. Password login available.</p>
                     ) : null}
                     {authMode === "both" && oidcConfigured ? (
                       <p className="text-xs text-text-muted text-center">Password and OIDC login enabled.</p>

@@ -343,7 +343,7 @@ export function TtsExampleCard({ providerId }) {
                       <span className="ml-1.5 px-1 py-0.5 text-[9px] font-semibold rounded bg-green-500/15 text-green-600 border border-green-500/20">Free</span>
                     )}
                     {v.free_users_allowed === false && (
-                      <span className="ml-1.5 px-1 py-0.5 text-[9px] font-semibold rounded bg-amber-500/15 text-amber-600 border border-amber-500/20">Paid</span>
+                      <span className="ml-1.5 px-1 py-0.5 text-[9px] font-semibold rounded bg-brand-500/15 text-brand-600 border border-brand-500/20">Paid</span>
                     )}
                   </button>
                 ))}

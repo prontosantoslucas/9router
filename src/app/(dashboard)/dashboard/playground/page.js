@@ -75,7 +75,7 @@ export default function PlaygroundPage() {
       {/* Header */}
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-amber-500 text-2xl">compare</span>
+          <span className="material-symbols-outlined text-brand-500 text-2xl">compare</span>
           <h1 className="text-2xl font-bold font-display text-text-main">Playground A/B — Comparação Lado a Lado</h1>
         </div>
         <p className="text-sm text-text-muted">
@@ -89,7 +89,7 @@ export default function PlaygroundPage() {
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           placeholder="Escreva a instrução ou pergunta para testar em paralelo..."
-          className="w-full min-h-[100px] resize-y rounded-xl border border-border bg-bg p-3 text-sm text-text-main placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+          className="w-full min-h-[100px] resize-y rounded-xl border border-border bg-bg p-3 text-sm text-text-main placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-500/50"
         />
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2">
@@ -108,7 +108,7 @@ export default function PlaygroundPage() {
                   }}
                   className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${
                     isSelected
-                      ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/50"
+                      ? "bg-brand-500/20 text-brand-600 dark:text-brand-400 border-brand-500/50"
                       : "bg-bg text-text-muted border-border hover:border-text-muted"
                   }`}
                 >
@@ -121,7 +121,7 @@ export default function PlaygroundPage() {
           <button
             onClick={handleRunComparison}
             disabled={loading || !prompt.trim()}
-            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 transition-all"
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:from-brand-600 hover:to-amber-700 disabled:opacity-50 transition-all"
           >
             <span className={`material-symbols-outlined text-lg ${loading ? "animate-spin" : ""}`}>
               {loading ? "sync" : "bolt"}
@@ -159,7 +159,7 @@ export default function PlaygroundPage() {
               <div className="flex-1 text-xs leading-relaxed text-text-main overflow-y-auto max-h-[400px] whitespace-pre-wrap">
                 {loading && !res ? (
                   <div className="flex flex-col items-center justify-center h-48 gap-2 text-text-muted">
-                    <span className="material-symbols-outlined animate-spin text-2xl text-amber-500">sync</span>
+                    <span className="material-symbols-outlined animate-spin text-2xl text-brand-500">sync</span>
                     <span>Aguardando modelo...</span>
                   </div>
                 ) : res ? (
@@ -177,7 +177,7 @@ export default function PlaygroundPage() {
               {res && !res.error && (
                 <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-[11px] font-mono text-text-muted">
                   <span>📥 {res.promptTokens}t | 📤 {res.completionTokens}t</span>
-                  <span className="text-amber-500 font-semibold">${res.cost}</span>
+                  <span className="text-brand-500 font-semibold">${res.cost}</span>
                 </div>
               )}
             </div>

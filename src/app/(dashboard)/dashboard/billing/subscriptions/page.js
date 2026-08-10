@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 
 const STATUS_STYLES = {
   active: "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/20",
-  paused: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20",
+  paused: "bg-brand-500/15 text-brand-600 dark:text-brand-400 border-brand-500/20",
   cancelled: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/20",
   expired: "bg-surface-3 text-text-muted border-border",
 };
@@ -58,8 +58,8 @@ export default function SubscriptionsPage() {
       <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center size-9 rounded-md bg-amber-500/10 border border-amber-500/20">
-              <span className="material-symbols-outlined text-amber-500 text-[20px]">autorenew</span>
+            <div className="flex items-center justify-center size-9 rounded-md bg-brand-500/10 border border-brand-500/20">
+              <span className="material-symbols-outlined text-brand-500 text-[20px]">autorenew</span>
             </div>
             <h1 className="text-2xl font-display font-bold tracking-tight text-text-main">Subscriptions</h1>
           </div>
@@ -68,7 +68,7 @@ export default function SubscriptionsPage() {
         <button
           onClick={handleRenewal}
           disabled={actionLoading === "renewal"}
-          className="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all active:scale-[0.97] disabled:opacity-50"
         >
           {actionLoading === "renewal" ? <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span> : <span className="material-symbols-outlined text-[16px]">sync</span>}
           {actionLoading === "renewal" ? "Processing…" : "Process Renewals"}
@@ -111,7 +111,7 @@ export default function SubscriptionsPage() {
                       <div className="flex gap-3 justify-end">
                         {s.status === "active" && (
                           <>
-                            <button onClick={() => doAction(s.id, "pause")} disabled={actionLoading === s.id} className="text-amber-600 dark:text-amber-400 hover:underline text-xs font-medium disabled:opacity-50">Pause</button>
+                            <button onClick={() => doAction(s.id, "pause")} disabled={actionLoading === s.id} className="text-brand-600 dark:text-brand-400 hover:underline text-xs font-medium disabled:opacity-50">Pause</button>
                             <button onClick={() => doAction(s.id, "cancel")} disabled={actionLoading === s.id} className="text-red-500 hover:underline text-xs font-medium disabled:opacity-50">Cancel</button>
                           </>
                         )}

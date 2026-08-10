@@ -183,7 +183,7 @@ export default function MitmToolCard({
             <div className="flex flex-col gap-0.5 text-[11px] text-text-muted px-1">
               <p>Toggle DNS to redirect {tool.name} traffic through 9Router via MITM.</p>
               {!dnsActive && (
-                <p className="text-amber-600 text-[10px] mt-1">
+                <p className="text-brand-600 text-[10px] mt-1">
                   ⚠️ Enable DNS to edit model mappings
                 </p>
               )}
@@ -259,7 +259,7 @@ export default function MitmToolCard({
 
               {/* Warning below button */}
               {warning && (
-                <div className="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-amber-500">
+                <div className="flex items-center gap-2 px-2 py-1.5 rounded text-xs text-brand-500">
                   <span className="material-symbols-outlined text-[14px]">warning</span>
                   <span>{warning}</span>
                 </div>

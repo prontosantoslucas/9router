@@ -79,7 +79,7 @@ export default function AgentSection() {
           <div className="flex-1 w-full max-w-md">
             <div className="card-elev p-6 border border-border rounded-2xl relative overflow-hidden">
               <div className="flex items-center gap-3 border-b border-border pb-4 mb-4">
-                <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-brand-600 to-amber-400 flex items-center justify-center text-white font-bold text-lg">
+                <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-brand-600 to-brand-400 flex items-center justify-center text-white font-bold text-lg">
                   L
                 </div>
                 <div>

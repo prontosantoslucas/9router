@@ -277,7 +277,7 @@ export default function BillingPage() {
   const modelsList = Object.entries(modelsMap).map(([name, data]) => ({
     name,
     count: `${(((data.promptTokens || 0) + (data.completionTokens || 0)) / 1000).toFixed(1)}k tokens`,
-    color: name.includes("gpt") ? "bg-emerald-500" : name.includes("claude") ? "bg-purple-500" : name.includes("gemini") ? "bg-blue-500" : "bg-amber-500",
+    color: name.includes("gpt") ? "bg-emerald-500" : name.includes("claude") ? "bg-purple-500" : name.includes("gemini") ? "bg-blue-500" : "bg-brand-500",
   })).slice(0, 4);
 
   return (
@@ -887,7 +887,7 @@ export default function BillingPage() {
                 </button>
 
                 {pixPayload?.isMock && (
-                  <p className="text-[10px] text-amber-500 bg-amber-500/10 px-2 py-1 rounded font-mono">
+                  <p className="text-[10px] text-brand-500 bg-brand-500/10 px-2 py-1 rounded font-mono">
                     Modo Simulação (Configure seu token do Mercado Pago em Gateways para receber PIX real)
                   </p>
                 )}

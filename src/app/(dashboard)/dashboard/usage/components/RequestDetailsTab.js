@@ -422,7 +422,7 @@ export default function RequestDetailsTab() {
                     "text-xs px-2 py-0.5 rounded",
                     selectedDetail.pxpipe.applied
                       ? "bg-green-500/15 text-green-600"
-                      : "bg-amber-500/15 text-amber-600"
+                      : "bg-brand-500/15 text-brand-600"
                   )}>
                     {selectedDetail.pxpipe.applied ? "Activated" : "Skipped"}
                   </span>
