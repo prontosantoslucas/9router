@@ -1,0 +1,17 @@
+# Força o Railway a usar o Dockerfile em vez de detectar Nixpacks
+# (Nixpacks estava pegando apps/agent/package.json e rodando só o agent
+# loopback na 3717, deixando a porta pública sem serviço → 502).
+#
+# O Dockerfile + runner-start.sh sobe Next.js (porta pública $PORT)
+# + agent loopback (127.0.0.1:3717) juntos.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "/entrypoint.sh /bin/sh /app/runner-start.sh"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
