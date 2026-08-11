@@ -2,7 +2,31 @@
 set -e
 
 # Garante que os diretórios de dados existam
-mkdir -p /app/data/agent /app/data-home
+mkdir -p /app/data/agent /app/data-home /app/data/db
+
+# ─────────────────────────────────────────────────────────────
+# Sanity-check do data.sqlite: se existir mas estiver com schema
+# corrompido ou incompatível (ex: backup importado de versão antiga,
+# WAL órfão, arquivo 0 bytes de failed upload), apaga tudo pra deixar
+# o app criar do zero via migrations. Evita ficar preso em
+# "malformed database schema" ou "no such table: scannedKeys".
+# ─────────────────────────────────────────────────────────────
+DB_FILE=/app/data/db/data.sqlite
+if [ -e "$DB_FILE" ]; then
+  DB_OK=$(node -e "
+    try {
+      const Database = require('better-sqlite3');
+      const db = new Database('$DB_FILE', { readonly: true, fileMustExist: true });
+      const row = db.prepare(\"SELECT name FROM sqlite_master WHERE type='table' AND name='scannedKeys' LIMIT 1\").get();
+      db.close();
+      console.log(row ? 'ok' : 'missing_table');
+    } catch (e) { console.log('error:' + e.message); }
+  " 2>/dev/null)
+  if [ "$DB_OK" != "ok" ]; then
+    echo "[Start] Detected unusable dashboard DB ($DB_OK) — resetting"
+    rm -f "$DB_FILE" "$DB_FILE-shm" "$DB_FILE-wal" "$DB_FILE-info"
+  fi
+fi
 
 # ─────────────────────────────────────────────────────────────
 # Pré-gera AGENT_INTERNAL_SECRET (compartilhado entre agente e proxy)
