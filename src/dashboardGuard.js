@@ -30,6 +30,7 @@ const PUBLIC_API_PATHS = [
   "/api/auth/oidc",
   "/api/version",
   "/api/settings/require-login",
+  "/api/maxdemo",
 ];
 
 // Public top-level prefixes (LLM API endpoints with their own API key auth).
