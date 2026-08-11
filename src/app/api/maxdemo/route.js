@@ -54,15 +54,15 @@ export async function POST(req) {
     // /v1/chat/completions no loopback local (sem API key = modo local
     // do handleChat, roteando pelos providers já configurados no dashboard).
     // ROUTER_BASE_URL é setada pelo runner-start.sh: http://127.0.0.1:${PORT}/v1
-    // AUTO_MODEL é a env que o webchat também usa como default.
+    //
+    // model: "auto" ativa o combo (30 modelos em fallback) — igual webchat
+    // e proxy do agent. Se um provider falha (rate limit, quota), passa
+    // pro próximo em vez de erro imediato.
     const baseUrl =
       process.env.ROUTER_BASE_URL ||
       process.env.MAXROUTER_DEMO_BASE_URL ||
       "http://127.0.0.1:8080/v1";
-    const model =
-      process.env.AUTO_MODEL ||
-      process.env.MAXROUTER_DEMO_MODEL ||
-      "gpt-4o-mini";
+    const model = "auto";
 
     const messages = [
       { role: "system", content: scenario.systemPrompt },
