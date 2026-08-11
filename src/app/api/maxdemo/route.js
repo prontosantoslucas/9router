@@ -50,16 +50,19 @@ export async function POST(req) {
       );
     }
 
-    // Config via env — fallback: usar o próprio gateway 9router local.
+    // Usa o MESMO gateway 9router que o webchat usa por baixo — chama
+    // /v1/chat/completions no loopback local (sem API key = modo local
+    // do handleChat, roteando pelos providers já configurados no dashboard).
+    // ROUTER_BASE_URL é setada pelo runner-start.sh: http://127.0.0.1:${PORT}/v1
+    // AUTO_MODEL é a env que o webchat também usa como default.
     const baseUrl =
+      process.env.ROUTER_BASE_URL ||
       process.env.MAXROUTER_DEMO_BASE_URL ||
-      process.env.OPENAI_BASE_URL ||
-      "http://127.0.0.1:20128/v1";
-    const apiKey =
-      process.env.MAXROUTER_DEMO_API_KEY ||
-      process.env.OPENAI_API_KEY ||
-      "sk-demo";
-    const model = process.env.MAXROUTER_DEMO_MODEL || "gpt-4o-mini";
+      "http://127.0.0.1:8080/v1";
+    const model =
+      process.env.AUTO_MODEL ||
+      process.env.MAXROUTER_DEMO_MODEL ||
+      "gpt-4o-mini";
 
     const messages = [
       { role: "system", content: scenario.systemPrompt },
@@ -72,10 +75,7 @@ export async function POST(req) {
 
     const upstreamRes = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model,
         messages,
