@@ -63,9 +63,12 @@ export async function POST(req) {
       process.env.MAXROUTER_DEMO_BASE_URL ||
       "http://127.0.0.1:8080/v1";
     // Modelo específico (não "auto") — combo default tenta providers que
-    // podem não estar cadastrados (ex: openai). Deepseek/Groq são rápidos,
-    // baratos e certeza que tem key nesse deploy.
-    const model = process.env.MAXROUTER_DEMO_MODEL || "deepseek/deepseek-chat";
+    // podem não estar cadastrados (ex: openai). Gemini 2.5 Flash roda no
+    // OAuth do Gemini CLI (free tier Google) — sem custo por request e
+    // testado 200 direto no /v1/chat/completions deste deploy. Deepseek
+    // direto foi tentado antes mas a conta está com saldo 0 (402
+    // Insufficient Balance). Se um dia trocar, override via env.
+    const model = process.env.MAXROUTER_DEMO_MODEL || "gemini-2.5-flash";
 
     const messages = [
       { role: "system", content: scenario.systemPrompt },
