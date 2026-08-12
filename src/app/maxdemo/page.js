@@ -1,6 +1,7 @@
 import Link from "next/link";
 import DemoChat from "./DemoChat";
 import Icon from "./Icon";
+import Reveal from "./Reveal";
 
 // WhatsApp direto do Lucas (marca MaxRouter). Trocar o número aqui
 // pelo chip separado quando o Business estiver ativo.
@@ -36,52 +37,62 @@ function Nav() {
 function Hero() {
   return (
     <section className="mx-auto max-w-6xl px-6 pt-32 pb-8 text-center">
-      <span className="inline-block rounded-full border border-brand-500/30 bg-brand-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-500">
-        Agente de IA para clínicas
-      </span>
-      <h1 className="mx-auto mt-5 max-w-3xl text-4xl font-bold leading-tight tracking-tight text-text-main sm:text-5xl md:text-6xl">
-        Seu WhatsApp respondendo{" "}
-        <span className="bg-gradient-to-r from-brand-500 to-brand-400 bg-clip-text text-transparent">
-          paciente sozinho
+      <Reveal variant="bounce" delay={0}>
+        <span className="inline-block rounded-full border border-brand-500/30 bg-brand-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-500">
+          Agente de IA para clínicas
         </span>
-        , 24 horas por dia.
-      </h1>
-      <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-text-muted">
-        Um agente que qualifica interesse, tira dúvida, agenda no seu Google
-        Calendar e nunca perde lead fora do horário. Instalação em 5 dias.
-      </p>
-      <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-        <a
-          href={CTA_WHATSAPP}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 rounded-full bg-brand-500 px-6 py-3 text-base font-semibold text-white shadow-soft transition-all hover:bg-brand-600 hover:shadow-warm"
-        >
-          <Icon name="chat" className="w-5 h-5" />
-          Quero pra minha clínica
-        </a>
-        <a
-          href="#demo"
-          className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-6 py-3 text-base font-semibold text-text-main transition-all hover:border-brand-500 hover:text-brand-500"
-        >
-          <Icon name="play_arrow" className="w-5 h-5" strokeWidth={0} fill="currentColor" />
-          Testar agora
-        </a>
-      </div>
-      <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-xs text-text-subtle">
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-brand-500" />
-          Setup em 5 dias
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-brand-500" />
-          Sem contrato longo
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-brand-500" />
-          Integrado ao seu Google Calendar
-        </span>
-      </div>
+      </Reveal>
+      <Reveal variant="up" delay={120}>
+        <h1 className="mx-auto mt-5 max-w-3xl text-4xl font-bold leading-tight tracking-tight text-text-main sm:text-5xl md:text-6xl">
+          Seu WhatsApp respondendo{" "}
+          <span className="bg-gradient-to-r from-brand-500 to-brand-400 bg-clip-text text-transparent">
+            paciente sozinho
+          </span>
+          , 24 horas por dia.
+        </h1>
+      </Reveal>
+      <Reveal variant="up" delay={260}>
+        <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-text-muted">
+          Um agente que qualifica interesse, tira dúvida, agenda no seu Google
+          Calendar e nunca perde lead fora do horário. Instalação em 5 dias.
+        </p>
+      </Reveal>
+      <Reveal variant="scale" delay={400}>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href={CTA_WHATSAPP}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-full bg-brand-500 px-6 py-3 text-base font-semibold text-white shadow-soft transition-all hover:bg-brand-600 hover:shadow-warm hover:scale-105"
+          >
+            <Icon name="chat" className="w-5 h-5" />
+            Quero pra minha clínica
+          </a>
+          <a
+            href="#demo"
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-6 py-3 text-base font-semibold text-text-main transition-all hover:border-brand-500 hover:text-brand-500 hover:scale-105"
+          >
+            <Icon name="play_arrow" className="w-5 h-5" strokeWidth={0} fill="currentColor" />
+            Testar agora
+          </a>
+        </div>
+      </Reveal>
+      <Reveal variant="up" delay={540}>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-xs text-text-subtle">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-brand-500 animate-pulse" />
+            Setup em 5 dias
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-brand-500 animate-pulse" />
+            Sem contrato longo
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-brand-500 animate-pulse" />
+            Integrado ao seu Google Calendar
+          </span>
+        </div>
+      </Reveal>
     </section>
   );
 }
@@ -92,16 +103,20 @@ function DemoSection() {
       id="demo"
       className="mx-auto max-w-6xl px-6 py-16"
     >
-      <div className="mb-8 text-center">
-        <h2 className="text-3xl font-bold tracking-tight text-text-main sm:text-4xl">
-          Teste com uma clínica de verdade
-        </h2>
-        <p className="mx-auto mt-3 max-w-xl text-text-muted">
-          Escolha um cenário e converse. O agente responde igual atenderia um
-          paciente real da sua clínica.
-        </p>
-      </div>
-      <DemoChat />
+      <Reveal variant="up">
+        <div className="mb-8 text-center">
+          <h2 className="text-3xl font-bold tracking-tight text-text-main sm:text-4xl">
+            Teste com uma clínica de verdade
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-text-muted">
+            Escolha um cenário e converse. O agente responde igual atenderia um
+            paciente real da sua clínica.
+          </p>
+        </div>
+      </Reveal>
+      <Reveal variant="bounce" delay={200}>
+        <DemoChat />
+      </Reveal>
     </section>
   );
 }
@@ -127,25 +142,26 @@ function HowItWorks() {
   return (
     <section className="border-t border-border-subtle bg-bg-alt py-16">
       <div className="mx-auto max-w-6xl px-6">
-        <h2 className="text-center text-3xl font-bold tracking-tight text-text-main sm:text-4xl">
-          Como funciona
-        </h2>
+        <Reveal variant="up">
+          <h2 className="text-center text-3xl font-bold tracking-tight text-text-main sm:text-4xl">
+            Como funciona
+          </h2>
+        </Reveal>
         <div className="mt-10 grid gap-6 md:grid-cols-3">
-          {steps.map((s) => (
-            <div
-              key={s.title}
-              className="rounded-2xl border border-border bg-surface p-6 shadow-soft transition-all hover:shadow-elev"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500/10 text-brand-500">
-                <Icon name={s.icon} className="w-6 h-6" />
+          {steps.map((s, i) => (
+            <Reveal key={s.title} variant="bounce" delay={i * 150}>
+              <div className="rounded-2xl border border-border bg-surface p-6 shadow-soft transition-all hover:shadow-elev hover:-translate-y-1 duration-300">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500/10 text-brand-500">
+                  <Icon name={s.icon} className="w-6 h-6" />
+                </div>
+                <h3 className="mt-4 text-lg font-semibold text-text-main">
+                  {s.title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-text-muted">
+                  {s.desc}
+                </p>
               </div>
-              <h3 className="mt-4 text-lg font-semibold text-text-main">
-                {s.title}
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-text-muted">
-                {s.desc}
-              </p>
-            </div>
+            </Reveal>
           ))}
         </div>
       </div>
@@ -157,14 +173,17 @@ function Pricing() {
   return (
     <section className="py-16">
       <div className="mx-auto max-w-4xl px-6">
-        <h2 className="text-center text-3xl font-bold tracking-tight text-text-main sm:text-4xl">
-          Investimento
-        </h2>
-        <p className="mx-auto mt-3 max-w-xl text-center text-text-muted">
-          Simples. Sem letra miúda. Sem lock-in.
-        </p>
+        <Reveal variant="up">
+          <h2 className="text-center text-3xl font-bold tracking-tight text-text-main sm:text-4xl">
+            Investimento
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-center text-text-muted">
+            Simples. Sem letra miúda. Sem lock-in.
+          </p>
+        </Reveal>
 
-        <div className="mt-10 rounded-3xl border-2 border-brand-500 bg-surface p-8 shadow-elev">
+        <Reveal variant="bounce" delay={220}>
+        <div className="mt-10 rounded-3xl border-2 border-brand-500 bg-surface p-8 shadow-elev transition-transform hover:scale-[1.01] duration-300">
           <div className="flex flex-col items-center text-center">
             <span className="rounded-full bg-brand-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-brand-500">
               Plano Padrão
@@ -206,6 +225,7 @@ function Pricing() {
             </a>
           </div>
         </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -233,23 +253,24 @@ function Faq() {
   return (
     <section className="border-t border-border-subtle bg-bg-alt py-16">
       <div className="mx-auto max-w-3xl px-6">
-        <h2 className="text-center text-3xl font-bold tracking-tight text-text-main sm:text-4xl">
-          Perguntas frequentes
-        </h2>
+        <Reveal variant="up">
+          <h2 className="text-center text-3xl font-bold tracking-tight text-text-main sm:text-4xl">
+            Perguntas frequentes
+          </h2>
+        </Reveal>
         <div className="mt-8 space-y-4">
-          {items.map((item) => (
-            <details
-              key={item.q}
-              className="group rounded-2xl border border-border bg-surface p-5 shadow-soft"
-            >
-              <summary className="flex cursor-pointer items-center justify-between gap-4 text-base font-semibold text-text-main">
-                {item.q}
-                <Icon name="add" className="w-5 h-5 text-brand-500 transition-transform group-open:rotate-45 shrink-0" />
-              </summary>
-              <p className="mt-3 text-sm leading-relaxed text-text-muted">
-                {item.a}
-              </p>
-            </details>
+          {items.map((item, i) => (
+            <Reveal key={item.q} variant="left" delay={i * 90}>
+              <details className="group rounded-2xl border border-border bg-surface p-5 shadow-soft transition-shadow hover:shadow-elev">
+                <summary className="flex cursor-pointer items-center justify-between gap-4 text-base font-semibold text-text-main">
+                  {item.q}
+                  <Icon name="add" className="w-5 h-5 text-brand-500 transition-transform group-open:rotate-45 shrink-0 duration-300" />
+                </summary>
+                <p className="mt-3 text-sm leading-relaxed text-text-muted">
+                  {item.a}
+                </p>
+              </details>
+            </Reveal>
           ))}
         </div>
       </div>
@@ -261,21 +282,27 @@ function CtaFinal() {
   return (
     <section className="py-20">
       <div className="mx-auto max-w-4xl px-6 text-center">
-        <h2 className="text-3xl font-bold tracking-tight text-text-main sm:text-4xl">
-          Toda mensagem sem resposta é um paciente indo pra concorrência.
-        </h2>
-        <p className="mt-4 text-lg text-text-muted">
-          Configura em 5 dias. Nunca mais perde lead fora do horário.
-        </p>
-        <a
-          href={CTA_WHATSAPP}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-8 inline-flex items-center gap-2 rounded-full bg-brand-500 px-8 py-4 text-lg font-semibold text-white shadow-elev transition-all hover:bg-brand-600"
-        >
-          <Icon name="chat" className="w-5 h-5" />
-          Chamar Lucas no WhatsApp
-        </a>
+        <Reveal variant="up">
+          <h2 className="text-3xl font-bold tracking-tight text-text-main sm:text-4xl">
+            Toda mensagem sem resposta é um paciente indo pra concorrência.
+          </h2>
+        </Reveal>
+        <Reveal variant="up" delay={200}>
+          <p className="mt-4 text-lg text-text-muted">
+            Configura em 5 dias. Nunca mais perde lead fora do horário.
+          </p>
+        </Reveal>
+        <Reveal variant="bounce" delay={400}>
+          <a
+            href={CTA_WHATSAPP}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-8 inline-flex items-center gap-2 rounded-full bg-brand-500 px-8 py-4 text-lg font-semibold text-white shadow-elev transition-all hover:bg-brand-600 hover:scale-105 duration-300"
+          >
+            <Icon name="chat" className="w-5 h-5" />
+            Chamar Lucas no WhatsApp
+          </a>
+        </Reveal>
       </div>
     </section>
   );
