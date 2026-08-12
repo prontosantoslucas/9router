@@ -7,7 +7,7 @@ export const metadata = {
     description:
       "Seu WhatsApp respondendo pacientes sozinho, 24 horas por dia. Nunca mais perca lead fora do horário.",
     type: "website",
-    url: "https://zenda.app.br",
+    url: "https://zenda.app.br/vsl1",
     siteName: "Zenda",
   },
 };

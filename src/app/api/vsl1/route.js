@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { SCENARIOS } from "@/app/maxdemo/scenarios";
+import { SCENARIOS } from "@/app/vsl1/scenarios";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

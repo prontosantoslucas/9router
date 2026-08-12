@@ -30,7 +30,7 @@ const PUBLIC_API_PATHS = [
   "/api/auth/oidc",
   "/api/version",
   "/api/settings/require-login",
-  "/api/maxdemo",
+  "/api/vsl1",
 ];
 
 // Public top-level prefixes (LLM API endpoints with their own API key auth).
@@ -223,8 +223,52 @@ function pageNoStore(request) {
   return res;
 }
 
+// Domínios de VITRINE (público, cliente/prospect) — só têm acesso a /vsl1.
+// Qualquer outra rota nesses hosts retorna 404 (o cliente não descobre que
+// existe dashboard interno, chat, etc). O host interno de admin
+// (maxrouter.up.railway.app) continua com acesso completo.
+const PUBLIC_STOREFRONT_HOSTS = (process.env.PUBLIC_STOREFRONT_HOSTS || "zenda.app.br,www.zenda.app.br")
+  .split(",")
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+// Paths permitidos no host público (asset paths, favicons, a VSL, seu endpoint)
+const PUBLIC_STOREFRONT_ALLOWED = [
+  "/vsl1",
+  "/api/vsl1",
+  "/_next/",
+  "/favicon",
+  "/robots.txt",
+  "/sitemap.xml",
+  "/manifest.json",
+  "/icons/",
+  "/api/health",
+];
+
+function isPublicStorefrontHost(request) {
+  const host = (request.headers.get("host") || "").split(":")[0].toLowerCase();
+  return PUBLIC_STOREFRONT_HOSTS.includes(host);
+}
+
+function isAllowedOnStorefront(pathname) {
+  return PUBLIC_STOREFRONT_ALLOWED.some(
+    (p) => pathname === p || pathname.startsWith(p + (p.endsWith("/") ? "" : "/")) || pathname.startsWith(p)
+  );
+}
+
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
+
+  // Vitrine pública: se veio via host de storefront (zenda.app.br), só a VSL existe.
+  if (isPublicStorefrontHost(request)) {
+    if (pathname === "/" || pathname === "") {
+      return NextResponse.redirect(new URL("/vsl1", request.url));
+    }
+    if (!isAllowedOnStorefront(pathname)) {
+      return NextResponse.json({ error: "Not Found" }, { status: 404 });
+    }
+    // Cai no fluxo normal (que vai deixar passar /vsl1 e /api/vsl1 via PUBLIC_API_PATHS)
+  }
 
   // Bloqueio de rotas legadas do agente que foram desativadas
   if (BLOCKED_AGENT_LEGACY_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {

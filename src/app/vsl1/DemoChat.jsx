@@ -55,7 +55,7 @@ export default function DemoChat() {
       setError(null);
 
       try {
-        const res = await fetch("/api/maxdemo", {
+        const res = await fetch("/api/vsl1", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

@@ -19,7 +19,7 @@ function Nav() {
   return (
     <nav className="fixed inset-x-0 top-0 z-50 border-b border-border-subtle bg-bg/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-        <Link href="/maxdemo" className="flex items-center gap-2">
+        <Link href="/vsl1" className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-soft">
             <Icon name="smart_toy" className="w-4 h-4" />
           </span>
