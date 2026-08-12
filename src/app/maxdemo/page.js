@@ -1,5 +1,6 @@
 import Link from "next/link";
 import DemoChat from "./DemoChat";
+import Icon from "./Icon";
 
 // WhatsApp direto do Lucas (marca MaxRouter). Trocar o número aqui
 // pelo chip separado quando o Business estiver ativo.
@@ -12,9 +13,7 @@ function Nav() {
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
         <Link href="/maxdemo" className="flex items-center gap-2">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 text-white shadow-soft">
-            <span className="material-symbols-outlined text-[18px]">
-              smart_toy
-            </span>
+            <Icon name="smart_toy" className="w-4 h-4" />
           </span>
           <span className="text-lg font-bold tracking-tight text-text-main">
             MaxRouter
@@ -26,9 +25,7 @@ function Nav() {
           rel="noopener noreferrer"
           className="hidden items-center gap-2 rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-soft transition-all hover:bg-brand-600 hover:shadow-warm sm:inline-flex"
         >
-          <span className="material-symbols-outlined text-[16px]">
-            chat
-          </span>
+          <Icon name="chat" className="w-4 h-4" />
           Falar comigo
         </a>
       </div>
@@ -60,18 +57,14 @@ function Hero() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 rounded-full bg-brand-500 px-6 py-3 text-base font-semibold text-white shadow-soft transition-all hover:bg-brand-600 hover:shadow-warm"
         >
-          <span className="material-symbols-outlined text-[18px]">
-            chat
-          </span>
+          <Icon name="chat" className="w-5 h-5" />
           Quero pra minha clínica
         </a>
         <a
           href="#demo"
           className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-6 py-3 text-base font-semibold text-text-main transition-all hover:border-brand-500 hover:text-brand-500"
         >
-          <span className="material-symbols-outlined text-[18px]">
-            play_arrow
-          </span>
+          <Icon name="play_arrow" className="w-5 h-5" strokeWidth={0} fill="currentColor" />
           Testar agora
         </a>
       </div>
@@ -144,9 +137,7 @@ function HowItWorks() {
               className="rounded-2xl border border-border bg-surface p-6 shadow-soft transition-all hover:shadow-elev"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500/10 text-brand-500">
-                <span className="material-symbols-outlined text-2xl">
-                  {s.icon}
-                </span>
+                <Icon name={s.icon} className="w-6 h-6" />
               </div>
               <h3 className="mt-4 text-lg font-semibold text-text-main">
                 {s.title}
@@ -198,9 +189,7 @@ function Pricing() {
                 "Sem contrato de fidelidade",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2">
-                  <span className="material-symbols-outlined mt-0.5 text-[18px] text-brand-500">
-                    check_circle
-                  </span>
+                  <Icon name="check_circle" className="mt-0.5 w-[18px] h-[18px] text-brand-500 shrink-0" />
                   <span>{item}</span>
                 </li>
               ))}
@@ -213,9 +202,7 @@ function Pricing() {
               className="mt-8 inline-flex items-center gap-2 rounded-full bg-brand-500 px-8 py-3 text-base font-semibold text-white shadow-soft transition-all hover:bg-brand-600 hover:shadow-warm"
             >
               Falar com o Lucas no WhatsApp
-              <span className="material-symbols-outlined text-[18px]">
-                arrow_forward
-              </span>
+              <Icon name="arrow_forward" className="w-[18px] h-[18px]" />
             </a>
           </div>
         </div>
@@ -257,9 +244,7 @@ function Faq() {
             >
               <summary className="flex cursor-pointer items-center justify-between gap-4 text-base font-semibold text-text-main">
                 {item.q}
-                <span className="material-symbols-outlined text-brand-500 transition-transform group-open:rotate-45">
-                  add
-                </span>
+                <Icon name="add" className="w-5 h-5 text-brand-500 transition-transform group-open:rotate-45 shrink-0" />
               </summary>
               <p className="mt-3 text-sm leading-relaxed text-text-muted">
                 {item.a}
@@ -288,9 +273,7 @@ function CtaFinal() {
           rel="noopener noreferrer"
           className="mt-8 inline-flex items-center gap-2 rounded-full bg-brand-500 px-8 py-4 text-lg font-semibold text-white shadow-elev transition-all hover:bg-brand-600"
         >
-          <span className="material-symbols-outlined text-[20px]">
-            chat
-          </span>
+          <Icon name="chat" className="w-5 h-5" />
           Chamar Lucas no WhatsApp
         </a>
       </div>

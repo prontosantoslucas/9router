@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SCENARIOS, DEFAULT_SCENARIO } from "./scenarios";
+import Icon from "./Icon";
 
 function nowLabel() {
   const d = new Date();
@@ -125,12 +126,8 @@ export default function DemoChat() {
               </p>
             </div>
             <div className="flex items-center gap-3 text-white/90">
-              <span className="material-symbols-outlined text-[18px]">
-                videocam
-              </span>
-              <span className="material-symbols-outlined text-[18px]">
-                call
-              </span>
+              <Icon name="videocam" className="w-[18px] h-[18px]" />
+              <Icon name="call" className="w-[18px] h-[18px]" />
             </div>
           </div>
 
@@ -231,9 +228,7 @@ export default function DemoChat() {
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-500 text-white shadow-soft transition-all hover:bg-brand-600 disabled:opacity-40"
                 aria-label="Enviar"
               >
-                <span className="material-symbols-outlined text-[18px]">
-                  send
-                </span>
+                <Icon name="send" className="w-[18px] h-[18px]" />
               </button>
             </form>
           </div>
