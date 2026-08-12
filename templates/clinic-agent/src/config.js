@@ -1,0 +1,68 @@
+import "dotenv/config";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(__dirname, "..");
+
+function need(key) {
+  const v = process.env[key];
+  if (!v) throw new Error(`env var missing: ${key}`);
+  return v;
+}
+function opt(key, def = "") {
+  return process.env[key] ?? def;
+}
+
+export const config = {
+  server: {
+    port: Number(opt("PORT", 3000)),
+    env: opt("NODE_ENV", "production"),
+    publicUrl: need("PUBLIC_URL"),
+    dataDir: path.resolve(ROOT, opt("DATA_DIR", "./data")),
+  },
+  clinic: {
+    name: need("CLINIC_NAME"),
+    type: need("CLINIC_TYPE"),
+    city: opt("CLINIC_CITY"),
+    phone: opt("CLINIC_PHONE"),
+    whatsapp: opt("CLINIC_WHATSAPP"),
+    instagram: opt("CLINIC_INSTAGRAM"),
+    website: opt("CLINIC_WEBSITE"),
+    address: opt("CLINIC_ADDRESS"),
+  },
+  router: {
+    baseUrl: opt("ROUTER_BASE_URL", "https://maxrouter.up.railway.app/v1"),
+    apiKey: need("ROUTER_API_KEY"),
+    model: opt("ROUTER_MODEL", "gemini-2.5-flash"),
+  },
+  evolution: {
+    url: need("EVOLUTION_URL"),
+    token: need("EVOLUTION_TOKEN"),
+    instance: need("EVOLUTION_INSTANCE"),
+    webhookToken: opt("EVOLUTION_WEBHOOK_TOKEN"),
+  },
+  google: {
+    clientId: need("GOOGLE_CLIENT_ID"),
+    clientSecret: need("GOOGLE_CLIENT_SECRET"),
+    redirectUri: need("GOOGLE_REDIRECT_URI"),
+    calendarId: opt("GOOGLE_CALENDAR_ID", "primary"),
+  },
+  agent: {
+    mode: opt("AGENT_MODE", "test"),   // test | prod
+    name: opt("AGENT_NAME", "atendimento"),
+    ownerName: opt("AGENT_OWNER_NAME"),
+    ownerWhatsapp: opt("AGENT_OWNER_WHATSAPP"),
+  },
+  security: {
+    dashboardPassword: need("DASHBOARD_PASSWORD"),
+    webhookSecret: opt("WEBHOOK_SECRET"),
+  },
+  paths: {
+    root: ROOT,
+    memoria: path.join(ROOT, "setup/memoria-inicial.md"),
+    schema: path.join(ROOT, "src/db/schema.sql"),
+    db: path.join(path.resolve(ROOT, opt("DATA_DIR", "./data")), "clinic.db"),
+    web: path.join(ROOT, "web"),
+  },
+};

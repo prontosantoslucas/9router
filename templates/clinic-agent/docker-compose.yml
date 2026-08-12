@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  clinic-agent:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./setup/memoria-inicial.md:/app/setup/memoria-inicial.md:ro
+    restart: unless-stopped

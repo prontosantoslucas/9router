@@ -1,0 +1,29 @@
+{
+  "name": "clinic-agent",
+  "version": "0.1.0",
+  "description": "Agente MaxRouter — WhatsApp + Google Calendar + Chat web para clínicas",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "init-db": "node src/db/init.js",
+    "load-memory": "node src/agent/loadMemory.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "googleapis": "^160.0.0",
+    "openai": "^6.7.0",
+    "uuid": "^13.0.0",
+    "ws": "^8.19.0"
+  },
+  "optionalDependencies": {
+    "libsql": "^0.5.29"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
