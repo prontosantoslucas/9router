@@ -843,6 +843,25 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
+---
+
+### Capítulo 46: Publicação do APK Android Release (`agente-lucas.apk`) no Repositório GitHub
+
+* **Por que foi feita essa alteração (Causa Raiz & Solicitação do Usuário)**:
+  - Atendimento à solicitação direta do usuário (*"apk pode deixar disponivel no github, commit e push"*), garantindo que o APK Android release compilado e pronto para uso fique rastreado e facilmente baixável diretamente do repositório remoto.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Publicação do Binário APK**:
+     - Copiado o APK compilado `apps/mobile/android/app/build/outputs/apk/release/app-release.apk` para as raízes de download [`agente-lucas.apk`](file:///c:/Users/user/Documents/GitHub/9router/agente-lucas.apk) e [`apps/mobile/agente-lucas.apk`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile/agente-lucas.apk).
+  2. **Controle de Versão & Push no GitHub**:
+     - Adicionados e forçados no Git com `git add -f agente-lucas.apk apps/mobile/agente-lucas.apk`.
+     - Executado o commit e efetuado o `git push origin master` com sucesso para o repositório remoto `prontosantoslucas/9router`.
+
+---
+
+*Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
+
 
 
 
