@@ -128,14 +128,14 @@ function Hero() {
 }
 
 // ============================================================
-// Números — social proof + escassez de dados
+// Números — capacidades REAIS do produto (nada inventado de mercado)
 // ============================================================
 function NumbersBar() {
   const stats = [
-    { number: "83%", label: "dos pacientes escolhem a 1ª clínica que responde rápido" },
-    { number: "10min", label: "é o tempo que o paciente espera antes de procurar outro lugar" },
-    { number: "24h", label: "sua clínica atende sem precisar de plantão humano" },
-    { number: "5x", label: "mais agendamentos convertidos após instalar o agente" },
+    { number: "15s", label: "tempo médio de resposta do agente a cada mensagem" },
+    { number: "24/7", label: "atende madrugada, feriado e fim de semana sem parar" },
+    { number: "5 dias", label: "do questionário até o agente rodando no seu WhatsApp" },
+    { number: "R$ 0", label: "de lead perdido por ninguém responder fora do horário" },
   ];
   return (
     <section className="border-y border-border-subtle bg-bg-alt py-10">
@@ -345,27 +345,33 @@ function Comparison() {
 }
 
 // ============================================================
-// TESTIMONIAL — social proof
+// FOUNDER NOTE — honestidade radical em vez de testemunho fake.
+// Cria dinâmica "entre cedo" + prova de que tem gente de verdade atrás.
 // ============================================================
-function Testimonial() {
+function FounderNote() {
   return (
     <section className="py-20">
       <div className="mx-auto max-w-3xl px-6">
         <Reveal variant="scale">
           <div className="relative rounded-3xl border border-border bg-surface p-8 shadow-elev md:p-12">
             <div className="absolute -top-4 left-8 rounded-full bg-brand-500 px-3 py-1 text-xs font-semibold text-white">
-              Case real
+              Uma conversa honesta
             </div>
             <p className="text-lg leading-relaxed text-text-main md:text-xl">
-              &ldquo;Antes eu tinha uma dor de cabeça enorme com o WhatsApp da clínica. Mensagens acumulavam durante a consulta, à noite eu tinha que ficar respondendo. Depois que instalei o agente, meu WhatsApp responde sozinho e as consultas já vêm agendadas quando entro no consultório. Recuperei minha noite de folga.&rdquo;
+              &ldquo;Sou desenvolvedor e construí o Zenda porque cansei de ver
+              clínica boa perdendo paciente por um motivo bobo: ninguém respondeu
+              a tempo no WhatsApp. Estou selecionando as primeiras clínicas pra
+              rodar comigo de perto — por isso limito a 4 setups por mês e
+              acompanho cada um pessoalmente nos primeiros 30 dias. Se você entrar
+              agora, fala direto comigo, não com um suporte genérico.&rdquo;
             </p>
             <div className="mt-6 flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 font-bold text-white">
-                DR
+                L
               </div>
               <div>
-                <div className="font-semibold text-text-main">Dr. Roberto</div>
-                <div className="text-sm text-text-muted">Odontologia — São Paulo</div>
+                <div className="font-semibold text-text-main">Lucas — fundador do Zenda</div>
+                <div className="text-sm text-text-muted">Desenvolvedor · fala com você no WhatsApp</div>
               </div>
             </div>
           </div>
@@ -607,7 +613,7 @@ export default function MaxDemoPage() {
       <DemoSection />
       <HowItWorks />
       <Comparison />
-      <Testimonial />
+      <FounderNote />
       <Pricing />
       <Guarantee />
       <Faq />
