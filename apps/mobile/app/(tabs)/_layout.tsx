@@ -85,6 +85,16 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="live"
+        options={{
+          title: 'Modo Live',
+          tabBarLabel: 'Modo Live',
+          tabBarIcon: ({ color, size }: { color: string; size: number }) => (
+            <Ionicons name="pulse" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="insights"
         options={{
           title: 'Insights',

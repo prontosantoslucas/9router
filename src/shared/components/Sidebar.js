@@ -16,9 +16,11 @@ const VISIBLE_MEDIA_KINDS = ["embedding", "image", "tts", "stt"];
 const COMBINED_WEB_ITEM = { id: "web", label: "Web Fetch & Search", icon: "travel_explore", href: "/dashboard/media-providers/web" };
 
 const navItems = [
+  { href: "/dashboard/telemetry", label: "Telemetria", icon: "monitoring" },
   { href: "/dashboard/endpoint", label: "Endpoint", icon: "api" },
   { href: "/dashboard/providers", label: "Providers", icon: "dns" },
   { href: "/dashboard/combos", label: "Combos", icon: "layers" },
+
   { href: "/dashboard/playground", label: "Playground A/B", icon: "compare" },
   { href: "/dashboard/rag", label: "RAG Documentos", icon: "folder_data" },
   { href: "/dashboard/scanner", label: "Scanner", icon: "search" },

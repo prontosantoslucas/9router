@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SCENARIOS, DEFAULT_SCENARIO } from "./scenarios";
 import Icon from "./Icon";
+import HandoffCard from "./HandoffCard";
+import { track } from "./track";
+
+// Quantas perguntas o visitante precisa fazer antes de oferecer o handoff.
+// 2 = já teve conversa de verdade (não foi só curiosidade de 1 clique), e
+// ainda está com a impressão fresca. Acima disso o momento começa a passar.
+const HANDOFF_AFTER_QUESTIONS = 2;
 
 function nowLabel() {
   const d = new Date();
@@ -28,6 +35,10 @@ export default function DemoChat() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Só o que o VISITANTE digitou. Não dá pra derivar de `messages` porque
+  // initialMessages já vem com uma mensagem de "user" semeada pra dar contexto
+  // visual — contá-la inflaria o gatilho do handoff e o texto do WhatsApp.
+  const [questions, setQuestions] = useState([]);
   const scrollRef = useRef(null);
 
   const switchScenario = (id) => {
@@ -35,6 +46,8 @@ export default function DemoChat() {
     setMessages(SCENARIOS[id].initialMessages);
     setError(null);
     setInput("");
+    setQuestions([]);
+    track("demo_scenario_switch", { demo_scenario: SCENARIOS[id].label });
   };
 
   useEffect(() => {
@@ -49,10 +62,20 @@ export default function DemoChat() {
       if (!text || loading) return;
 
       const nextMessages = [...messages, { role: "user", content: text }];
+      const nextQuestions = [...questions, text];
       setMessages(nextMessages);
+      setQuestions(nextQuestions);
       setInput("");
       setLoading(true);
       setError(null);
+
+      if (nextQuestions.length === 1) {
+        track("demo_start", { demo_scenario: scenario.label });
+      }
+      track("demo_message", {
+        demo_scenario: scenario.label,
+        demo_questions: nextQuestions.length,
+      });
 
       try {
         const res = await fetch("/api/vsl1", {
@@ -80,7 +103,7 @@ export default function DemoChat() {
         setLoading(false);
       }
     },
-    [messages, loading, scenarioId]
+    [messages, loading, scenarioId, questions, scenario.label]
   );
 
   const suggested = SCENARIOS[scenarioId].suggestedReplies || [];
@@ -235,10 +258,28 @@ export default function DemoChat() {
         </div>
       </div>
 
+      {/* Fechamento — o momento de maior intenção da página inteira.
+          Também aparece quando a demo falha: um agente de IA que quebra na
+          frente do cliente é o pior jeito de vender um agente de IA, então em
+          vez de só um erro vermelho, oferece a conversa real. */}
+      {error ? (
+        <HandoffCard
+          scenarioLabel={scenario.label}
+          questions={questions}
+          variant="fallback"
+        />
+      ) : questions.length >= HANDOFF_AFTER_QUESTIONS ? (
+        <HandoffCard scenarioLabel={scenario.label} questions={questions} />
+      ) : null}
+
       {/* Reset */}
       <button
         type="button"
-        onClick={() => setMessages(SCENARIOS[scenarioId].initialMessages)}
+        onClick={() => {
+          setMessages(SCENARIOS[scenarioId].initialMessages);
+          setQuestions([]);
+          setError(null);
+        }}
         className="text-xs text-text-muted underline-offset-4 hover:text-brand-500 hover:underline"
       >
         Reiniciar conversa

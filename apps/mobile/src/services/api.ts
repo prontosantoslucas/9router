@@ -3,18 +3,32 @@ import { NotionNote, SaveNoteInput } from '../types';
 
 const TOKEN_KEY = 'lucas_auth_token';
 const CHAT_ID_KEY = 'lucas_chat_id';
-const DEFAULT_BASE_URL = 'https://maxrouter-prod.up.railway.app';
+const SERVER_URL_KEY = 'lucas_server_url';
+const DEFAULT_BASE_URL = 'https://maxrouter.up.railway.app';
 
 let customBaseUrl = DEFAULT_BASE_URL;
 
+// Tenta carregar a URL do servidor persistida
+try {
+  SecureStore.getItemAsync(SERVER_URL_KEY).then((saved) => {
+    if (saved && saved.trim()) {
+      customBaseUrl = saved.trim().replace(/\/$/, '');
+    }
+  }).catch(() => {});
+} catch {}
+
 export const apiService = {
-  setBaseUrl(url: string) {
-    customBaseUrl = url.replace(/\/$/, '');
+  async setBaseUrl(url: string) {
+    customBaseUrl = url.trim().replace(/\/$/, '');
+    try {
+      await SecureStore.setItemAsync(SERVER_URL_KEY, customBaseUrl);
+    } catch {}
   },
 
   getBaseUrl() {
     return customBaseUrl;
   },
+
 
   async getToken(): Promise<string | null> {
     try {
@@ -41,7 +55,7 @@ export const apiService = {
       if (cached) return cached;
     } catch {}
     try {
-      const data = await this.request<{ chatId?: string }>('/api/auth/me', { method: 'GET' });
+      const data: any = await this.request('/api/auth/me', { method: 'GET' });
       if (data?.chatId) {
         await SecureStore.setItemAsync(CHAT_ID_KEY, data.chatId);
         return data.chatId;
@@ -136,11 +150,15 @@ export const apiService = {
   // ──────── API DE CHAT ────────
   async sendMessage(
     message: string,
-    imageBase64?: string
+    imageBase64?: string,
+    liveMode?: boolean
   ): Promise<{ response: string; model?: string }> {
     const payload: any = { message };
     if (imageBase64) {
       payload.image = imageBase64;
+    }
+    if (liveMode) {
+      payload.liveMode = true;
     }
 
     const data = await this.request('/api/agent/chat', {

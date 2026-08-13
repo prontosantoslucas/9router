@@ -12,8 +12,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from './_layout';
 
+import { apiService } from '../src/services/api';
+
 export default function LoginScreen() {
   const [password, setPassword] = useState('');
+  const [serverUrl, setServerUrl] = useState(apiService.getBaseUrl());
+  const [showServerConfig, setShowServerConfig] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { login } = useAuth();
@@ -28,6 +32,9 @@ export default function LoginScreen() {
     setErrorMsg(null);
 
     try {
+      if (serverUrl.trim()) {
+        await apiService.setBaseUrl(serverUrl.trim());
+      }
       await login(password.trim());
     } catch (err: any) {
       console.warn('Erro de autenticação:', err);
@@ -40,7 +47,7 @@ export default function LoginScreen() {
       } else if (err.status === 429) {
         setErrorMsg('Acesso temporariamente suspenso devido a múltiplas tentativas.');
       } else {
-        setErrorMsg('Falha ao autenticar. Verifique sua conexão e senha.');
+        setErrorMsg('Falha ao autenticar. Verifique sua conexão e a URL do servidor.');
       }
     } finally {
       setLoading(false);
@@ -64,6 +71,21 @@ export default function LoginScreen() {
           <View style={styles.errorBox}>
             <Ionicons name="alert-circle" size={18} color="#ef4444" />
             <Text style={styles.errorText}>{errorMsg}</Text>
+          </View>
+        )}
+
+        {showServerConfig && (
+          <View style={styles.inputBox}>
+            <Ionicons name="globe-outline" size={20} color="#64748b" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="https://maxrouter.up.railway.app"
+              placeholderTextColor="#64748b"
+              autoCapitalize="none"
+              autoCorrect={false}
+              value={serverUrl}
+              onChangeText={(txt: string) => setServerUrl(txt)}
+            />
           </View>
         )}
 
@@ -98,10 +120,20 @@ export default function LoginScreen() {
             </>
           )}
         </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setShowServerConfig(!showServerConfig)}
+          style={{ marginTop: 16, alignItems: 'center' }}
+        >
+          <Text style={{ color: '#64748b', fontSize: 12 }}>
+            {showServerConfig ? 'Ocultar URL do Servidor' : `Servidor: ${serverUrl}`}
+          </Text>
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {

@@ -123,7 +123,8 @@ app.get("/send", async (req, res) => {
 
 app.get("/health", (req, res) => {
   const status = models.getStatus();
-  res.json({ status: "ok", models: status });
+  const queueStats = require("./queue").getStats();
+  res.json({ status: "ok", models: status, queue: queueStats });
 });
 
 app.get("/schedule", (req, res) => {
@@ -154,6 +155,16 @@ app.get("/api/stats", (req, res) => {
   });
 });
 
+app.get("/api/telemetry/stats", (req, res) => {
+  try {
+    const telemetry = require("./telemetry");
+    res.json(telemetry.getTelemetryStats());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 app.post("/sync-superbrain", async (req, res) => {
   const ok = await superbrain.refreshFromGitHub();
   res.json({ synced: ok, length: superbrain.getContent().length });
@@ -171,8 +182,9 @@ app.post("/api/chat", async (req, res) => {
   // model: forca um modelo especifico em vez do roteamento normal — usado pelo
   // Playground A/B (/dashboard/playground) para comparar modelos de verdade.
   const model = req.body.model || undefined;
+  const liveMode = !!req.body.liveMode;
   try {
-    const result = await processMessage(chatId, message || "", name, { githubToken: ghToken, images, model });
+    const result = await processMessage(chatId, message || "", name, { githubToken: ghToken, images, model, liveMode });
     if (result.formatted) delete result.formatted;
     if (result.image && result.image.startsWith("/")) {
       const proto = req.headers["x-forwarded-proto"] || req.protocol;
@@ -1147,6 +1159,13 @@ async function start() {
     require("./autonomous/dailyInsights").start();
   } catch (err) {
     console.warn("[dailyInsights] falha ao iniciar:", err.message);
+  }
+
+  // Fila assíncrona SQLite em segundo plano
+  try {
+    require("./queue").startWorker();
+  } catch (err) {
+    console.warn("[queue] falha ao iniciar worker:", err.message);
   }
 
   // Job alerts (LinkedIn — buscas recorrentes)

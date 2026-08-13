@@ -143,6 +143,32 @@ db.exec(`
     token TEXT NOT NULL DEFAULT '',
     database_id TEXT NOT NULL DEFAULT ''
   );
+
+  CREATE TABLE IF NOT EXISTS semantic_cache (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prompt_norm TEXT NOT NULL,
+    prompt_raw TEXT NOT NULL,
+    response TEXT NOT NULL,
+    model TEXT NOT NULL,
+    hit_count INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_semantic_cache_norm ON semantic_cache(prompt_norm);
+
+  CREATE TABLE IF NOT EXISTS queue_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_type TEXT NOT NULL,
+    payload TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    error_msg TEXT,
+    run_at TEXT DEFAULT (datetime('now')),
+    completed_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_queue_jobs_status ON queue_jobs(status, run_at);
 `);
 
 // Migração idempotente: segundo database do segundo cérebro ("Cérebro

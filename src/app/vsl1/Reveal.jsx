@@ -30,14 +30,23 @@ export default function Reveal({
   ...rest
 }) {
   const ref = useRef(null);
-  // Inicializa já considerando prefers-reduced-motion — sem setState em effect
-  const [visible, setVisible] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  });
+  // SEMPRE inicia oculto — tem que bater com o que o servidor renderiza.
+  // Ler prefers-reduced-motion aqui no initializer causava mismatch de
+  // hidratação (servidor: opacity-0, cliente com reduced-motion: opacity-100);
+  // o React abortava a hidratação e a página INTEIRA ficava invisível, já que
+  // todas as seções da VSL são embrulhadas em <Reveal>. A preferência de
+  // motion é aplicada no effect abaixo, onde só o cliente roda.
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (visible) return;
+    // Sistema pede menos animação: revela sem esperar viewport nem delay.
+    // Vai via setTimeout(0) — e não setState direto — pelo mesmo motivo do
+    // resto do arquivo: setState síncrono no corpo do effect encadeia render.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const t = setTimeout(() => setVisible(true), 0);
+      return () => clearTimeout(t);
+    }
     const el = ref.current;
     if (!el) return;
     // Se já entrou na viewport (hero above-fold), animar já ao carregar

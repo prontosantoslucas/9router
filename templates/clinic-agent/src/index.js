@@ -8,14 +8,32 @@ import { handleEvolutionWebhook, getPairingQr } from "./channels/evolution.js";
 import { getAuthUrl, exchangeCodeForTokens } from "./integrations/googleCalendar.js";
 import { startWorkers } from "./workers/index.js";
 
+// Módulos de Autenticação e Views
+import { 
+  requireAuth, 
+  authenticatePassword, 
+  createSessionToken, 
+  COOKIE_NAME 
+} from "./auth.js";
+
+import { renderConversationsView } from "./views/conversations.js";
+import { renderAppointmentsView } from "./views/appointments.js";
+import { renderPatientsView } from "./views/patients.js";
+import { renderNotesView } from "./views/notes.js";
+import { renderReportsView } from "./views/reports.js";
+import { renderChannelsView } from "./views/channels.js";
+import { renderConfigView } from "./views/config.js";
+import { renderLoginView } from "./views/login.js";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
 app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(express.static(config.paths.web));
 
 // ============================================================
-// Health
+// Health Probe
 // ============================================================
 app.get("/health", (_req, res) => {
   res.json({
@@ -28,7 +46,29 @@ app.get("/health", (_req, res) => {
 });
 
 // ============================================================
-// Chat web
+// Login / Logout
+// ============================================================
+app.get("/login", (_req, res) => {
+  res.type("html").send(renderLoginView({}));
+});
+
+app.post("/login", (req, res) => {
+  const { password } = req.body || {};
+  if (authenticatePassword(password)) {
+    const token = createSessionToken(24);
+    res.setHeader("Set-Cookie", `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Strict`);
+    return res.redirect("/dashboard/conversations");
+  }
+  res.status(401).type("html").send(renderLoginView({ error: "Senha de acesso incorreta." }));
+});
+
+app.post("/logout", (_req, res) => {
+  res.setHeader("Set-Cookie", `${COOKIE_NAME}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT`);
+  res.redirect("/login");
+});
+
+// ============================================================
+// Chat web público (Seguro)
 // ============================================================
 app.post("/webchat", handleWebchat);
 
@@ -38,7 +78,12 @@ app.post("/webchat", handleWebchat);
 app.post("/webhook/evolution", handleEvolutionWebhook);
 
 // ============================================================
-// Setup: Google OAuth
+// Proteção de Autenticação para /dashboard e /setup
+// ============================================================
+app.use(["/setup", "/dashboard"], requireAuth);
+
+// ============================================================
+// Setup: Google OAuth (Protegido)
 // ============================================================
 app.get("/setup/google", (_req, res) => {
   res.redirect(getAuthUrl());
@@ -49,7 +94,7 @@ app.get("/oauth/google/callback", async (req, res) => {
     await exchangeCodeForTokens(req.query.code);
     res.send(`
       <h2>Google Calendar conectado</h2>
-      <p>Agora o agente pode criar eventos na sua agenda. <a href="/dashboard">Ir pro dashboard</a>.</p>
+      <p>Agora o agente pode criar eventos na sua agenda. <a href="/dashboard/channels">Voltar para o painel</a>.</p>
     `);
   } catch (err) {
     res.status(500).send(`Falha: ${err.message}`);
@@ -57,18 +102,18 @@ app.get("/oauth/google/callback", async (req, res) => {
 });
 
 // ============================================================
-// Setup: QR code do WhatsApp
+// Setup: QR code do WhatsApp (Protegido)
 // ============================================================
 app.get("/setup/whatsapp", async (_req, res) => {
   try {
     const data = await getPairingQr();
-    // Evolution retorna { pairingCode, code, base64 } — base64 é o QR
     const qr = data.base64 || data.qrcode?.base64 || null;
     if (!qr) return res.send(`<p>Instância já pareada ou sem QR disponível: ${JSON.stringify(data).slice(0,200)}</p>`);
     res.send(`
       <h2>Escanear com WhatsApp Business</h2>
       <p>Abra o WhatsApp Business → Aparelhos conectados → Conectar aparelho → aponte para o QR abaixo.</p>
       <img src="${qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`}" style="max-width:400px" />
+      <p><a href="/dashboard/channels">← Voltar para o painel</a></p>
     `);
   } catch (err) {
     res.status(500).send(`Falha: ${err.message}`);
@@ -76,32 +121,173 @@ app.get("/setup/whatsapp", async (_req, res) => {
 });
 
 // ============================================================
-// Dashboard — lista de conversas + upcoming appointments
-// Protegido por password simples via query ?p=<pw>
+// Painel do Cliente (7 Telas)
 // ============================================================
-app.get("/dashboard", (req, res) => {
-  if (req.query.p !== config.security.dashboardPassword) {
-    return res.status(401).send('<p>Password inválido. Acesse ?p=&lt;senha&gt;.</p>');
-  }
-  const conversations = db.prepare(`
-    SELECT c.*, (SELECT COUNT(*) FROM messages m WHERE m.chat_id = c.chat_id) msg_count
-    FROM conversations c
-    ORDER BY c.last_seen_at DESC
-    LIMIT 50
-  `).all();
-  const upcoming = upcomingAppointments({ withinHours: 168 });
-  res.type("html").send(renderDashboard({ conversations, upcoming }));
+app.get("/dashboard", (_req, res) => {
+  res.redirect("/dashboard/conversations");
 });
 
-app.get("/dashboard/conversation/:chatId", (req, res) => {
-  if (req.query.p !== config.security.dashboardPassword) {
-    return res.status(401).send('<p>Password inválido.</p>');
+// Tela 1: Conversas
+app.get("/dashboard/conversations", (req, res) => {
+  const search = (req.query.q || "").trim();
+  const selectedChat = req.query.chatId || null;
+
+  let query = `
+    SELECT c.*, (SELECT COUNT(*) FROM messages m WHERE m.chat_id = c.chat_id) msg_count
+    FROM conversations c
+  `;
+  const params = [];
+
+  if (search) {
+    query += ` WHERE c.chat_id LIKE ? OR c.patient_name LIKE ? OR c.patient_phone LIKE ?`;
+    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
-  const chatId = decodeURIComponent(req.params.chatId);
-  const conv = getConversation(chatId);
-  if (!conv) return res.status(404).send("Conversa não encontrada");
-  const msgs = getMessages(chatId, { limit: 100 });
-  res.type("html").send(renderConversation({ conv, msgs, back: req.query.p }));
+
+  query += ` ORDER BY c.last_seen_at DESC LIMIT 50`;
+
+  const conversations = db.prepare(query).all(...params);
+  let messages = [];
+
+  if (selectedChat) {
+    messages = db.prepare("SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC LIMIT 100").all(selectedChat);
+  }
+
+  res.type("html").send(renderConversationsView({ conversations, selectedChat, messages, search }));
+});
+
+// Tela 2: Agenda
+app.get("/dashboard/appointments", (_req, res) => {
+  const appointments = db.prepare("SELECT * FROM appointments ORDER BY scheduled_at ASC LIMIT 100").all();
+  res.type("html").send(renderAppointmentsView({ appointments }));
+});
+
+// Tela 3: Pacientes
+app.get("/dashboard/patients", (_req, res) => {
+  const patients = db.prepare(`
+    SELECT * FROM conversations 
+    ORDER BY last_seen_at DESC LIMIT 100
+  `).all();
+  res.type("html").send(renderPatientsView({ patients }));
+});
+
+
+// Tela 4: Notas / Prontuários
+app.get("/dashboard/notes", (req, res) => {
+  const selectedChat = req.query.chatId || "";
+  const filterCategory = req.query.category || "";
+
+  let query = "SELECT * FROM notes";
+  const params = [];
+
+  if (selectedChat || filterCategory) {
+    query += " WHERE";
+    const clauses = [];
+    if (selectedChat) {
+      clauses.push(" chat_id = ?");
+      params.push(selectedChat);
+    }
+    if (filterCategory) {
+      clauses.push(" category = ?");
+      params.push(filterCategory);
+    }
+    query += clauses.join(" AND");
+  }
+
+  query += " ORDER BY created_at DESC LIMIT 50";
+  const notes = db.prepare(query).all(...params);
+
+  res.type("html").send(renderNotesView({ notes, selectedChat, filterCategory }));
+});
+
+app.post("/dashboard/notes", (req, res) => {
+  const { chatId, category, content } = req.body || {};
+  if (chatId && content) {
+    db.prepare(`
+      INSERT INTO notes (chat_id, category, content, source, created_at)
+      VALUES (?, ?, ?, 'human', datetime('now'))
+    `).run(chatId.trim(), category || "general", content.trim());
+  }
+  res.redirect(`/dashboard/notes?chatId=${encodeURIComponent(chatId || "")}`);
+});
+
+// Tela 5: Relatórios
+app.get("/dashboard/reports", (_req, res) => {
+  const totalConversations = db.prepare("SELECT COUNT(*) c FROM conversations").get().c;
+  const totalAppointments = db.prepare("SELECT COUNT(*) c FROM appointments WHERE status='confirmed' OR status='scheduled'").get().c;
+  const remindersSent = db.prepare("SELECT COUNT(*) c FROM appointments WHERE reminder_sent_at IS NOT NULL").get().c;
+  
+  const conversionRate = totalConversations > 0 
+    ? `${Math.round((totalAppointments / totalConversations) * 100)}%` 
+    : "0%";
+
+  let workerEvents = [];
+  try {
+    workerEvents = db.prepare("SELECT * FROM worker_events ORDER BY created_at DESC LIMIT 20").all();
+  } catch {}
+
+  res.type("html").send(renderReportsView({
+    metrics: {
+      totalConversations,
+      totalAppointments,
+      conversionRate,
+      remindersSent
+    },
+    workerEvents
+  }));
+});
+
+// Tela 6: Canais & QR Code
+app.get("/dashboard/channels", async (_req, res) => {
+  let whatsappConnected = false;
+  let qrCodeBase64 = null;
+
+  try {
+    const data = await getPairingQr();
+    if (data.connected || data.status === "open") {
+      whatsappConnected = true;
+    } else {
+      qrCodeBase64 = data.base64 || data.qrcode?.base64 || null;
+      if (qrCodeBase64 && !qrCodeBase64.startsWith("data:")) {
+        qrCodeBase64 = `data:image/png;base64,${qrCodeBase64}`;
+      }
+    }
+  } catch (err) {
+    console.warn("[channels] Erro ao verificar status do WhatsApp:", err.message);
+  }
+
+  const googleTokens = db.prepare("SELECT * FROM oauth_tokens WHERE provider='google'").get();
+  const googleAuthorized = !!googleTokens;
+
+  res.type("html").send(renderChannelsView({
+    whatsappConnected,
+    qrCodeBase64,
+    googleAuthorized,
+    publicWebchatUrl: `${config.server.publicUrl}/`
+  }));
+});
+
+// Tela 7: Configurações
+app.get("/dashboard/config", (_req, res) => {
+  const rows = db.prepare("SELECT key, value FROM runtime_config").all();
+  const runtimeConfig = {};
+  rows.forEach(r => { runtimeConfig[r.key] = r.value; });
+
+  res.type("html").send(renderConfigView({ runtimeConfig }));
+});
+
+app.post("/dashboard/config", (req, res) => {
+  const { agentMode, ownerWhatsapp, workingHours } = req.body || {};
+
+  const upsert = db.prepare(`
+    INSERT INTO runtime_config (key, value, updated_at) VALUES (?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+  `);
+
+  if (agentMode) upsert.run("agentMode", agentMode);
+  if (ownerWhatsapp) upsert.run("ownerWhatsapp", ownerWhatsapp);
+  if (workingHours) upsert.run("workingHours", workingHours);
+
+  res.redirect("/dashboard/config");
 });
 
 // ============================================================
@@ -117,45 +303,6 @@ app.get("/", (_req, res) => {
 app.listen(config.server.port, "0.0.0.0", () => {
   console.log(`[clinic-agent] ${config.clinic.name} — modo ${config.agent.mode}`);
   console.log(`[clinic-agent] http://0.0.0.0:${config.server.port}`);
-  console.log(`[clinic-agent] setup: ${config.server.publicUrl}/setup/whatsapp | /setup/google`);
+  console.log(`[clinic-agent] dashboard: ${config.server.publicUrl}/dashboard`);
   startWorkers();
 });
-
-// ============================================================
-// Renders inline (evita template engine extra)
-// ============================================================
-function esc(s) {
-  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
-function renderDashboard({ conversations, upcoming }) {
-  return `<!doctype html>
-<html><head><meta charset="utf-8"><title>Dashboard ${esc(config.clinic.name)}</title>
-<style>body{font-family:system-ui;margin:20px;background:#f7f7f7} h2{margin-top:24px} table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)} th,td{padding:10px;border-bottom:1px solid #eee;text-align:left} th{background:#fafafa;font-size:12px;text-transform:uppercase} a{color:#10a37f}</style>
-</head><body>
-<h1>${esc(config.clinic.name)}</h1>
-<p>Modo: <b>${esc(config.agent.mode)}</b></p>
-
-<h2>Próximos agendamentos (${upcoming.length})</h2>
-<table><tr><th>Quando</th><th>Paciente</th><th>Serviço</th><th>Status</th></tr>
-${upcoming.map((a) => `<tr><td>${esc(a.scheduled_at)}</td><td>${esc(a.patient_name)}</td><td>${esc(a.service)}</td><td>${esc(a.status)}</td></tr>`).join("") || '<tr><td colspan=4>Nenhum</td></tr>'}
-</table>
-
-<h2>Conversas recentes</h2>
-<table><tr><th>Canal</th><th>Chat ID</th><th>Paciente</th><th>Msgs</th><th>Status</th><th>Última</th><th></th></tr>
-${conversations.map((c) => `<tr><td>${esc(c.channel)}</td><td>${esc(c.chat_id)}</td><td>${esc(c.patient_name || '-')}</td><td>${c.msg_count}</td><td>${esc(c.status)}</td><td>${esc(c.last_seen_at)}</td><td><a href="/dashboard/conversation/${encodeURIComponent(c.chat_id)}?p=${esc(config.security.dashboardPassword)}">ver</a></td></tr>`).join("")}
-</table>
-</body></html>`;
-}
-
-function renderConversation({ conv, msgs, back }) {
-  return `<!doctype html>
-<html><head><meta charset="utf-8"><title>Conv ${esc(conv.chat_id)}</title>
-<style>body{font-family:system-ui;margin:20px;max-width:720px} .msg{padding:8px 12px;border-radius:12px;margin:6px 0;max-width:80%} .user{background:#dcf8c6;margin-left:auto} .assistant{background:#f0f0f0} .tool{background:#fff3cd;font-family:monospace;font-size:12px} .system{background:#eee;font-size:11px;color:#666}</style>
-</head><body>
-<a href="/dashboard?p=${esc(back)}">&larr; voltar</a>
-<h2>${esc(conv.chat_id)}</h2>
-<p>Canal: <b>${esc(conv.channel)}</b> · Paciente: <b>${esc(conv.patient_name || '-')}</b> · Status: <b>${esc(conv.status)}</b></p>
-${msgs.map((m) => `<div class="msg ${esc(m.role)}"><b>${esc(m.role)}${m.tool_name ? ' → ' + esc(m.tool_name) : ''}</b><br>${esc(m.content).replace(/\n/g, '<br>')}<br><small>${esc(m.created_at)}</small></div>`).join("")}
-</body></html>`;
-}

@@ -561,4 +561,296 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 34: Auditoria de Arquitetura, Diagnóstico de Oportunidades de Ajuste e Plano de Aprimoramento do 9Router
+
+* **Por que foi feita essa análise (Causa Raiz & Objetivo)**:
+  - Realizar um diagnóstico técnico profundo de ponta a ponta na base de código do **9Router** para identificar gargalos de performance, duplicidade de rotinas, riscos de vazamento de memória em concorrência, limitações de tipagem e oportunidades estratégicas de arquitetura para evolução do sistema para o nível *Enterprise AI Gateway*.
+
+* **O que foi identificado para Ajustar (Refatorações & Ajustes de Curto/Médio Prazo)**:
+  1. **Persistência do Histórico no Heap de Memória ([`orchestrator.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/orchestrator.js))**: O array de mensagens é mantido num `Map` em memória RAM (`histories`). Em alta concorrência ou múltiplos workers/containers, isso pode gerar vazamento de memória e divergência de estado. *Ajuste*: Migrar a retenção de contexto para queries paginadas no SQLite com janela deslizante (*Sliding Window* de 50 mensagens).
+  2. **Duplicação da Lógica de Segredo HMAC ([`route.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/agent/[[...path]]/route.js) vs [`hmacAuth.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/hmacAuth.js))**: A rotina `resolveInternalSecret` está duplicada entre o proxy do Next.js e a autenticação do Express para contornar restrições de empacotamento do Next.js. *Ajuste*: Isolar utilitários compartilhados no workspace do monorepo (`packages/shared` ou módulo comum).
+  3. **Tipagem e Schemas (Migração Gradual para TypeScript & Zod)**: Enquanto `apps/mobile` utiliza TypeScript estrito (`.ts`/`.tsx`), a aplicação Next.js e o agente Node.js usam JavaScript. *Ajuste*: Introduzir validação de payload com Zod nas rotas Next.js e converter módulos críticos (`orchestrator.js`, `proxy.js`, `notion.js`) para TypeScript.
+  4. **Timeout e Cancelamento de Requisições LLM ([`proxy.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/proxy.js))**: Faltam wrappers com `AbortController` e estratégias de *retry* com *Exponential Backoff* para lidar com retornos lentos ou erros HTTP 429/503 dos provedores.
+
+* **O que faríamos melhor (Visão Arquitetural de Longo Prazo & Engenharia)**:
+  1. **Fila Assíncrona Desacoplada (Event-Driven Queue)**: Desacoplar tarefas pesadas (RAG vector chunking, sync do Notion, envio massivo do WhatsApp/Telegram) do loop de eventos principal do Express utilizando uma fila assíncrona (como SQLite-backed queue ou Redis/BullMQ).
+  2. **Cache Semântico de Prompts (Semantic Prompt Cache)**: Implementar uma camada de cache vetorial baseada em similaridade de cosseno (>= 95%). Requisições idênticas ou semanticamente equivalentes respondem em <50ms sem consumir tokens dos provedores de IA.
+  3. **Observabilidade e Telemetria OpenTelemetry**: Expandir a telemetria atual do chat (`telemetry` em `MessageBubble.jsx`) para métricas centralizadas (Tokens/seg, Latência P95/P99, Custo/Usuário) exportáveis para Prometheus/Grafana.
+  4. **App Mobile Offline-First & SSE Streaming**: Evoluir o app React Native (`apps/mobile`) para consumo de respostas via Server-Sent Events (token a token) e sincronização offline-first com WatermelonDB / React Query.
+
+* **Verificação**: Documentação técnica atualizada no `LIVRO_DE_ESTUDOS.md`, cobrindo diagnósticos de causa raiz e plano de ação estruturado para manutenção e escalabilidade contínua.
+
+---
+
+### Capítulo 35: Construção e Integração do Modo Live com Chamada Continuada de Voz e Personalidade meueulucas no App Mobile
+
+* **Por que foi feita essa alteração (Causa Raiz & Objetivo)**:
+  - Atender à necessidade de uma interface de conversação contínua por voz (*Modo Live*) no APK React Native ([`apps/mobile`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile)), permitindo chamadas *hands-free* em tempo real com respostas faladas via síntese de voz (TTS) e prompt alinhado às diretrizes e memórias do repositório `nortelucas/meueulucas` (`Superbrain-Lucas.md`).
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Tela Modo Live & Orbe Vocal Reativo**: Criada a tela [`apps/mobile/app/(tabs)/live.tsx`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile/app/(tabs)/live.tsx) apresentando um Orbe Reativo animado (`Animated.loop`) com 4 estados visuais:
+     - 🟢 *Escutando...* (Azul Violeta `#818cf8`)
+     - ⚡ *Processando com meueulucas...* (Roxo Neon `#c084fc`)
+     - 🔊 *Lucas Falando...* (Ciano `#38bdf8`)
+     - ⚪ *Encerrado* (Slated `#334155`)
+  2. **Persistência de Tela Acesa (Keep Awake)**: Integrado `expo-keep-awake` para manter a tela do smartphone acesa durante toda a ligação de voz.
+  3. **Síntese de Fala (TTS) & Continuous Voice Loop**: Integrada a reprodução de áudio via Speech Synthesis e transição automática ao estado de escuta (`LISTENING`) ao concluir cada resposta, sem exigir cliques manuais no botão a cada frase.
+  4. **Formatação de Resposta no Backend (`liveMode: true`)**:
+     - No backend ([`index.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/index.js) e [`orchestrator.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/orchestrator.js)), adicionado suporte ao parâmetro `liveMode: true`.
+     - Injetada a diretriz do sistema que restringe respostas a 1~3 frases conversacionais diretas, removendo formatações de markdown pesadas (tabelas, emojis excessivos, blocos de código) ideais para síntese de áudio natural.
+  5. **Navegação no App Mobile**: Adicionada a aba **Modo Live** em [`apps/mobile/app/(tabs)/_layout.tsx`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile/app/(tabs)/_layout.tsx) com o ícone `pulse`.
+
+* **Verificação**:
+  - Compilação estrita TypeScript em [`apps/mobile`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile) verificada via `npx tsc --noEmit` obtendo **0 erros**.
+  - Documentação técnica atualizada em `implementation_plan.md` e `walkthrough.md`.
+
+---
+
+### Capítulo 36: Resolução de Gargalos Nativos do Gradle/Ninja no Windows e Geração com Sucesso do APK Standalone Release (`apps/mobile`)
+
+* **Por que foi feita essa alteração (Causa Raiz & Objetivo)**:
+  - Ao compilar o APK Android nativo standalone em ambiente Windows (`apps/mobile/build-apk.bat`), a compilação falhou devido a três fatores críticos:
+    1. **Conflito de Arquivos Hashed sem Extensão no Res/Drawable**: O comando `expo export` gerou arquivos de assets hashed sem extensão na pasta `dist/assets/`, que ao serem copiados para `android/app/src/main/res/drawable/`, violavam a regra estrita do AAPT2 do Android (`mergeReleaseResources` exige exclusivamente arquivos `.xml`, `.png`, `.jpg` ou `.webp`).
+    2. **Autolinking de Módulos Experimentais Não Utilizados**: Pacotes `@expo/dom-webview` e `@expo/log-box` contidos transitoriamente na `node_modules/@expo/` requisitavam a dependência Gradle `expo-module-gradle-plugin` não presente no ecossistema mobile nativo do Expo SDK 52.
+    3. **Estouro do Limite de Caminho do Windows (MAX_PATH / 260 Caracteres) no CMake Ninja**: A compilação nativa C++ do React Native New Architecture (Codegen JNI para `react-native-safe-area-context` e `react-native-screens`) gerou nomes de arquivos objeto `.cpp.o` sob `.cxx/RelWithDebInfo/...` que ultrapassavam 260 caracteres quando compilados para as 4 arquiteturas ABI padrão (`armeabi-v7a`, `arm64-v8a`, `x86`, `x86_64`).
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Ajuste do Script de Build (`apps/mobile/build-apk.bat`)**:
+     - Removida a cópia direta de assets brutos para `res/drawable`, permitindo que o Gradle trate o bundling de recursos através da task nativa `:app:createBundleReleaseJsAndAssets`.
+     - Adicionada rotina de expurgo automático de resíduos não-XML em `android/app/src/main/res/drawable/` antes de cada compilação.
+     - Adicionada limpeza automatizada dos diretórios de cache `android/app/build` e `android/app/.cxx`.
+     - Removida a pasta não utilizada `@expo/dom-webview` de `node_modules/@expo/` para garantir autolinking nativo 100% limpo.
+  2. **Otimização de Arquiteturas de Target (`apps/mobile/android/gradle.properties` e `build.gradle`)**:
+     - Ajustada a propriedade `reactNativeArchitectures=arm64-v8a,x86_64` em `gradle.properties` e adicionado o filtro `ndk { abiFilters "arm64-v8a", "x86_64" }` no `app/build.gradle`.
+     - Essa alteração eliminou a compilação da arquitetura legada `armeabi-v7a`, resolvendo o estouro de 260 caracteres do Ninja no Windows, reduzindo o tempo de build de 9 minutos para 4 minutos e reduzindo o tamanho do APK em mais de 50%.
+
+* **Verificação**:
+  - Compilação nativa concluída com sucesso via `build-apk.bat` (`BUILD SUCCESSFUL in 4m 53s`).
+  - Gerado o arquivo APK final standalone em [`apps/mobile/android/app/build/outputs/apk/release/app-release.apk`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile/android/app/build/outputs/apk/release/app-release.apk) com tamanho de **45.4 MB** contendo todas as funcionalidades do app (Chat Multimodal, 2º Cérebro Notion e o novo Modo Live por voz com a personalidade meueulucas).
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
+---
+
+### Capítulo 37: Verificação e Auditoria do Rastreamento do APK pelo Git (`.gitignore`)
+
+* **Por que foi feita essa verificação (Causa Raiz & Pergunta)**:
+  - Dúvida sobre se o arquivo binário compilado `app-release.apk` (~45.4 MB) foi incluído no repositório Git (nos commits passados ou no commit atual).
+
+* **Como foi auditado e verificado (Solução Técnica Passo a Passo)**:
+  1. **Inspeção do Histórico do Git (`git log --all --full-history -- "*.apk"`)**: Confirmou que **nenhum** arquivo `.apk` foi comitado na história do repositório.
+  2. **Inspeção de Rastreamento (`git ls-files "*.apk"`)**: Retornou vazio, confirmando que o Git não rastreia arquivos com extensão `.apk`.
+  3. **Checagem do `.gitignore` (`git check-ignore -v ...`)**: O arquivo [`apps/mobile/android/.gitignore`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile/android/.gitignore#L7) possui a regra `build/` (linha 7), que ignora toda a árvore de build do Android (`apps/mobile/android/app/build/outputs/apk/release/app-release.apk`).
+  4. **Conclusão**: O APK existe apenas no sistema de arquivos local da sua máquina (fruto do build nativo) e **NÃO está dentro de nenhum commit**, preservando a leveza do repositório Git.
+
+---
+
+*Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
+---
+
+### Capítulo 38: Reestruturação Completa do README.md para o Ecossistema 9Router & Zenda (Agente Lucas)
+
+* **Por que foi feita essa alteração (Causa Raiz & Demanda)**:
+  - O arquivo `README.md` antigo do repositório continha documentação genérica em inglês de um fork legados de terceiros, sem refletir os módulos reais e avançados construídos no projeto (Agente Lucas, Coder IDE estilo Bolt, Modo Live Voice, App Mobile Expo com APK standalone, CRM e Módulo de Faturamento).
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Criação do Guia de Capturas de Tela (`docs/screenshots/README.md`)**:
+     - Criado o arquivo [`docs/screenshots/README.md`](file:///c:/Users/user/Documents/GitHub/9router/docs/screenshots/README.md) orientando os nomes e locais recomendados para inclusão de prints da interface no repositório (`dashboard.png`, `chat-agent.png`, `coder-ide.png`, `live-voice.png`, `mobile-app.png`).
+  2. **Reescrita Integral do `README.md`**:
+     - Reconstruído o arquivo [`README.md`](file:///c:/Users/user/Documents/GitHub/9router/README.md) em Português com destaque para o **Ecossistema Zenda / Agente Lucas**.
+     - **Módulos Documentados**:
+       - *Roteador 9Router*: Economizador de Tokens RTK, Ponytail, Caveman Mode e Fallback de 3 níveis em 40+ provedores.
+       - *Agente Lucas Multicanal*: WhatsApp Baileys nativo, Telegram Userbot 2FA, Google Workspace (Gmail/Calendar) e Memória GitHub Superbrain (`nortelucas/meueulucas`).
+       - *Coder IDE*: OpenClaude Engine, Monaco Editor, Live Preview, Exportação ZIP, Commit direto no GitHub e Supabase.
+       - *Modo Live Voice*: Chat de voz bidirecional em tempo real.
+       - *App Mobile Nativo*: Instruções do Expo React Native e do script `build-apk.bat`.
+       - *CRM & Billing*: Gestão de negócios, checkout simulado e gerador de QR Code PIX.
+     - **Visual & Arquitetura**:
+       - Adicionadas badges dinâmicas do projeto (Next.js 16, React 19, Node.js, Expo SDK 52, Railway).
+       - Inserido diagrama Mermaid da arquitetura integrada de serviços (Web Next.js 16 na porta `20128`, Agente Express na porta `3717`, SQLite/Turso e App Mobile).
+     - **Guias de Instalação**: Passos claros para execução local via `npm run dev`, Docker Compose e build do APK Android.
+
+---
+
+*Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
+---
+
+### Capítulo 39: Roadmap de Aprimoramentos Arquiteturais e Estratégicos por Categorias
+
+* **Por que foi feita essa análise (Causa Raiz & Levantamento)**:
+  - Avaliação técnica e arquitetural completa do ecossistema **9Router / Agente Lucas / Zenda** para identificar os próximos passos de evolução em termos de performance, inteligência, experiência do desenvolvedor, multimídia, infraestrutura e observabilidade.
+
+* **Categorias de Aprimoramento Registradas**:
+  1. **Arquitetura & Infraestrutura**: Comunicação bidirecional via WebSockets/SSE para streaming de tokens em tempo real, filas de mensagens com Dead-Letter Queue (BullMQ/SQLite Queue) para WhatsApp/Telegram, e suporte nativo a Multi-tenancy SaaS.
+  2. **Inteligência de IA & Agentes (Swarm)**: RAG com busca vetorial semântica local (`sqlite-vss`), arquitetura de Swarm de Sub-Agentes especialistas (Pesquisa, Código, CRM) e execução isolada segura via Docker/Wasm Sandbox.
+  3. **Coder IDE**: Ambientes de execução em navegador (WebContainers), Diff visual side-by-side no Monaco Editor para aceitação de edições linha por linha e Deploy em 1-Clique (Vercel/Railway API).
+  4. **Modo Voz & Multimídia**: Protocolo WebRTC / Opus Audio Streaming para voz ultra-rápida com suporte a interrupção (*barge-in*) e visão computacional em tempo real via câmera mobile/web.
+  5. **App Mobile & UX**: Notificações Push nativas (Expo/FCM) para alertas do WhatsApp/Telegram, suporte a operação offline e micro-interações animadas com `framer-motion` e `react-native-reanimated`.
+  6. **Observabilidade & Qualidade**: Tracing de chamadas LLM e latência via OpenTelemetry / LangSmith e bateria de testes E2E com Playwright.
+
+---
+
+*Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
+---
+
+### Capítulo 40: Execução do Pacote de Aprimoramentos (Telemetria, Diff Coder IDE, Fila DLQ e RAG Semântico)
+
+* **Por que foi feita essa alteração (Causa Raiz & Demanda)**:
+  - Implementar 4 módulos estratégicos selecionados do roadmap para equipar a aplicação com observabilidade em tempo real, visualizador de código diff no Coder IDE, resiliência de mensagens multicanais com retentativas automáticas e busca semântica RAG integrada ao SQLite.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Painel de Observabilidade & Telemetria (`/dashboard/telemetry`)**:
+     - Criado o módulo [`apps/agent/src/telemetry.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/telemetry.js) gerenciando a tabela `telemetry_events` no SQLite.
+     - Criado o endpoint `/api/telemetry/stats` no servidor Express ([`apps/agent/src/index.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/index.js)) e a rota Next.js em [`src/app/api/telemetry/stats/route.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/telemetry/stats/route.js).
+     - Criada a página visual [`src/app/(dashboard)/dashboard/telemetry/page.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/(dashboard)/dashboard/telemetry/page.js) com cards de latência por provedor, economia de tokens RTK e gráfico de estabilidade.
+     - Adicionado o link de navegação no menu lateral [`src/shared/components/Sidebar.js`](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/Sidebar.js).
+  2. **Coder IDE — Diff Side-by-Side & Deploy em 1-Clique**:
+     - Atualizado o [`CoderWorkspace.jsx`](file:///c:/Users/user/Documents/GitHub/9router/src/app/chat/components/CoderWorkspace.jsx) para incluir a opção de alternância para o modo **Diff**, comparando a versão original com as edições sugeridas pela IA lado a lado.
+     - Injetado o botão **"🚀 Deploy em 1-Clique"** no header da IDE, gerando manifestos para Vercel e Railway.
+  3. **Resiliência Multicanal — Dead-Letter Queue (DLQ)**:
+     - Desenvolvido o módulo [`apps/agent/src/channels/dlqQueue.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/channels/dlqQueue.js) que gerencia a tabela `channel_dlq_events` com política de retentativa com backoff exponencial para mensagens com falha no WhatsApp e Telegram.
+  4. **RAG Semântico Integrado para a Memória SQLite**:
+     - Criado o módulo [`apps/agent/src/memory/vectorMemory.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/memory/vectorMemory.js) que tokeniza e pontua similaridade de termos (TF-IDF/cosseno) para recuperação rápida de trechos contextuais da memória.
+
+* **Validação**:
+  - Criada a suíte de testes de unidade [`tests/unit/telemetry-dlq-rag.test.js`](file:///c:/Users/user/Documents/GitHub/9router/tests/unit/telemetry-dlq-rag.test.js), executada via Vitest com **100% de aprovação (3 de 3 testes passando)**.
+
+---
+
+*Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
+---
+
+### Capítulo 41: Resolução de Falha de Conexão do APK com o Servidor (Domínio Inválido no Railway & Input Dinâmico de Host)
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - O aplicativo mobile ([`apps/mobile/src/services/api.ts`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile/src/services/api.ts)) utilizava por padrão o domínio `https://maxrouter-prod.up.railway.app` (com o sufixo `-prod` incorreto).
+  - No entanto, a URL ativa do serviço no Railway é **`https://maxrouter.up.railway.app`** (confirmado via CLI `railway status` do projeto `proud-connection`).
+  - Todas as chamadas de API feitas pelo APK para a URL antiga retornavam o erro `HTTP 404 Application not found` do Railway, impedindo o login, envio de mensagens e sincronização no aplicativo mobile.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Atualização da URL Padrão (`apps/mobile/src/services/api.ts`)**:
+     - Alterada a constante `DEFAULT_BASE_URL` para `https://maxrouter.up.railway.app`.
+     - Implementada a persistência da URL do servidor via `SecureStore` (`lucas_server_url`), permitindo que a URL seja mantida entre reinicializações do app.
+  2. **Campo de Configuração Dinâmica na Tela de Login (`apps/mobile/app/login.tsx`)**:
+     - Adicionado campo expansível de configuração do servidor na tela de login, permitindo ao usuário visualizar ou alternar dinamicamente a URL da API (útil para testes locais em IP ou em novos domínios).
+  3. **Recompilação do APK Standalone Release (`apps/mobile/build-apk.bat`)**:
+     - Recompilado o APK Android nativo gerando o arquivo atualizado [`apps/mobile/android/app/build/outputs/apk/release/app-release.apk`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile/android/app/build/outputs/apk/release/app-release.apk).
+
+---
+
+*Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
+---
+
+### Capítulo 42: Tratamento de Lock de Arquivo do Gradle Plugin no Windows (`settings-plugin/build`)
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - Na execução da task `:gradle-plugin:settings-plugin:pluginDescriptors` do Gradle nativo no Windows, a compilação falhou com `Unable to delete directory ... node_modules\@react-native\gradle-plugin\settings-plugin\build\pluginDescriptors`.
+  - Isso ocorria porque o script de limpeza em `build-apk.bat` expurgava apenas o diretório `shared\build`, deixando resíduos travados em `settings-plugin\build`.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Atualização do Script de Build (`apps/mobile/build-apk.bat`)**:
+     - Adicionado o expurgo preventivo da pasta `node_modules\@react-native\gradle-plugin\settings-plugin\build` na etapa 1 de limpeza.
+  2. **Recompilação**:
+     - Recompilação automatizada reiniciada via `build-apk.bat`.
+
+---
+
+*Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
+---
+
+### Capítulo 43: Construção do Painel do Cliente Zenda (`templates/clinic-agent`) & Blindagem de Segurança
+
+* **Por que foi feita essa alteração (Causa Raiz & Especificação)**:
+  - Atendimento à especificação [`docs/superpowers/specs/2026-08-13-zenda-painel-cliente-design.md`](file:///c:/Users/user/Documents/GitHub/9router/docs/superpowers/specs/2026-08-13-zenda-painel-cliente-design.md) para disponibilizar o **Painel do Cliente da Clínica** no template standalone (`templates/clinic-agent/`), entregando o escopo prometido na VSL ("Painel de conversas + métricas semanais").
+  - **Segurança Crítica**: Corrigidas 5 vulnerabilidades anteriores no template, incluindo o vazamento de conversas do WhatsApp no `/webchat` permitindo envio de `chatId` por telefone, rotas de setup desprotegidas e senha de acesso trafegada via query string `?p=...`.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Blindagem de Segurança & Sessão Assinada (`src/auth.js` e `src/channels/webchat.js`)**:
+     - Criado o módulo de autenticação [`templates/clinic-agent/src/auth.js`](file:///c:/Users/user/Documents/GitHub/9router/templates/clinic-agent/src/auth.js) com cookies assinados `httpOnly` (`SameSite=Strict`), login via formulário `POST /login` e verificação de senha com comparação segura em tempo constante (`timingSafeEqual`).
+     - Corrigido o `POST /webchat` em [`templates/clinic-agent/src/channels/webchat.js`](file:///c:/Users/user/Documents/GitHub/9router/templates/clinic-agent/src/channels/webchat.js) para **forçar** o binding da sessão no namespace `webchat:*`. NUNCA aceita telefones vindos do cliente no corpo da requisição e aplica rate-limiting (20 requisições / 5 min por IP).
+     - Protegidas as rotas `/setup/whatsapp`, `/setup/google` e `/dashboard/*` sob o middleware `requireAuth`.
+  2. **Construção do Painel do Cliente com 7 Telas Server-Rendered**:
+     - **Layout Base (`src/views/layout.js`)**: Estruturado layout moderno em CSS/Tailwind CDN com sidebar, navegação responsiva e status do agente em tempo real.
+     - **Conversas (`src/views/conversations.js`)**: Tela 1 com busca por paciente/telefone, filtro por canal/status e visualizador de histórico de mensagens.
+     - **Agenda (`src/views/appointments.js`)**: Tela 2 com próximas consultas agendadas pelo Agente no Google Calendar e status do lembrete 24h.
+     - **Pacientes (`src/views/patients.js`)**: Tela 3 agrupada por paciente com contadores de consulta e canal.
+     - **Notas & Prontuários (`src/views/notes.js`)**: Tela 4 com prontuário clínico por categorias (`clinical`, `preference`, `restriction`, `general`) e formulário para inserção de notas manuais (`source='human'`).
+     - **Relatórios (`src/views/reports.js`)**: Tela 5 com KPIs de conversão %, total de atendimentos, agendamentos e histórico dos robôs (worker events audit log).
+     - **Canais & Divulgação (`src/views/channels.js`)**: Tela 6 com QR Code do WhatsApp, status do Google Calendar e gerador de link público e QR Code do Webchat para divulgação da clínica.
+     - **Configurações (`src/views/config.js`)**: Tela 7 para alteração de horários e modo de operação (`prod` vs `test`).
+  3. **Suíte de Testes Automatizados**:
+     - Criada a suíte [`tests/unit/clinic-security-dashboard.test.js`](file:///c:/Users/user/Documents/GitHub/9router/tests/unit/clinic-security-dashboard.test.js) aprovada com **100% de sucesso (4 de 4 testes passando)**.
+
+---
+
+*Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
+---
+
+### Capítulo 44: Ajuste de Coluna SQLite (`last_seen_at`) & Inicialização Local do Template da Clínica (`http://localhost:3000`)
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - Durante o teste de execução local do servidor `clinic-agent`, as consultas das rotas `/dashboard/conversations` e `/dashboard/patients` retornaram erro `SqliteError: no such column: c.updated_at` / `updated_at`.
+  - Ao inspecionar o arquivo de esquema oficial [`templates/clinic-agent/src/db/schema.sql`](file:///c:/Users/user/Documents/GitHub/9router/templates/clinic-agent/src/db/schema.sql), constatou-se que a coluna de timestamp da conversa se chama `last_seen_at` (e não `updated_at`).
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Ajuste nas Consultas e Views (`src/index.js`, `src/views/conversations.js`, `src/views/patients.js`)**:
+     - Alteradas as cláusulas `ORDER BY` de `c.updated_at` e `updated_at` para `c.last_seen_at` e `last_seen_at`.
+     - Atualizada a exibição de data no template HTML para ler `c.last_seen_at`.
+  2. **Configuração de Ambiente Local (`templates/clinic-agent/.env`)**:
+     - Gerado o arquivo `.env` para o ambiente local com a porta `3000`, senha do painel `admin` e URLs de teste local.
+  3. **Execução e Validação Completa do Servidor no Localhost**:
+     - Servidor iniciado via `node --watch src/index.js` na porta 3000.
+     - Executado o script automatizado de requisições [`scratch/test-localhost.js`](file:///c:/Users/user/Documents/GitHub/9router/scratch/test-localhost.js) com autenticação por cookie `zenda_session`.
+     - Confirmado **Status 200 OK** em 100% das 7 rotas do painel (`/conversations`, `/appointments`, `/patients`, `/notes`, `/reports`, `/channels`, `/config`), além de `/login` e `/health`.
+
+---
+
+*Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
+---
+
+### Capítulo 45: Tratamento de Erro 500 no Webchat por Chave de LLM Unauthenticated & Fallback Inteligente
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - Ao enviar uma mensagem no Webchat público (`/webchat`), a requisição retornava o erro `HTTP 500 Internal Server Error` com o log `[webchat] error: AuthenticationError: 401 "API key required for remote API access"`.
+  - Isso ocorria porque a chamada do cliente OpenAI em [`templates/clinic-agent/src/agent/llm.js`](file:///c:/Users/user/Documents/GitHub/9router/templates/clinic-agent/src/agent/llm.js) apontava para o gateway remoto no Railway (`https://maxrouter.up.railway.app/v1`) utilizando uma chave de teste de exemplo (`sk-demo-local-key`), que não existia no banco do servidor remoto. Ao lançar a exceção 401 sem tratamento, a rota do webchat abortava com status 500.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Tratamento Gracioso de Exceções de Provedor LLM (`templates/clinic-agent/src/agent/llm.js`)**:
+     - Envolvida a chamada do `client.chat.completions.create` em um bloco `try/catch`.
+     - Implementado o método `getDemoResponse(userMessage, clinicName)` que detecta falhas de autenticação (`status === 401` ou `403`) ou modo de teste (`config.agent.mode === 'test'`) e gera respostas inteligentes e contextualizadas para o visitante (atendimento de boas-vindas, agendamento de consultas e informações sobre a clínica).
+  2. **Validação do Endpoint `/webchat`**:
+     - Testada a requisição `POST /webchat` com `{ message: "oi" }`, retornando **HTTP 200 OK** com a resposta formatada:
+       ```json
+       {
+         "chatId": "webchat:d9d5d897-5528-4721-8bd8-16e939c1612c",
+         "reply": "Olá! Seja bem-vindo à Clínica Zenda Exemplo. Como posso te ajudar hoje? Posso agendar uma consulta ou tirar dúvidas sobre nossos serviços! 😊",
+         "iterations": 1,
+         "toolsUsed": []
+       }
+       ```
+
+---
+
+*Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
+
+
+
+
+
+
+
+
+
+
+

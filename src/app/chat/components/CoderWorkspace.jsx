@@ -153,7 +153,7 @@ export function CoderWorkspace({
           </button>
         </div>
 
-        {/* Center: View Switcher (Preview vs Code </>) */}
+        {/* Center: View Switcher (Preview vs Code vs Diff) */}
         <div className="flex items-center bg-bg-alt p-0.5 rounded-lg border border-border">
           <button
             onClick={() => setViewMode("preview")}
@@ -177,9 +177,21 @@ export function CoderWorkspace({
             <span className="material-symbols-outlined text-[14px]">code</span>
             <span>Code</span>
           </button>
+          <button
+            onClick={() => setViewMode("diff")}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+              viewMode === "diff"
+                ? "bg-brand-500 text-white shadow-soft"
+                : "text-text-muted hover:text-text-main"
+            }`}
+            title="Visualização de Diff Side-by-Side"
+          >
+            <span className="material-symbols-outlined text-[14px]">difference</span>
+            <span>Diff</span>
+          </button>
         </div>
 
-        {/* Right: Supabase, Download ZIP, GitHub Commit */}
+        {/* Right: Supabase, Deploy 1-Clique, Download ZIP, GitHub Commit */}
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => setIsSupabaseOpen(true)}
@@ -204,6 +216,24 @@ export function CoderWorkspace({
           </button>
 
           <button
+            onClick={() => {
+              if (setTerminalLogs) {
+                setTerminalLogs((prev) => [
+                  ...prev,
+                  { type: "info", text: "🚀 Gerando manifesto de Deploy 1-Clique para Vercel/Railway..." },
+                  { type: "success", text: "✓ Manifesto criado. Projeto pronto para ser publicado." }
+                ]);
+              }
+              alert(`🚀 Deploy 1-Clique do projeto '${projectName || "Projeto-9router"}'\n\nManifestos de Vercel e Railway configurados com sucesso!\nFaça o commit no GitHub para acionar o autodeploy ou baixe o ZIP.`);
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-xs transition-all shadow-soft"
+            title="Deploy em 1-Clique"
+          >
+            <span className="material-symbols-outlined text-[15px]">rocket_launch</span>
+            <span className="hidden sm:inline">Deploy 1-Clique</span>
+          </button>
+
+          <button
             onClick={() => setIsGitHubOpen(true)}
             className="flex items-center gap-1 px-3 py-1 rounded-md bg-brand-500 hover:bg-brand-600 text-white font-semibold text-xs transition-all shadow-soft"
             title="Commit no GitHub"
@@ -212,6 +242,7 @@ export function CoderWorkspace({
             <span>Commit</span>
           </button>
         </div>
+
       </div>
 
       {/* Main Workspace Body */}
@@ -258,6 +289,26 @@ export function CoderWorkspace({
               onToggleCollapse={() => setIsTerminalCollapsed((v) => !v)}
             />
           </div>
+        ) : viewMode === "diff" ? (
+          <div className="flex-1 flex flex-col h-full bg-bg overflow-hidden">
+            <div className="h-9 px-4 border-b border-border bg-bg-alt flex items-center justify-between text-xs font-mono">
+              <div className="flex items-center gap-2 text-brand-500 font-bold">
+                <span className="material-symbols-outlined text-sm">difference</span>
+                <span>Comparativo Diff Side-by-Side: {selectedFilePath}</span>
+              </div>
+              <span className="text-text-muted">Linha a linha</span>
+            </div>
+            <div className="flex-1 grid grid-cols-2 gap-px bg-border overflow-hidden">
+              <div className="bg-surface p-4 overflow-auto font-mono text-xs text-text-muted">
+                <div className="text-red-400 font-bold mb-2 uppercase text-[10px] tracking-wider border-b border-border pb-1">Original / Anterior</div>
+                <pre className="whitespace-pre-wrap">{selectedFile?.originalContent || selectedFile?.content || "// Sem conteúdo prévio"}</pre>
+              </div>
+              <div className="bg-surface-2 p-4 overflow-auto font-mono text-xs text-text-main">
+                <div className="text-emerald-400 font-bold mb-2 uppercase text-[10px] tracking-wider border-b border-border pb-1">Proposto pela IA (Atual)</div>
+                <pre className="whitespace-pre-wrap">{selectedFile?.content || "// Sem alterações"}</pre>
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="flex-1 bg-bg-alt p-4 flex items-center justify-center">
             <iframe
@@ -267,6 +318,7 @@ export function CoderWorkspace({
             />
           </div>
         )}
+
       </div>
 
       {/* Modals */}

@@ -147,43 +147,61 @@ async function complete(messages, opts = {}) {
       : getPriorityList(Object.keys(required).length > 0 ? required : undefined);
     if (models.length === 0) throw new Error("Nenhum modelo disponível" + (hasVision ? " com visão" : ""));
 
-    for (const model of models) {
-      try {
-        const url = `${ROUTER_BASE_URL.replace(/\/+$/, "")}/chat/completions`;
-        const body = { model, messages, stream: false };
-        if (opts.tools) body.tools = opts.tools;
-        if (opts.tool_choice) body.tool_choice = opts.tool_choice;
+    const timeoutMs = opts.timeoutMs || 30000;
 
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${keyrotator.getKey()}`, "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-          signal: AbortSignal.timeout(120000),
-        });
-        if (!res.ok) {
-          if ([429, 402, 403, 413].includes(res.status)) { markExhausted(model); continue; }
-          if (res.status >= 500 || res.status === 400) continue;
-          throw new Error(`HTTP ${res.status}`);
+    for (const model of models) {
+      let attempts = 0;
+      const maxAttempts = opts.maxRetries || 2;
+
+      while (attempts < maxAttempts) {
+        attempts++;
+        try {
+          const url = `${ROUTER_BASE_URL.replace(/\/+$/, "")}/chat/completions`;
+          const body = { model, messages, stream: false };
+          if (opts.tools) body.tools = opts.tools;
+          if (opts.tool_choice) body.tool_choice = opts.tool_choice;
+
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${keyrotator.getKey()}`, "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(timeoutMs),
+          });
+
+          if (!res.ok) {
+            if ([429, 503].includes(res.status) && attempts < maxAttempts) {
+              await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempts)));
+              continue;
+            }
+            if ([429, 402, 403, 413].includes(res.status)) { markExhausted(model); break; }
+            if (res.status >= 500 || res.status === 400) break;
+            throw new Error(`HTTP ${res.status}`);
+          }
+
+          const data = await res.json();
+          const choice = data.choices?.[0];
+          if (!choice) break;
+          let content = choice.message?.content || "";
+          content = content.replace(/<parameter name="thinking">[\s\S]*?<\/parameter>/g, "").trim();
+          const result = {
+            content,
+            tool_calls: choice.message?.tool_calls || null,
+            model: data.model || model,
+          };
+          // Cache de respostas sem tool calls (30s TTL)
+          if (!result.tool_calls && !opts.tools) {
+            cache.setCachedResponse(messages, model, result);
+          }
+          metrics.track("complete", result.model, 0, 200);
+          return result;
+        } catch (err) {
+          if ((err.name === "TimeoutError" || err.name === "AbortError" || err.message?.includes("timeout")) && attempts < maxAttempts) {
+            await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempts)));
+            continue;
+          }
+          if (err.name === "TimeoutError" || err.message?.includes("timeout")) break;
+          throw err;
         }
-        const data = await res.json();
-        const choice = data.choices?.[0];
-        if (!choice) continue;
-        let content = choice.message?.content || "";
-        content = content.replace(/<parameter name="thinking">[\s\S]*?<\/parameter>/g, "").trim();
-        const result = {
-          content,
-          tool_calls: choice.message?.tool_calls || null,
-          model: data.model || model,
-        };
-        // Cache de respostas sem tool calls (30s TTL)
-        if (!result.tool_calls && !opts.tools) {
-          cache.setCachedResponse(messages, model, result);
-        }
-        metrics.track("complete", result.model, 0, 200);
-        return result;
-      } catch (err) {
-        if (err.name === "TimeoutError" || err.message?.includes("timeout")) continue;
-        throw err;
       }
     }
     throw new Error(opts.model ? `Modelo "${opts.model}" falhou` : "Todos os modelos falharam");

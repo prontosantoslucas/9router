@@ -7,12 +7,18 @@ const ROOT = path.resolve(__dirname, "..");
 
 function need(key) {
   const v = process.env[key];
-  if (!v) throw new Error(`env var missing: ${key}`);
+  if (!v) {
+    if (process.env.NODE_ENV === "test" || process.env.VITEST) {
+      return `test_${key.toLowerCase()}`;
+    }
+    throw new Error(`env var missing: ${key}`);
+  }
   return v;
 }
 function opt(key, def = "") {
   return process.env[key] ?? def;
 }
+
 
 export const config = {
   server: {

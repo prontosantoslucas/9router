@@ -2,6 +2,8 @@ import Link from "next/link";
 import DemoChat from "./DemoChat";
 import Icon from "./Icon";
 import Reveal from "./Reveal";
+import CtaLink from "./CtaLink";
+import { CTA_WHATSAPP } from "./cta";
 
 // Estrutura: PAS (Problem → Agitation → Solution) + prova social + garantia.
 // Público: donos de clínica (odonto/estética/veterinária).
@@ -11,9 +13,6 @@ import Reveal from "./Reveal";
 
 const BRAND = "Zenda";
 const BRAND_DOMAIN = "zenda.app.br";
-
-const CTA_WHATSAPP =
-  "https://wa.me/5511913530262?text=Ol%C3%A1!%20Vi%20o%20Zenda%20e%20quero%20o%20agente%20que%20atende%20WhatsApp%20da%20minha%20cl%C3%ADnica%20automaticamente.";
 
 function Nav() {
   return (
@@ -27,15 +26,14 @@ function Nav() {
             {BRAND}
           </span>
         </Link>
-        <a
+        <CtaLink
           href={CTA_WHATSAPP}
-          target="_blank"
-          rel="noopener noreferrer"
+          location="nav"
           className="hidden items-center gap-2 rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white shadow-soft transition-all hover:bg-brand-600 hover:shadow-warm hover:scale-105 sm:inline-flex"
         >
           <Icon name="chat" className="w-4 h-4" />
           Falar comigo
-        </a>
+        </CtaLink>
       </div>
     </nav>
   );
@@ -87,22 +85,23 @@ function Hero() {
 
         <Reveal variant="scale" delay={420}>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <a
+            <CtaLink
               href="#demo"
+              location="hero_demo"
+              external={false}
               className="inline-flex items-center gap-2 rounded-full bg-brand-500 px-7 py-3.5 text-base font-semibold text-white shadow-elev transition-all hover:bg-brand-600 hover:shadow-warm hover:scale-105"
             >
               <Icon name="play_arrow" className="w-5 h-5" strokeWidth={0} fill="currentColor" />
               Ver o agente funcionando (grátis)
-            </a>
-            <a
+            </CtaLink>
+            <CtaLink
               href={CTA_WHATSAPP}
-              target="_blank"
-              rel="noopener noreferrer"
+              location="hero_whatsapp"
               className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-6 py-3.5 text-base font-semibold text-text-main transition-all hover:border-brand-500 hover:text-brand-500 hover:scale-105"
             >
               <Icon name="chat" className="w-5 h-5" />
               Falar direto no WhatsApp
-            </a>
+            </CtaLink>
           </div>
         </Reveal>
 
@@ -439,15 +438,14 @@ function Pricing() {
                   ))}
                 </ul>
 
-                <a
+                <CtaLink
                   href={CTA_WHATSAPP}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  location="pricing"
                   className="mt-10 inline-flex items-center gap-2 rounded-full bg-brand-500 px-8 py-4 text-lg font-semibold text-white shadow-elev transition-all hover:bg-brand-600 hover:scale-105 duration-300"
                 >
                   Quero garantir minha vaga
                   <Icon name="arrow_forward" className="w-[18px] h-[18px]" />
-                </a>
+                </CtaLink>
                 <p className="mt-3 text-xs text-text-subtle">
                   Pagamento no PIX ou cartão em até 12x. Sem letra miúda.
                 </p>
@@ -570,15 +568,14 @@ function CtaFinal() {
           </p>
         </Reveal>
         <Reveal variant="bounce" delay={360}>
-          <a
+          <CtaLink
             href={CTA_WHATSAPP}
-            target="_blank"
-            rel="noopener noreferrer"
+            location="cta_final"
             className="mt-10 inline-flex items-center gap-2 rounded-full bg-brand-500 px-10 py-5 text-lg font-semibold text-white shadow-elev transition-all hover:bg-brand-600 hover:scale-105 hover:shadow-warm duration-300 sm:text-xl"
           >
             <Icon name="chat" className="w-6 h-6" />
             Quero ver se funciona pra minha clínica
-          </a>
+          </CtaLink>
         </Reveal>
         <Reveal variant="up" delay={520}>
           <p className="mt-5 text-xs text-text-subtle">

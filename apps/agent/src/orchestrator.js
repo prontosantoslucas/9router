@@ -4,17 +4,22 @@ const { TOOL_SCHEMAS, runTool } = require("./tools");
 const memory = require("./memory");
 const db = require("./db");
 const imagine = require("./imagine");
+const semanticCache = require("./semanticCache");
 
 const MAX_TOOL_LOOPS = 6;
+const MAX_HISTORY_MESSAGES = 50;
 
 const histories = new Map();
 const muted = new Set();
 
-// Carregar históricos do SQLite
+// Carregar históricos do SQLite (com truncamento preventivo de memória)
 const rows = db.prepare("SELECT chat_id, messages FROM histories").all();
 for (const row of rows) {
   try {
-    const msgs = JSON.parse(row.messages);
+    let msgs = JSON.parse(row.messages);
+    if (Array.isArray(msgs) && msgs.length > MAX_HISTORY_MESSAGES) {
+      msgs = msgs.slice(-MAX_HISTORY_MESSAGES);
+    }
     histories.set(row.chat_id, { msgs });
   } catch {}
 }
@@ -335,7 +340,38 @@ async function processMessage(chatId, text, userName, ctx = {}) {
   // Check se é o primeiro turno da sessão para resgatar o handoff
   const isFirstTurn = session.msgs.length <= 1;
 
+  // Verificação de Cache Semântico para consultas recorrentes
+  if (!ctx.replyTo && (!Array.isArray(ctx.images) || ctx.images.length === 0) && !text.startsWith("/")) {
+    const cached = semanticCache.get(text, 0.90);
+    if (cached) {
+      const latencyMs = Date.now() - startTime;
+      session.msgs.push({ role: "user", content: text });
+      session.msgs.push({ role: "assistant", content: cached.response });
+      if (session.msgs.length > MAX_HISTORY_MESSAGES) {
+        session.msgs = session.msgs.slice(-MAX_HISTORY_MESSAGES);
+      }
+      persistHistories();
+      return {
+        content: cached.response,
+        formatted: `⚡ *Cache Semântico*:\n${cached.response}`,
+        model: `${cached.model} (cache)`,
+        agent: activePrimaryId,
+        telemetry: {
+          latencyMs,
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          estimatedCost: 0,
+          cached: true,
+        },
+      };
+    }
+  }
+
   session.msgs.push({ role: "user", content: text });
+  if (session.msgs.length > MAX_HISTORY_MESSAGES) {
+    session.msgs = session.msgs.slice(-MAX_HISTORY_MESSAGES);
+  }
 
   // 1. Carregar Personalidade do GitHub (ou fallback local)
   const { getActivePersonality } = require("./personality/personalityPoller");
@@ -356,7 +392,12 @@ async function processMessage(chatId, text, userName, ctx = {}) {
     }
   } catch { /* modulo pode não ter subido ainda */ }
 
-  const systemPrompt = `${agentSystem(activePrimary, userName)}\n\n## Diretrizes de Personalidade:\n${githubPersonality}${memoryContext}${psychContext}`;
+  let livePrompt = "";
+  if (ctx.liveMode) {
+    livePrompt = `\n\n## MODO LIVE (LIGAÇÃO DE VOZ CONTINUADA EM TEMPO REAL):\nVocê está em uma LIGAÇÃO DE VOZ ao vivo com o Lucas. Suas respostas serão convertidas diretamente em síntese de áudio (fala). Responda com fluidez natural, tom conversacional e direto, sem emojis, sem tabelas, sem blocos de código ou formatações pesadas de markdown. Seja sucinto (1 a 3 frases por turno), objetivo e mantenha a identidade autêntica do meueulucas (Superbrain-Lucas).`;
+  }
+
+  const systemPrompt = `${agentSystem(activePrimary, userName)}\n\n## Diretrizes de Personalidade:\n${githubPersonality}${memoryContext}${psychContext}${livePrompt}`;
 
   const msgs = [
     { role: "system", content: systemPrompt },
@@ -497,6 +538,10 @@ Como psicanalista, faça uma análise breve (2-3 frases) destacando padrões de 
   const promptTokens = Math.max(1, Math.round((text || "").length / 4));
   const completionTokens = Math.max(1, Math.round((content || "").length / 4));
   const estimatedCost = Number(((promptTokens * 0.00000015) + (completionTokens * 0.0000006)).toFixed(6));
+
+  if (!ctx.replyTo && (!Array.isArray(ctx.images) || ctx.images.length === 0) && !text.startsWith("/") && primaryAnswer) {
+    semanticCache.set(text, primaryAnswer, activePrimaryId);
+  }
 
   persistHistories();
   return {
