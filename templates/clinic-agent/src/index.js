@@ -6,6 +6,7 @@ import { db, getConversation, getMessages, upcomingAppointments } from "./db/db.
 import { handleWebchat } from "./channels/webchat.js";
 import { handleEvolutionWebhook, getPairingQr } from "./channels/evolution.js";
 import { getAuthUrl, exchangeCodeForTokens } from "./integrations/googleCalendar.js";
+import { startWorkers } from "./workers/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -117,6 +118,7 @@ app.listen(config.server.port, "0.0.0.0", () => {
   console.log(`[clinic-agent] ${config.clinic.name} — modo ${config.agent.mode}`);
   console.log(`[clinic-agent] http://0.0.0.0:${config.server.port}`);
   console.log(`[clinic-agent] setup: ${config.server.publicUrl}/setup/whatsapp | /setup/google`);
+  startWorkers();
 });
 
 // ============================================================

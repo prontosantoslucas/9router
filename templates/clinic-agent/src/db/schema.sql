@@ -5,19 +5,22 @@
 -- Conversas por contato (chatId = telefone/whatsapp id)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS conversations (
-  chat_id       TEXT PRIMARY KEY,          -- phone: 5511987654321 ou webchat:uuid
-  channel       TEXT NOT NULL,             -- 'whatsapp' | 'webchat'
-  patient_name  TEXT,                      -- nome coletado durante conversa
-  patient_phone TEXT,                      -- número secundário se diferente
-  patient_email TEXT,
-  status        TEXT DEFAULT 'active',     -- active | pending_human | closed
-  metadata      TEXT DEFAULT '{}',         -- JSON: preferências, tags, notas curtas
-  first_seen_at TEXT DEFAULT (datetime('now')),
-  last_seen_at  TEXT DEFAULT (datetime('now'))
+  chat_id           TEXT PRIMARY KEY,      -- phone: 5511987654321 ou webchat:uuid
+  channel           TEXT NOT NULL,         -- 'whatsapp' | 'webchat'
+  patient_name      TEXT,                  -- nome coletado durante conversa
+  patient_phone     TEXT,                  -- número secundário se diferente
+  patient_email     TEXT,
+  status            TEXT DEFAULT 'active', -- active | pending_human | closed | opted_out
+  reengaged_stage   TEXT,                  -- v4: null | '15d' | '30d' | '60d' (último tier enviado)
+  reengaged_at      TEXT,                  -- v4: quando enviou a última reativação
+  metadata          TEXT DEFAULT '{}',     -- JSON: preferências, tags, notas curtas
+  first_seen_at     TEXT DEFAULT (datetime('now')),
+  last_seen_at      TEXT DEFAULT (datetime('now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_conversations_status ON conversations(status);
 CREATE INDEX IF NOT EXISTS idx_conversations_last_seen ON conversations(last_seen_at);
+CREATE INDEX IF NOT EXISTS idx_conversations_reengage ON conversations(status, last_seen_at, reengaged_stage);
 
 -- ============================================================
 -- Histórico de mensagens
@@ -66,13 +69,31 @@ CREATE TABLE IF NOT EXISTS appointments (
   scheduled_at         TEXT NOT NULL,              -- ISO datetime
   duration_minutes     INTEGER DEFAULT 30,
   status               TEXT DEFAULT 'confirmed',   -- confirmed | canceled | completed | no_show
-  reminder_sent_at     TEXT,                       -- workers setam quando manda lembrete
+  reminder_sent_at     TEXT,                       -- v3: worker seta quando manda lembrete 24h antes
+  crm_synced_at        TEXT,                       -- v2: worker/tool seta quando sincroniza com CRM
+  crm_object_id        TEXT,                       -- v2: id do lead/contact no CRM (RD Station / HubSpot)
+  reengaged_at         TEXT,                       -- v4: worker seta quando manda mensagem de retomada
   notes                TEXT,
   created_at           TEXT DEFAULT (datetime('now')),
   FOREIGN KEY (chat_id) REFERENCES conversations(chat_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_appointments_scheduled ON appointments(scheduled_at, status);
+CREATE INDEX IF NOT EXISTS idx_appointments_reminder ON appointments(scheduled_at, reminder_sent_at, status);
+
+-- ============================================================
+-- Log de eventos dos workers (audit trail de reminders/reengagement/crm sync)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS worker_events (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind          TEXT NOT NULL,                    -- 'reminder' | 'reengagement' | 'crm_sync'
+  chat_id       TEXT,
+  appointment_id INTEGER,
+  status        TEXT NOT NULL,                    -- 'sent' | 'skipped' | 'failed'
+  payload       TEXT,                             -- JSON: detalhes/erro
+  created_at    TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_worker_events_kind_time ON worker_events(kind, created_at);
 
 -- ============================================================
 -- OAuth tokens (Google Calendar)

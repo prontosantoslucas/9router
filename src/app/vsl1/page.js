@@ -13,7 +13,7 @@ const BRAND = "Zenda";
 const BRAND_DOMAIN = "zenda.app.br";
 
 const CTA_WHATSAPP =
-  "https://wa.me/5511999999999?text=Ol%C3%A1!%20Vi%20o%20Zenda%20e%20quero%20o%20agente%20que%20atende%20WhatsApp%20da%20minha%20cl%C3%ADnica%20automaticamente.";
+  "https://wa.me/5511913530262?text=Ol%C3%A1!%20Vi%20o%20Zenda%20e%20quero%20o%20agente%20que%20atende%20WhatsApp%20da%20minha%20cl%C3%ADnica%20automaticamente.";
 
 function Nav() {
   return (

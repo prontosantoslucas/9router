@@ -98,12 +98,28 @@ clinic-agent/
 └── .env.example
 ```
 
+## Workers de background (v3 + v4)
+
+Rodam automaticamente no boot (`WORKERS_ENABLED=true`):
+
+- **v3 — Lembrete 24h antes** (`src/workers/reminder.js`): checa a cada 15min
+  consultas confirmadas dentro da janela de `REMINDER_HOURS_BEFORE` horas que
+  ainda não receberam lembrete, e manda WhatsApp pedindo confirmação. É
+  transacional (paciente tem consulta marcada), então envia em qualquer modo.
+
+- **v4 — Reativação de inativos / LTV recovery** (`src/workers/reengagement.js`):
+  checa a cada 6h pacientes silenciosos e manda mensagem escalando o apelo por
+  tier. `REENGAGE_TIERS=15,30,60` → 15 dias (check-in leve), 30 dias (oferta
+  suave), 60+ dias (último toque com condição especial). Cada tier envia 1x.
+  Quem volta a falar reseta e pode ser reativado num ciclo futuro. Quem tem
+  consulta futura marcada não é reativado. **Só dispara em `AGENT_MODE=prod`**
+  (LGPD — comunicação ativa). Paciente que responde SAIR/PARAR vira
+  `opted_out` e não recebe mais nada.
+
 ## Roadmap
 
-**v1 (esta pasta):** Odonto/Estética/Vet com fluxo consulta agendada
-**v2:** Integração CRM (RD Station, HubSpot free)
-**v3:** Follow-up automático 24h antes da consulta
-**v4:** Retomada de pacientes que sumiram (LTV recovery)
+**v2:** Integração CRM (RD Station, HubSpot free) — colunas prontas no schema
+(`crm_synced_at`, `crm_object_id`), falta o conector.
 
 ## Preço sugerido
 

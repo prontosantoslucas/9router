@@ -83,6 +83,48 @@ export function upcomingAppointments({ withinHours = 48 } = {}) {
   `).all(withinHours);
 }
 
+// v3: consultas que precisam de lembrete — dentro da janela [X-1h, X+1h] antes
+// da consulta e que ainda não receberam lembrete.
+export function appointmentsNeedingReminder({ hoursBefore = 24 } = {}) {
+  return db.prepare(`
+    SELECT * FROM appointments
+    WHERE status = 'confirmed'
+      AND reminder_sent_at IS NULL
+      AND scheduled_at BETWEEN datetime('now', '+' || (? - 1) || ' hours')
+                           AND datetime('now', '+' || (? + 1) || ' hours')
+    ORDER BY scheduled_at ASC
+  `).all(hoursBefore, hoursBefore);
+}
+
+export function markReminderSent(appointmentId) {
+  db.prepare(`UPDATE appointments SET reminder_sent_at = datetime('now') WHERE id = ?`).run(appointmentId);
+}
+
+// v4: conversas elegíveis pra reativação. Retorna, pra cada conversa ativa,
+// há quantos dias está silenciosa. O worker decide o tier (15/30/60+).
+export function conversationsForReengagement() {
+  return db.prepare(`
+    SELECT chat_id, channel, patient_name, patient_phone, status, reengaged_stage,
+           CAST(julianday('now') - julianday(last_seen_at) AS INTEGER) AS days_silent
+    FROM conversations
+    WHERE status = 'active'
+      AND channel = 'whatsapp'
+    ORDER BY last_seen_at ASC
+  `).all();
+}
+
+export function markReengaged(chatId, stage) {
+  db.prepare(`UPDATE conversations SET reengaged_stage = ?, reengaged_at = datetime('now') WHERE chat_id = ?`).run(stage, chatId);
+}
+
+// Registro de eventos dos workers (audit)
+export function logWorkerEvent({ kind, chatId = null, appointmentId = null, status, payload = null }) {
+  db.prepare(`
+    INSERT INTO worker_events (kind, chat_id, appointment_id, status, payload)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(kind, chatId, appointmentId, status, payload ? JSON.stringify(payload) : null);
+}
+
 // ============================================================
 // OAuth token
 // ============================================================

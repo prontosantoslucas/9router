@@ -1,6 +1,9 @@
 import { config } from "../config.js";
-import { upsertConversation } from "../db/db.js";
+import { upsertConversation, updateConversationStatus, logWorkerEvent } from "../db/db.js";
 import { respondToMessage } from "../agent/llm.js";
+
+// Palavras que sinalizam opt-out (LGPD Art. 18 — direito de oposição).
+const OPT_OUT_KEYWORDS = /^(sair|parar|pare|cancelar|descadastrar|remover|stop|n[aã]o quero|me tira)/i;
 
 // ============================================================
 // Cliente Evolution API (WhatsApp Business unofficial gateway)
@@ -64,6 +67,16 @@ export async function handleEvolutionWebhook(req, res) {
     const chatId = `whatsapp:${phone}`;
 
     upsertConversation({ chatId, channel: "whatsapp", patientName: data.pushName || null });
+
+    // Opt-out (LGPD): paciente pediu pra parar → marca e confirma, sem passar pelo LLM.
+    if (OPT_OUT_KEYWORDS.test(text.trim())) {
+      updateConversationStatus(chatId, "opted_out");
+      logWorkerEvent({ kind: "reengagement", chatId, status: "skipped", payload: { reason: "opted_out" } });
+      if (config.agent.mode === "prod") {
+        await sendWhatsapp(chatId, "Tudo bem! Não vou mais te enviar mensagens automáticas. Se precisar da gente, é só chamar. 💚");
+      }
+      return res.json({ ok: true, optedOut: true });
+    }
 
     // Modo test: NÃO responde direto. Salva a msg e espera humano confirmar.
     // Modo prod: agente responde.

@@ -58,6 +58,21 @@ export const config = {
     dashboardPassword: need("DASHBOARD_PASSWORD"),
     webhookSecret: opt("WEBHOOK_SECRET"),
   },
+  crm: {
+    provider: opt("CRM_PROVIDER", ""),
+    rdstation: {
+      token: opt("RDSTATION_API_TOKEN"),
+      identifier: opt("RDSTATION_IDENTIFIER", "maxrouter-clinic-agent"),
+    },
+    hubspot: {
+      token: opt("HUBSPOT_PRIVATE_APP_TOKEN"),
+    },
+  },
+  workers: {
+    enabled: opt("WORKERS_ENABLED", "true") === "true",
+    reminderHoursBefore: Number(opt("REMINDER_HOURS_BEFORE", 24)),
+    reengageTiers: opt("REENGAGE_TIERS", "15,30,60"),
+  },
   paths: {
     root: ROOT,
     memoria: path.join(ROOT, "setup/memoria-inicial.md"),
