@@ -48,6 +48,8 @@ const ALWAYS_PROTECTED = [
   "/chat",
   "/coder",
   "/api/agent",
+  "/prospeccao",
+  "/api/prospeccao",
 ];
 
 // Rotas legadas/internas do agente que devem retornar 404 estrito no Maxrouter
