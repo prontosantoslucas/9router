@@ -1397,4 +1397,32 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 69: Arquitetura de Atualizações OTA (Over-The-Air) vs Recompilação de APK
+
+* **Por que foi feita essa análise e configuração (Causa Raiz & Demanda do Usuário)**:
+  - O usuário questionou a necessidade de reinstalar o aplicativo via APK e por que as atualizações não ocorrem diretamente de forma transparente no celular (Over-The-Air).
+  - Havia a necessidade de esclarecer a fronteira técnica entre a camada de código nativo compilado (Android/Kotlin/C++) e a camada dinâmica (JavaScript/React) e integrar a biblioteca `expo-updates` ao projeto mobile.
+
+* **Como funciona a arquitetura OTA e como foi configurada (Solução Técnica Passo a Passo)**:
+  1. **A Fronteira entre Nativo e JavaScript**:
+     - **Camada Nativa (Requer novo APK)**: Mudança de ícones de sistema no launcher (`res/mipmap`), inclusão de novos drivers de hardware nativos (como `expo-av` para decodificação de áudio) e novas permissões de sistema no `AndroidManifest.xml`.
+     - **Camada Dinâmica JavaScript (Atualiza via OTA sem novo APK)**: Telas, layouts visuais, fluxos de chat, botões, lógicas de negócios, chamadas de API e novos componentes React.
+  2. **Instalação e Ativação do Motor Receptor OTA ([`apps/mobile/app.json`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile/app.json))**:
+     - Instalado o módulo nativo `expo-updates`.
+     - Configurado no `app.json`:
+       ```json
+       "runtimeVersion": {
+         "policy": "appVersion"
+       },
+       "updates": {
+         "enabled": true,
+         "checkAutomatically": "ON_LOAD",
+         "fallbackToCacheTimeout": 0
+       }
+       ```
+  3. **Ciclo de Vida do OTA**:
+     - Uma vez que o aplicativo possui a biblioteca `expo-updates` embutida no binário base, a cada inicialização o app consulta silenciosamente o servidor. Se houver um novo bundle JS, o app baixa o pacote em segundo plano e aplica a nova versão na próxima abertura sem exigir download de arquivo `.apk`.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
