@@ -1340,4 +1340,32 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 67: Resolução do Erro "Network request failed" no App Mobile (CORS Preflight & OPTIONS)
+
+* **Por que estava dando esse problema (Causa Raiz Detalhada)**:
+  - Ao realizar requisições REST a partir do aplicativo mobile (Android/iOS via React Native), o cliente HTTP envia cabeçalhos customizados (`Authorization: Bearer ...`, `Content-Type: application/json`).
+  - Antes de enviar a requisição `POST` ou `GET`, a stack de rede nativa do Android dispara uma requisição de pré-voo HTTP **`OPTIONS` (CORS Preflight)**.
+  - O middleware [`src/dashboardGuard.js`](file:///c:/Users/user/Documents/GitHub/9router/src/dashboardGuard.js) interceptava essas requisições `OPTIONS` nas rotas protegidas (como `/api/agent/*` e `/api/auth/*`), mas como requisições `OPTIONS` não enviam tokens de autenticação por especificação do protocolo, o guard retornava `401 Unauthorized` ou `405 Method Not Allowed`.
+  - Ao receber status de erro no preflight, o motor `fetch` do Android abortava a conexão imediatamente e lançava a exceção genérica **`TypeError: Network request failed`**.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Interceptação Global de `OPTIONS` no `dashboardGuard.js` ([`src/dashboardGuard.js`](file:///c:/Users/user/Documents/GitHub/9router/src/dashboardGuard.js))**:
+     - Adicionada verificação no topo de `proxy(request)`: se `request.method === "OPTIONS"`, responde imediatamente com `HTTP 204 No Content` e os cabeçalhos de controle de acesso:
+       ```http
+       Access-Control-Allow-Origin: *
+       Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS
+       Access-Control-Allow-Headers: Authorization, Content-Type, Accept, Origin, User-Agent, X-Requested-With, apikey, x-api-key, x-9r-cli-token
+       Access-Control-Max-Age: 86400
+       ```
+  2. **Exportação de Handlers `OPTIONS` em Todas as Rotas de Autenticação e Agente**:
+     - [`src/app/api/auth/login/route.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/auth/login/route.js): `export async function OPTIONS()`.
+     - [`src/app/api/auth/status/route.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/auth/status/route.js): `export async function OPTIONS()`.
+     - [`src/app/api/agent/[[...path]]/route.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/agent/%5B%5B...path%5D%5D/route.js): `export async function OPTIONS()`.
+  3. **Aprimoramento do Cliente de Rede Mobile ([`apps/mobile/src/services/api.ts`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile/src/services/api.ts) e [`apps/mobile/app/login.tsx`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile/app/login.tsx))**:
+     - Removido envio forçado de `Cookie` manual que conflitava com o Android HTTP layer.
+     - Centralizado o uso estrito de `Authorization: Bearer <token>`.
+     - Exibição de mensagens detalhadas de conexão na tela de login.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
