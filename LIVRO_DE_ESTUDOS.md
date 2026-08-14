@@ -1137,4 +1137,39 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 59: Motor de Prospecção Autônoma 24/7 de Vagas e Clientes com WhatsApp & Instagram DM (`apps/agent/src/prospector.js`)
+
+* **Por que foi feita essa alteração (Causa Raiz & Solicitação do Usuário)**:
+  - O usuário relatou que a funcionalidade de busca e prospecção automática havia sido inicialmente implementada em um sub-template isolado (`templates/clinic-agent`) em vez da aplicação central do Agente Lucas (`apps/agent`), e solicitou a **implementação oficial 24/7 no motor principal** com suporte completo a disparo automatizado via **WhatsApp** e **Instagram DM**.
+  - O sistema do Agente Lucas possuía partes desconexas (`jobAlerts.js`, `farejador.js`, `linkedinJobHunt.js`), necessitando de um motor unificado que fizesse a busca contínua, geração de abordagens personalizadas com IA (LLM Copywriter) e disparo multi-canal automatizado.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Criação do Motor Central `apps/agent/src/prospector.js`**:
+     - **Schema SQLite Dedicado**:
+       - `prospector_settings`: Configurações de termos, região, intervalo em minutos, auto-envio WhatsApp/Instagram e pitch customizado.
+       - `prospector_leads`: Vagas, empresas e recrutadores com hash de desduplicação SHA-256 para garantir que nenhuma vaga seja reprocessada.
+       - `prospector_outreach`: Fila e histórico de abordagens geradas e disparadas por canal.
+     - **Ciclo Autônomo 24/7 (`runCycle`)**:
+       - Executa periodicamente a cada 15 minutos (ou intervalo configurado).
+       - Minera vagas no LinkedIn, RemoteOK, Arbeitnow e buscas Web no Google.
+       - Analisa cada oportunidade e gera via `proxy.complete` uma mensagem de abordagem curta, persuasiva e sob medida para o cargo/empresa.
+  2. **Integração de Disparo Multi-Canal (WhatsApp & Instagram DM)**:
+     - **WhatsApp**: Envia via `evolutionApi.sendTextMessage(lead.phone, message)` (compatível com Evolution API e Baileys nativo).
+     - **Instagram DM**: Enfileira no bridge da extensão Chrome (`extensionBridge.enqueueNow`) com tipo `instagram_send_dm` e gera deep link direto `https://ig.me/m/username`.
+     - **Notificações Proativas**: Notifica o usuário no Telegram (`botManager`) e Webchat a cada lote de oportunidades descobertas.
+  3. **Comandos Integrados no Chat e Telegram (`apps/agent/src/orchestrator.js`)**:
+     - Implementado o comando `/prospector` (ou `/prospectar`):
+       - `/prospector status`: Exibe status 24/7, métricas do dia e contadores.
+       - `/prospector run`: Dispara ciclo de busca e abordagem imediata.
+       - `/prospector add <termos>; [local]`: Atualiza critérios de busca.
+       - `/prospector toggle`: Liga/pausa o motor contínuo.
+       - `/prospector list`: Lista as últimas vagas e rascunhos de abordagem.
+  4. **Endpoints de API no Servidor (`apps/agent/src/index.js`)**:
+     - `GET /api/prospector/status`, `GET /api/prospector/leads`, `POST /api/prospector/settings`, `POST /api/prospector/run`, `POST /api/prospector/send`.
+  5. **Inicialização no Boot & Suíte de Testes**:
+     - Adicionado `prospector.start()` no ciclo de boot do servidor (`apps/agent/src/index.js`).
+     - Criada a suíte de testes [`tests/unit/prospector-engine.test.js`](file:///c:/Users/user/Documents/GitHub/9router/tests/unit/prospector-engine.test.js) com **100% de aprovação (4 de 4 testes passando)**.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*

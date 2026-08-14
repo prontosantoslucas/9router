@@ -323,6 +323,64 @@ async function processMessage(chatId, text, userName, ctx = {}) {
     }
   }
 
+  // Comando /prospector ou /prospectar (Motor 24/7 de Busca e Abordagem)
+  const prospectorMatch = text.match(/^\/(?:prospector|prospectar)(?:\s+(.*))?$/i);
+  if (prospectorMatch) {
+    session.msgs.push({ role: "user", content: text });
+    const sub = (prospectorMatch[1] || "").trim();
+    const prospector = require("./prospector");
+    let content = "";
+
+    if (!sub || sub === "status") {
+      const stats = prospector.getStats();
+      content = `🎯 *Motor de Prospecção 24/7*\n\n` +
+        `• **Status:** ${stats.running ? "🟢 Ativo e Rodando 24/7" : "⏸️ Pausado"}\n` +
+        `• **Intervalo:** a cada ${stats.settings.interval_min} minutos\n` +
+        `• **Termos:** _${stats.settings.target_keywords}_\n` +
+        `• **Região:** _${stats.settings.target_location}_\n` +
+        `• **Envio Auto WhatsApp:** ${stats.settings.auto_send_wa ? "✅ Sim" : "❌ Manual"}\n` +
+        `• **Envio Auto Instagram DM:** ${stats.settings.auto_send_ig ? "✅ Sim" : "❌ Manual"}\n` +
+        `• **Total de Oportunidades:** ${stats.totalLeads}\n` +
+        `• **Abordagens Despachadas:** ${stats.sentOutreach}\n` +
+        `• **Rascunhos Pendentes:** ${stats.draftedOutreach}\n\n` +
+        `_Comandos:_ \`/prospector run\`, \`/prospector add <termos>; [local]\`, \`/prospector toggle\`, \`/prospector list\``;
+    } else if (sub === "run") {
+      content = "⏳ *Iniciando ciclo de busca e prospecção autônoma agora... Notificarei assim que novas vagas e abordagens forem processadas.*";
+      prospector.runCycle().then((r) => {
+        console.log("[Prospector] Ciclo manual concluído:", r);
+      }).catch((e) => console.error("[Prospector] Erro no ciclo:", e.message));
+    } else if (sub === "toggle" || sub === "pause" || sub === "start") {
+      const current = prospector.getSettings();
+      const nextEnabled = sub === "start" ? true : (sub === "pause" ? false : !current.enabled);
+      const updated = prospector.updateSettings({ enabled: nextEnabled });
+      if (nextEnabled) prospector.start(); else prospector.stop();
+      content = `🎯 *Motor de Prospecção:* ${updated.enabled ? "🟢 Ativado 24/7" : "⏸️ Pausado"}`;
+    } else if (sub.startsWith("add ")) {
+      const parts = sub.slice(4).split(";");
+      const kw = parts[0]?.trim();
+      const loc = parts[1]?.trim();
+      const updated = prospector.updateSettings({
+        target_keywords: kw || undefined,
+        target_location: loc || undefined,
+      });
+      content = `✅ *Novos critérios de busca salvos!*\n• Termos: _${updated.target_keywords}_\n• Local: _${updated.target_location}_`;
+    } else if (sub === "list") {
+      const leads = prospector.listLeads(10);
+      if (leads.length === 0) {
+        content = "📭 Nenhuma oportunidade registrada ainda. Use `/prospector run` para iniciar uma busca imediata.";
+      } else {
+        content = `📋 *Últimas ${leads.length} Oportunidades & Abordagens:*\n\n` +
+          leads.map((l) => `• *${l.title}* — _${l.company}_ (${l.location})\n  Status: \`${l.status}\` | Canal: ${l.phone ? "📱 WA" : ""} ${l.instagram_handle ? "📸 IG" : ""}\n  _Msg: ${l.wa_message ? l.wa_message.slice(0, 120) + "..." : "Sem rascunho"}_`).join("\n\n");
+      }
+    } else {
+      content = `❓ *Comandos do Prospector 24/7:*\n• \`/prospector status\` — Ver status e métricas\n• \`/prospector run\` — Rodar ciclo de busca agora\n• \`/prospector add <termos>; [local]\` — Atualizar termos de busca\n• \`/prospector toggle\` — Ativar/pausar\n• \`/prospector list\` — Listar últimas vagas e abordagens`;
+    }
+
+    session.msgs.push({ role: "assistant", content });
+    persistHistories();
+    return { content, model: "system", agent: "lucas" };
+  }
+
   // Correção: salva por agente para aprendizado dirigido
   if (isCorrection(text)) {
     memory.addCorrection(text);

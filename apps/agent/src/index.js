@@ -589,17 +589,75 @@ app.post("/api/extension/job-result", (req, res) => {
   }
 });
 
-app.get("/api/extension/stats", (req, res) => {
-  if (!extensionAuth(req, res)) return;
-  res.json(extensionBridge.stats());
+// ── Prospector 24/7 (Buscador e Prospectador Automático de Vagas e Clientes) ──
+const prospector = require("./prospector");
+
+app.get("/api/prospector/status", (req, res) => {
+  try {
+    res.json({ ok: true, ...prospector.getStats() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
+app.get("/api/prospector/leads", (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const leads = prospector.listLeads(limit);
+    res.json({ ok: true, count: leads.length, leads });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-// ════════════════════════════════════════════════════════════════
-// IMPORTANTE: TODAS as rotas abaixo usam `/api/<...>` (SEM `/agent/`)
-// porque o proxy do Next remove o prefixo `/api/agent/` ao encaminhar.
-// Frontend chama `/api/agent/copilot/approvals` → chega aqui como `/api/copilot/approvals`.
-// ════════════════════════════════════════════════════════════════
+app.post("/api/prospector/settings", (req, res) => {
+  try {
+    const updated = prospector.updateSettings(req.body || {});
+    res.json({ ok: true, settings: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/prospector/run", async (req, res) => {
+  try {
+    const result = await prospector.runCycle(async (msg) => {
+      const bot = botManager.getBot();
+      const tgChatId = process.env.SCANNER_NOTIFY_TELEGRAM_CHAT_ID;
+      if (bot && tgChatId) {
+        await bot.telegram.sendMessage(tgChatId, msg, { parse_mode: "Markdown" }).catch(() => {});
+      }
+    });
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/prospector/send", async (req, res) => {
+  try {
+    const { leadId, channel, customMessage } = req.body || {};
+    if (!leadId) return res.status(400).json({ error: "leadId obrigatório" });
+    const lead = db.prepare("SELECT * FROM prospector_leads WHERE id = ?").get(leadId);
+    if (!lead) return res.status(404).json({ error: "Lead não encontrado" });
+
+    const msg = customMessage || (await prospector.generateOutreachMessage(lead, channel || "whatsapp"));
+
+    if (channel === "whatsapp" || (!channel && lead.phone)) {
+      const waRes = await prospector.sendWhatsAppOutreach(lead.phone, msg);
+      return res.json({ ok: waRes.ok, channel: "whatsapp", result: waRes });
+    }
+
+    if (channel === "instagram" || (!channel && lead.instagram_handle)) {
+      const igRes = await prospector.sendInstagramOutreach(lead.instagram_handle, msg);
+      return res.json({ ok: igRes.ok, channel: "instagram", result: igRes });
+    }
+
+    res.status(400).json({ error: "Lead não possui telefone nem Instagram handle configurado" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ── Copilot (fila de aprovação de rascunhos WhatsApp/Telegram) ──
 app.get("/api/copilot/approvals", copilotController.listApprovals);
@@ -1173,6 +1231,19 @@ async function start() {
     require("./jobAlerts").start();
   } catch (err) {
     console.warn("[jobAlerts] falha ao iniciar:", err.message);
+  }
+
+  // Prospector 24/7 (Buscador & Prospectador Automático com WhatsApp e Instagram DM)
+  try {
+    require("./prospector").start(async (msg) => {
+      const bot = botManager.getBot();
+      const tgChatId = process.env.SCANNER_NOTIFY_TELEGRAM_CHAT_ID;
+      if (bot && tgChatId) {
+        await bot.telegram.sendMessage(tgChatId, msg, { parse_mode: "Markdown" }).catch(() => {});
+      }
+    });
+  } catch (err) {
+    console.warn("[prospector] falha ao iniciar worker 24/7:", err.message);
   }
 
   console.log(`[Agent] TG Bot: ${botManager.status().running ? "ativo" : "desativado"} · Workers: ${enableWorkers ? "on" : "off"}`);
