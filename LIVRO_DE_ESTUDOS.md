@@ -1110,4 +1110,31 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 58: Resolução de Latência Excessiva (120s Timeout) por Prefixagem de Modelos e Failover Acelerado
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  1. **Discrepância nos IDs de Modelos do Gateway (`/v1/models`)**:
+     - No catálogo de modelos do MaxRouter, o provedor Gemini expõe os modelos com o prefixo `gemini/` (ex.: `gemini/gemini-3-flash-preview` e `gemini/gemini-3.1-flash-lite-preview`).
+     - Ao configurar `gemini-2.5-flash` sem o prefixo no `MODEL_RANKING`, a função `getPriorityList()` no agente (`apps/agent/src/models.js`) comparava `state.available.includes("gemini-2.5-flash")` e retornava `false`, **descartando o Gemini** do topo da lista de execução.
+  2. **Falhas Intermediárias e Timeout Acumulado de 120 Segundos (`120099ms`)**:
+     - Sem o Gemini prioritário, o agente tentava:
+       - `groq/llama-3.3-70b-versatile`: Retornava erro 400 por alucinação de tool call (`attempted to call tool 'process_message' which was not in request.tools`).
+       - `groq/openai/gpt-oss-120b`: Estourava o limite de tokens por minuto (TPM 8.000) da Groq ao receber o prompt de sistema completo com histórico e Superbrain (~7.4k tokens).
+       - Modelos seguintes travavam no timeout padrão de **30s por modelo com 2 tentativas** em `apps/agent/src/proxy.js`.
+     - Isso gerava um atraso acumulado de exatamente **120.099 milissegundos (2 minutos)** antes de conseguir responder.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Ajuste dos IDs Exatos de Modelos no Ranking**:
+     - Atualizados [`src/lib/db/seedProviders.js`](file:///c:/Users/user/Documents/GitHub/9router/src/lib/db/seedProviders.js), [`apps/agent/src/models.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/models.js), [`apps/agent/.env`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/.env) e a variável `MODEL_RANKING` no Railway para:
+       `gemini/gemini-3-flash-preview,gemini/gemini-3.1-flash-lite-preview,kimchi/kimi-k2.7,kimchi/minimax-m3,kimchi/nemotron-3-ultra-fp4,groq/llama-3.3-70b-versatile,gemini-2.5-flash,ag/gemini-3-flash,ag/claude-opus-4-6-thinking,cc/claude-opus-4-8,cx/gpt-5.6-sol`
+  2. **Failover Acelerado e Redução do Timeout por Tentativa (`apps/agent/src/proxy.js`)**:
+     - Reduzido o timeout por modelo de 30s para **12s**, com **1 única tentativa** por modelo antes de avançar para o próximo.
+     - Se um modelo demorar ou estiver indisponível, o sistema salta imediatamente para o próximo modelo funcional sem deixar o usuário esperando.
+  3. **Deploy e Validação em Produção**:
+     - Código commitado e enviado ao branch `master` no GitHub (`origin/master`).
+     - Testes de tempo de resposta em produção:
+       - Resposta obtida em **2 a 4 segundos**, eliminando completamente a espera de 120 segundos.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
