@@ -32,43 +32,44 @@ const SEEDABLE_PROVIDERS = {
 // Fallback tries top-down; each entry is skipped when out of quota / banned by
 // the combo cooldown map in open-sse/services/combo.js.
 const MODEL_RANKING = [
-  // Tier 1 — top-tier frontier coders
-  "cc/claude-opus-4-8",                       // Anthropic direct: Opus 4.8
-  "cx/gpt-5.6-sol",                           // Cursor: GPT-5.6 flagship
-  "cc/claude-sonnet-5",                       // Anthropic direct: Sonnet 5
+  // Tier 1 — Active, verified ultra-fast & high-performance models
+  "gemini/gemini-3-flash-preview",
+  "gemini/gemini-3.1-flash-lite-preview",
+  "kimchi/kimi-k2.7",
+  "kimchi/minimax-m3",
+  "kimchi/nemotron-3-ultra-fp4",
+  "groq/llama-3.3-70b-versatile",
+  "gemini-2.5-flash",
+
+  // Tier 2 — Antigravity & Frontier models (when quota/OAuth active)
+  "ag/gemini-3-flash",
+  "ag/gemini-3.6-flash",
+  "ag/claude-sonnet-4-6",
+  "ag/claude-opus-4-6-thinking",
+  "ag/gemini-3.1-pro-low",
+  "ag/gemini-3-flash-agent",
+  "ag/gpt-oss-120b-medium",
+
+  // Tier 3 — OAuth frontier coders (fallback when tokens refreshed)
+  "cc/claude-opus-4-8",
+  "cx/gpt-5.6-sol",
+  "cc/claude-sonnet-5",
   "cx/gpt-5.6-terra",
   "cc/claude-opus-4-7",
-
-  // Tier 2 — strong reasoning / coding specialists on different providers
-  "cl/anthropic/claude-opus-4.7",             // ClinePass: Opus 4.7
   "cx/gpt-5.6-luna",
-  "cl/google/gemini-3.1-pro-preview",         // ClinePass: Gemini 3.1 Pro
-  "cx/gpt-5.3-codex-spark",                   // Cursor: codex specialist
-  "ag/claude-opus-4-6-thinking",              // Antigravity: Opus 4.6
-  "cl/openai/gpt-5.4",
+  "cx/gpt-5.3-codex-spark",
   "cx/gpt-5.5",
+  "cc/claude-haiku-4-5-20251001",
+
+  // Tier 4 — ClinePass & other providers
+  "cl/anthropic/claude-opus-4.7",
+  "cl/google/gemini-3.1-pro-preview",
+  "cl/openai/gpt-5.4",
   "cl/anthropic/claude-sonnet-4.6",
-  "ag/claude-sonnet-4-6",
-  "ag/gemini-3.6-flash",                      // Antigravity: Gemini 3.6 Flash
-  "cl/openai/gpt-5.3-codex",                  // ClinePass: codex specialist
-
-  // Tier 3 — fast + cheap fallbacks with usage quotas
-  "nvidia/deepseek-ai/deepseek-v4-pro",       // NVIDIA NIM
-  "kimchi/kimi-k2.7",                         // Kimi agentic
-  "cc/claude-haiku-4-5-20251001",             // Cheap Anthropic
-  "ag/gemini-3.1-pro-low",
+  "cl/openai/gpt-5.3-codex",
   "cl/kwaipilot/kat-coder-pro",
-  "nvidia/moonshotai/kimi-k2.6",
-  "kimchi/minimax-m3",
-  "ag/gemini-3-flash-agent",
   "bpm/seed-2-0-pro-260328",
-
-  // Tier 4 — last resort (chronic 429 or weak generalists)
-  "ag/gpt-oss-120b-medium",
-  "kimchi/deepseek-v4-flash",                 // Chronic 429 → bottom
-  "nvidia/deepseek-ai/deepseek-v4-flash",
-  "groq/openai/gpt-oss-120b",
-  "groq/llama-3.3-70b-versatile",
+  "kimchi/deepseek-v4-flash",
 ];
 
 export async function seedProviders() {

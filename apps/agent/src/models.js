@@ -9,13 +9,17 @@ const openai = new OPENAI({
 });
 
 const DEFAULT_RANKING = [
-  "opencode/gemini-2.5-flash",
-  "opencode/claude-3-5-haiku",
-  "opencode/gpt-4o-mini",
-  "mimo-free/mimo-v1",
+  "gemini/gemini-3-flash-preview",
+  "gemini/gemini-3.1-flash-lite-preview",
+  "kimchi/kimi-k2.7",
+  "kimchi/minimax-m3",
+  "kimchi/nemotron-3-ultra-fp4",
+  "groq/llama-3.3-70b-versatile",
   "gemini-2.5-flash",
-  "gpt-4o-mini",
-  "gpt-4o",
+  "ag/gemini-3-flash",
+  "ag/claude-opus-4-6-thinking",
+  "cc/claude-opus-4-8",
+  "cx/gpt-5.6-sol",
   "claude-3-5-sonnet",
   "deepseek-chat",
 ];

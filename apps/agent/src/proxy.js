@@ -147,11 +147,11 @@ async function complete(messages, opts = {}) {
       : getPriorityList(Object.keys(required).length > 0 ? required : undefined);
     if (models.length === 0) throw new Error("Nenhum modelo disponível" + (hasVision ? " com visão" : ""));
 
-    const timeoutMs = opts.timeoutMs || 30000;
+    const timeoutMs = opts.timeoutMs || 12000;
 
     for (const model of models) {
       let attempts = 0;
-      const maxAttempts = opts.maxRetries || 2;
+      const maxAttempts = opts.maxRetries || 1;
 
       while (attempts < maxAttempts) {
         attempts++;

@@ -1,7 +1,7 @@
 const https = require("https");
 
 const GITHUB_RAW = "https://raw.githubusercontent.com/nortelucas/meueulucas/main/Superbrain-Lucas.md";
-const TARGET_URL = process.env.SELF_URL || "https://9router-agent-production.up.railway.app";
+const TARGET_URL = process.env.SELF_URL || "https://maxrouter.up.railway.app";
 
 async function fetch(url) {
   return new Promise((resolve, reject) => {

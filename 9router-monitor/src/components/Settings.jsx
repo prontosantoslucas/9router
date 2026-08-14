@@ -16,7 +16,7 @@ export default function Settings({ onClose, onLogout, authed }) {
   return (
     <div className="settings body">
       <label>Servidor 9Router</label>
-      <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://maxrouter-prod.up.railway.app" />
+      <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://maxrouter.up.railway.app" />
       <button onClick={save}>{saved ? "Salvo ✓" : "Salvar servidor"}</button>
 
       <label className="row">

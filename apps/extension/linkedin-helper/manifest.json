@@ -6,6 +6,7 @@
   "permissions": ["storage", "activeTab", "scripting", "alarms", "cookies", "tabs"],
   "host_permissions": [
     "https://*.linkedin.com/*",
+    "https://maxrouter.up.railway.app/*",
     "https://maxrouter-prod.up.railway.app/*",
     "http://localhost/*",
     "http://127.0.0.1/*"

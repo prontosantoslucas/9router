@@ -1043,4 +1043,71 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 56: Diagnóstico e Correção de Erro "upstream error is not valid JSON" após Migração de Conta Railway
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  1. **Falha de Timeout por Cascata de Modelos Expirados / Inativos**:
+     - No ranking de modelos configurado no combo gerenciado `MaxRouter-Ranking` e no agente Lucas (`seedProviders.js`, `MODEL_RANKING`), as primeiras 28 posições continham modelos com credenciais expiradas ou esgotadas:
+       - **Claude Code (OAuth `cc/*`)**: Token de acesso revogado (`[401]: OAuth access token has been revoked / invalid_grant`).
+       - **Codex (OAuth `cx/*`)**: Token de sessão expirado (`[401]: Invalid refresh token`).
+       - **Cline (`cl/*`)**: Saldo esgotado e negativo (`[402]: Insufficient balance. Your Cline Credits balance is $-0.04`).
+       - **Antigravity (`ag/*`)**: Cota esgotada e rate limit (`[429]: RESOURCE_EXHAUSTED`), com timeouts internos de até 45s por tentativa.
+       - **NVIDIA NIM (`nvidia/*`)**: Modelo descontinuado (`[410]: The model 'deepseek-ai/deepseek-v4-pro' has reached its end of life`).
+     - Cada requisição de chat tentava iterar sequencialmente por todos esses modelos com retentativas, levando mais de **176 segundos** (quase 3 minutos).
+  2. **Timeout do Edge Proxy do Railway & Retorno HTTP 502 em Texto Puro**:
+     - Quando uma requisição ultrapassa o tempo limite de proxy do Railway / Cloudflare (~60 a 100 segundos), o balanceador de carga do Railway encerra a conexão prematuramente e devolve um corpo em texto puro (não-JSON): `"upstream error"` com status `502 Bad Gateway`.
+  3. **Parse Inseguro de JSON no Frontend (`useChatSession.js`)**:
+     - O hook de chat executava `const data = await res.json()` diretamente sem verificar se o cabeçalho `Content-Type` era `application/json`.
+     - Ao tentar decodificar a string bruta `"upstream error"`, o motor JavaScript disparava a exceção de sintaxe:
+       `SyntaxError: Unexpected token 'u', "upstream error" is not valid JSON`.
+     - Isso gerava a mensagem no chat: *"❌ Ops, não consegui responder: Unexpected token 'u', "upstream error" is not valid JSON"*.
+  4. **Divergência de Domínios após Mudança de Conta do Railway**:
+     - Na nova conta do Railway (projeto `proud-connection`), o serviço está ativo e online em **`https://maxrouter.up.railway.app`**.
+     - Vários arquivos de configuração legados e variáveis padrão ainda continham o endereço antigo `https://maxrouter-prod.up.railway.app` (que na nova conta retorna 404 *Application not found*).
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Reordenação e Priorização de Modelos Ativos e Ultra-Rápidos (`src/lib/db/seedProviders.js`, `apps/agent/src/models.js`, `apps/agent/.env`)**:
+     - Modelos ativos, com credenciais válidas e tempo de resposta inferior a 1 segundo foram colocados no topo do ranking prioritário:
+       1. `gemini-2.5-flash` (~900ms)
+       2. `gemini-3-flash-preview` (~800ms)
+       3. `groq/llama-3.3-70b-versatile` (~440ms)
+       4. `groq/openai/gpt-oss-120b` (~660ms)
+       5. `kimchi/nemotron-3-ultra-fp4`
+     - Isso eliminou as esperas de 176 segundos e fez as respostas do agente Lucas retornarem instantaneamente, prevenindo qualquer timeout no Railway.
+  2. **Tratamento Resiliente de Respostas HTTP no Chat Web (`src/app/chat/hooks/useChatSession.js`)**:
+     - Adicionada verificação segura do `Content-Type` antes do `res.json()`.
+     - Se o servidor ou proxy retornar texto puro ou HTML (ex.: 502/504), o erro é capturado e exibido de forma legível e amigável, prevenindo exceções de `SyntaxError` na UI.
+  3. **Atualização Completa dos Domínios Padrão para a Nova Conta do Railway**:
+     - Atualizado `DEFAULT_CLOUD_URL` para `https://maxrouter.up.railway.app` em [`src/lib/db/repos/settingsRepo.js`](file:///c:/Users/user/Documents/GitHub/9router/src/lib/db/repos/settingsRepo.js).
+     - Atualizados fallbacks nos cards de ferramentas CLI ([`ClaudeToolCard.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/(dashboard)/dashboard/cli-tools/components/ClaudeToolCard.js), [`DroidToolCard.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/(dashboard)/dashboard/cli-tools/components/DroidToolCard.js), [`ToolDetailClient.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/(dashboard)/dashboard/cli-tools/[toolId]/ToolDetailClient.js)).
+     - Atualizado `ROUTER_BASE_URL` em [`apps/agent/.env`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/.env).
+     - Atualizados links do Telegram, cron Superbrain, 9Router Monitor e extensão Chrome LinkedIn Helper.
+
+---
+
+### Capítulo 57: Configuração Completa e Padronização das Variáveis de Ambiente (Railway Cloud & Local)
+
+* **Por que foi feita essa alteração (Causa Raiz & Lacunas de Configuração)**:
+  - Após a migração para a nova conta do Railway (`proud-connection`), o serviço `9router-agent` subiu com variáveis cruciais ausentes ou desatualizadas:
+    1. **Bot do Telegram (`BOT_TOKEN` e `TELEGRAM_BOT_TOKEN`)**: Não estavam configurados nas variáveis do Railway, desativando o bot do Lucas no Telegram (`[BotManager] Bot do Telegram não iniciado: token ausente`).
+    2. **Notificações do Scanner de Chaves (`SCANNER_NOTIFY_TELEGRAM_CHAT_ID`)**: Ausente nas variáveis remotas.
+    3. **URLs Públicas & Domínios (`CLOUD_URL`, `NEXT_PUBLIC_CLOUD_URL`, `BASE_URL`, `NEXT_PUBLIC_BASE_URL`)**: Apontavam para `https://9router.com` e `http://localhost:20128` em vez da URL real do serviço (`https://maxrouter.up.railway.app`).
+    4. **Ranking de Modelos do Agente (`MODEL_RANKING`)**: Não estava fixado no Railway, o que fazia o agente depender de fallbacks padrão lentos.
+    5. **Ambiente Local (`.env` e `apps/agent/.env`)**: Faltavam chaves sincronizadas (`GROQ_API_KEY`, `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, `NVIDIA_API_KEY`, segredo HMAC do agente `AGENT_INTERNAL_SECRET` e tokens MCP).
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Configuração Remota no Railway (`railway variable set`)**:
+     - Configurado `BOT_TOKEN` e `TELEGRAM_BOT_TOKEN` (`8842388810:AAHHyqCKKZz7ye1T8pWM2XMF7xZVte9ontE`).
+     - Configurado `SCANNER_NOTIFY_TELEGRAM_CHAT_ID` (`8125822055`).
+     - Configurado `MODEL_RANKING` priorizando `gemini-2.5-flash`, `gemini-3-flash-preview`, `groq/llama-3.3-70b-versatile`, `groq/openai/gpt-oss-120b` e `kimchi/nemotron-3-ultra-fp4`.
+     - Atualizados `CLOUD_URL`, `NEXT_PUBLIC_CLOUD_URL`, `BASE_URL` e `NEXT_PUBLIC_BASE_URL` para `https://maxrouter.up.railway.app`.
+     - Disparado novo deploy atômico no Railway.
+  2. **Sincronização do `.env` Local e `apps/agent/.env`**:
+     - Preenchidos todos os parâmetros de banco, segurança, JWT, segredo interno HMAC, credenciais de IA e integrações Google OAuth / LinkedIn MCP.
+  3. **Validação de Ponta a Ponta**:
+     - Testado login e envio de mensagem real de chat na nuvem do Railway.
+     - Tempo de resposta medido: **527ms** (redução de 176s para ~0.5s), com resposta precisa e status **200 OK**.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*

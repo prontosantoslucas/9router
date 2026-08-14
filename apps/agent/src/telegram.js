@@ -146,7 +146,7 @@ function createBot(tokenOverride) {
 
   bot.command("id", async (ctx) => {
     const chatId = ctx.chat.id;
-    const link = `https://9router-agent-production.up.railway.app/chat?link=${chatId}`;
+    const link = `https://maxrouter.up.railway.app/chat?link=${chatId}`;
     await ctx.reply(
       `🆔 *Seu Chat ID:* \`${chatId}\`\n\n` +
       `Para linkar com o Web Chat:\n` +

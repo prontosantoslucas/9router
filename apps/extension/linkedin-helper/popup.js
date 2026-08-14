@@ -4,7 +4,7 @@ const $ = (id) => document.getElementById(id);
 
 async function loadConfig() {
   const cfg = await new Promise((r) => chrome.storage.local.get(["agentUrl", "token", "enabled", "invisibleOnly"], r));
-  $("agentUrl").value = cfg.agentUrl || "https://maxrouter-prod.up.railway.app";
+  $("agentUrl").value = cfg.agentUrl || "https://maxrouter.up.railway.app";
   $("token").value = cfg.token || "";
   $("toggle-enabled").textContent = cfg.enabled === false ? "Ativar" : "Pausar";
   $("toggle-invisible").checked = cfg.invisibleOnly === true;

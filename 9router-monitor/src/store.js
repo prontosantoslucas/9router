@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { load } from "@tauri-apps/plugin-store";
 import { setBaseUrl, setAlwaysOnTop } from "./api.js";
 
-const DEFAULT_BASE = "https://maxrouter-prod.up.railway.app";
+const DEFAULT_BASE = "https://maxrouter.up.railway.app";
 let store = null;
 
 function normalizeBase(url) {

@@ -19,7 +19,7 @@ impl HttpState {
             .expect("failed to build reqwest client");
         Arc::new(Self {
             client,
-            base_url: Mutex::new(String::from("https://maxrouter-prod.up.railway.app")),
+            base_url: Mutex::new(String::from("https://maxrouter.up.railway.app")),
         })
     }
 

@@ -81,8 +81,16 @@ export function useChatSession(sessionId = "default") {
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Falha na resposta do Agente Lucas");
+      let data;
+      const ct = res.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        data = await res.json().catch(() => null);
+      } else {
+        const textResp = await res.text().catch(() => "");
+        data = { error: textResp || `Erro no servidor (HTTP ${res.status})` };
+      }
+
+      if (!res.ok) throw new Error(data?.error || `Falha na resposta do Agente Lucas (HTTP ${res.status})`);
 
       const agentMsg = {
         id: (Date.now() + 1).toString(),
