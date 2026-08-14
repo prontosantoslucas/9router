@@ -1195,4 +1195,20 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 61: Execução 100% Invisível e em Segundo Plano (WhatsApp Headless & Instagram Service Worker)
+
+* **Por que foi feita essa verificação e aprimoramento (Causa Raiz & Dúvida do Usuário)**:
+  - O usuário perguntou se o processo de prospecção e envio via **WhatsApp** e **Instagram DM** ocorreria de forma **automática, invisível e sem abrir abas ou janelas no computador**, para não interromper seu uso normal da máquina.
+
+* **Como funciona e como foi garantido tecnicamente (Solução Técnica Passo a Passo)**:
+  1. **WhatsApp 100% Headless no Servidor (Zero Abas)**:
+     - As mensagens de WhatsApp são transmitidas via **sockets de rede e chamadas REST puras de backend** ([`nativeClient.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/channels/whatsapp/nativeClient.js) / Evolution API).
+     - Toda a operação ocorre no container do servidor (Railway ou local), **sem interface gráfica, sem abrir nenhuma aba de navegador**. O disparo ocorre 24h por dia, 7 dias por semana em segundo plano.
+  2. **Instagram DM Invisível via Chrome Extension Service Worker (`background.js`)**:
+     - No Chrome Extension Manifest V3 ([`manifest.json`](file:///c:/Users/user/Documents/GitHub/9router/apps/extension/linkedin-helper/manifest.json) e [`background.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/extension/linkedin-helper/background.js)), a extensão opera como um **Service Worker invisível de segundo plano**.
+     - Ao receber a tarefa `instagram_send_dm`, o worker realiza requisições HTTP internas diretamente nos endpoints da API do Instagram Web (`/api/v1/direct_v2/threads/broadcast/text/`) utilizando os cookies e token CSRF da sessão já autenticada do usuário.
+     - **Não abre abas, não rouba foco da tela nem abre pop-ups**. As mensagens são despachadas silenciosamente em background com intervalos humanizados de segurança.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*

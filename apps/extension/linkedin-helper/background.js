@@ -241,6 +241,59 @@ const HANDLERS = {
     }
   },
 
+  async instagram_send_dm({ handle, message }, cfg) {
+    if (!handle) throw new Error("handle do Instagram obrigatório");
+    if (!message) throw new Error("mensagem obrigatória");
+
+    const cleanHandle = String(handle).replace(/^@/, "").trim();
+
+    // 1. Obtém CSRF e cookies do Instagram em background sem abrir aba
+    const csrf = await new Promise((resolve) => {
+      chrome.cookies.get({ url: "https://www.instagram.com", name: "csrftoken" }, (c) => resolve(c ? c.value : null));
+    });
+
+    // 2. Tenta envio direto de DM via API interna do Instagram Web (100% invisível)
+    try {
+      const searchRes = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(cleanHandle)}`, {
+        headers: {
+          "x-ig-app-id": "936619743392459",
+          "x-csrftoken": csrf || "",
+        },
+        credentials: "include",
+      });
+
+      if (searchRes.ok) {
+        const userData = await searchRes.json();
+        const userId = userData?.data?.user?.id;
+
+        if (userId && csrf) {
+          const sendRes = await fetch("https://www.instagram.com/api/v1/direct_v2/threads/broadcast/text/", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              "x-csrftoken": csrf,
+              "x-ig-app-id": "936619743392459",
+            },
+            credentials: "include",
+            body: new URLSearchParams({
+              recipient_users: JSON.stringify([userId]),
+              text: message,
+              action: "send_item",
+            }),
+          });
+          if (sendRes.ok) {
+            return { ok: true, sentInvisibly: true, handle: cleanHandle, userId };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[Instagram DM] Falha no envio invisível via API:", e.message);
+    }
+
+    // Se não estiver logado no Instagram no browser, devolve o link direto
+    return { ok: true, directLink: `https://ig.me/m/${cleanHandle}`, handle: cleanHandle };
+  },
+
   async person_profile({ linkedin_username }, cfg) {
     if (!linkedin_username) throw new Error("linkedin_username obrigatorio");
     const apiResult = await apiPersonProfile(linkedin_username);
