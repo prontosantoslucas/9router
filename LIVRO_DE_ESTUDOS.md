@@ -1278,4 +1278,37 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 65: Menu Autocomplete de Comandos Slash (`/`) com Explicação em Português & Navegação por Teclado
+
+* **Por que foi feita essa alteração (Causa Raiz & Demanda do Usuário)**:
+  - O usuário solicitou que, ao digitar a barra (`/`) no campo de mensagem do chat, aparecesse automaticamente uma **lista interativa de comandos disponíveis para o bot**, com seleção via teclado (Enter/Setas) e um **painel explicativo em português ao passar o mouse ou focar no comando**, detalhando sua função, categoria e exemplo de uso.
+  - Também foi reforçada a necessidade de manter a interação **100% natural**, permitindo que o usuário converse por linguagem natural ou use os comandos de atalho de forma intercambiável.
+
+* **Como foi implementado (Solução Técnica Passo a Passo)**:
+  1. **Criação do Catálogo de Comandos `SLASH_COMMANDS` ([`src/shared/components/primitives/ChatComposer.jsx`](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/primitives/ChatComposer.jsx))**:
+     - Mapeados todos os comandos do sistema com nome, sintaxe, categoria, ícone Material Symbol, label amigável, descrição clara em português e exemplo prático:
+       - `/manual`: Manual interativo e ensino do agente.
+       - `/prospector status`: Painel de métricas e status 24/7.
+       - `/prospector avatar`: Pesquisa de mercado e Avatar/ICP com IA.
+       - `/prospector run`: Execução imediata de mineração de clientes.
+       - `/prospector produtos`: Portfólio de produtos à venda.
+       - `/prospector usar`: Ativação de produto para prospecção.
+       - `/prospector produto add`: Cadastro de novas aplicações para venda.
+       - `/prospector add`: Configuração de nichos e cidades.
+       - `/prospector list`: Relatório de clientes minerados.
+       - `/prospector toggle`: Liga/pausa o robô 24/7.
+       - `/modelos`: Ranking de modelos de IA e latência.
+       - `/limpar`: Limpeza do histórico da sessão.
+  2. **Menu Pop-up Inteligente com Glassmorphism**:
+     - Renderizado acima da caixa de texto quando o usuário digita `/`.
+     - Filtro dinâmico em tempo real conforme o usuário continua digitando (ex: `/prosp`, `/man`, `/av`).
+     - **Navegação por Teclado**:
+       - `ArrowDown` / `ArrowUp`: Navega entre os comandos da lista.
+       - `Enter` / `Tab`: Seleciona o comando focado e insere no campo de texto com foco imediato.
+       - `Escape`: Fecha o menu pop-up.
+  3. **Painel de Explicação em Português (Hover/Focus Preview Card)**:
+     - Exibe no lado direito do menu a descrição detalhada do que o comando faz, o objetivo e uma caixa de exemplo de uso em código com destaque visual.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
