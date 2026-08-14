@@ -1211,4 +1211,29 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 62: Motor Multi-Produto de Inteligência de Mercado, Mapeamento de Avatar/ICP & Portfólio Dinâmico
+
+* **Por que foi feita essa alteração (Causa Raiz & Demanda do Usuário)**:
+  - O usuário perguntou como o Agente de Prospecção pode se **ajustar dinamicamente a qualquer produto ou aplicação do portfólio** que ele queira vender (ex.: Zenda AI, MaxRouter Gateway, automações), incluindo a capacidade de **fazer pesquisa de mercado autônoma para mapear o Avatar/ICP, gerar listas qualificadas de prospects e sugerir a melhor oferta**.
+
+* **Como foi implementado (Solução Técnica Passo a Passo)**:
+  1. **Tabelas de Portfólio e Inteligência de Mercado (`apps/agent/src/prospector.js`)**:
+     - `prospector_products`: Catálogo de produtos à venda com nome, descrição, nichos-alvo, cidades, propostas de valor e pitch padrão.
+     - `prospector_market_research`: Histórico de pesquisas de mercado estruturadas contendo o Dossiê completo de Avatar, ICP, Dores latentes, Objeções e Ganchos de alta conversão.
+  2. **Motor Autônomo de Pesquisa de Mercado (`researchMarketAvatar`)**:
+     - O Agente realiza buscas automáticas na Web (`webSearch`) sobre as dores reais, queixas de clientes e gargalos de atendimento do nicho pesquisado.
+     - O LLM sintetiza os dados em um **Dossiê Go-To-Market completo** com:
+       1. *Perfil do Cliente Ideal (ICP & Avatar)*: Tomadores de decisão e porte da empresa.
+       2. *Top 3 Dores Latentes*: Problemas críticos que causam perda de faturamento.
+       3. *Top 3 Objeções & Quebra de Objeção*: Respostas persuasivas para barreiras comuns.
+       4. *Ganchos de Abordagem*: Pitches adaptados para WhatsApp e Instagram DM.
+       5. *Modelo de Oferta e Precificação*.
+  3. **Comandos Conversacionais no Chat / Telegram (`orchestrator.js`)**:
+     - `/prospector avatar <nicho>` — Gera na hora o Dossiê de Mercado para qualquer nicho *(Ex.: `/prospector avatar Odontologia`)*.
+     - `/prospector produtos` — Lista todos os produtos cadastrados no portfólio.
+     - `/prospector usar <id>` — Troca instantaneamente o produto ativo da prospecção.
+     - `/prospector produto add <Nome>; <Descrição>; <Nichos>; <Cidades>` — Cadastra um novo produto para o robô vender.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*

@@ -333,21 +333,60 @@ async function processMessage(chatId, text, userName, ctx = {}) {
 
     if (!sub || sub === "status") {
       const stats = prospector.getStats();
-      content = `🎯 *Motor de Prospecção 24/7*\n\n` +
-        `• **Status:** ${stats.running ? "🟢 Ativo e Rodando 24/7" : "⏸️ Pausado"}\n` +
+      content = `🎯 *Motor de Prospecção B2B 24/7*\n\n` +
+        `• **Produto Ativo:** 🚀 *${stats.settings.product_name || 'Zenda AI'}*\n` +
+        `• **Status:** ${stats.running ? "🟢 Ativo e Minerando 24/7" : "⏸️ Pausado"}\n` +
         `• **Intervalo:** a cada ${stats.settings.interval_min} minutos\n` +
-        `• **Termos:** _${stats.settings.target_keywords}_\n` +
-        `• **Região:** _${stats.settings.target_location}_\n` +
-        `• **Envio Auto WhatsApp:** ${stats.settings.auto_send_wa ? "✅ Sim" : "❌ Manual"}\n` +
-        `• **Envio Auto Instagram DM:** ${stats.settings.auto_send_ig ? "✅ Sim" : "❌ Manual"}\n` +
-        `• **Total de Oportunidades:** ${stats.totalLeads}\n` +
+        `• **Nichos-Alvo:** _${stats.settings.target_keywords}_\n` +
+        `• **Cidades:** _${stats.settings.target_location}_\n` +
+        `• **Envio Auto WhatsApp:** ${stats.settings.auto_send_wa ? "✅ Sim" : "❌ Fila de Rascunhos"}\n` +
+        `• **Envio Auto Instagram DM:** ${stats.settings.auto_send_ig ? "✅ Sim" : "❌ Fila de Rascunhos"}\n` +
+        `• **Total de Clientes Mapeados:** ${stats.totalLeads}\n` +
         `• **Abordagens Despachadas:** ${stats.sentOutreach}\n` +
-        `• **Rascunhos Pendentes:** ${stats.draftedOutreach}\n\n` +
-        `_Comandos:_ \`/prospector run\`, \`/prospector add <termos>; [local]\`, \`/prospector toggle\`, \`/prospector list\``;
+        `• **Rascunhos Prontos:** ${stats.draftedOutreach}\n\n` +
+        `_Comandos Disponíveis:_\n` +
+        `• \`/prospector avatar <nicho>\` — Pesquisa de mercado e Avatar/ICP\n` +
+        `• \`/prospector produtos\` — Ver portfólio de produtos à venda\n` +
+        `• \`/prospector usar <produto_id>\` — Mudar produto da prospecção\n` +
+        `• \`/prospector run\` — Rodar ciclo de busca agora\n` +
+        `• \`/prospector add <nichos>; [cidades]\` — Atualizar termos de busca\n` +
+        `• \`/prospector toggle\` — Ativar/pausar`;
+    } else if (sub.startsWith("avatar ") || sub.startsWith("pesquisar ")) {
+      const niche = sub.replace(/^(?:avatar|pesquisar)\s+/i, "").trim();
+      content = `🔬 *Realizando Pesquisa de Mercado & ICP Avatar para "${niche}"...*\n\n_Aguarde alguns instantes enquanto consulto a Web e sintetizo as dores e ganchos..._`;
+      prospector.researchMarketAvatar(niche).then((res) => {
+        session.msgs.push({ role: "assistant", content: res.dossier });
+        persistHistories();
+      }).catch((e) => console.error("[Prospector Research] Erro:", e.message));
+    } else if (sub === "produtos" || sub === "portfolio" || sub === "portfólio") {
+      const prods = prospector.listProducts();
+      content = `📦 *Portfólio de Produtos para Prospecção:*\n\n` +
+        prods.map((p) => `• **${p.name}** [ID: \`${p.id}\`] ${p.is_active ? "🟢 *[ATIVO]*" : "⚪"}\n  _${p.description}_\n  🎯 *Nichos:* ${p.target_niches}\n  📍 *Regiões:* ${p.target_locations}`).join("\n\n") +
+        `\n\n_Para ativar um produto:_ \`/prospector usar <id>\`\n_Para cadastrar novo:_ \`/prospector produto add <Nome>; <Descrição>; <Nichos>; <Cidades>\``;
+    } else if (sub.startsWith("usar ")) {
+      const prodId = sub.slice(5).trim();
+      try {
+        const active = prospector.setActiveProduct(prodId);
+        content = `🚀 *Produto Ativo Atualizado!*\n\nAgora o robô está prospectando para **${active.name}**.\n• Nichos: _${active.target_niches}_\n• Cidades: _${active.target_locations}_`;
+      } catch (err) {
+        content = `❌ Erro ao trocar produto: ${err.message}`;
+      }
+    } else if (sub.startsWith("produto add ")) {
+      const raw = sub.slice(12).split(";");
+      const name = raw[0]?.trim();
+      const desc = raw[1]?.trim();
+      const niches = raw[2]?.trim();
+      const locs = raw[3]?.trim();
+      if (!name) {
+        content = "❌ Uso: `/prospector produto add <Nome>; <Descrição>; <Nichos>; <Cidades>`";
+      } else {
+        const prod = prospector.addProduct({ name, description: desc, target_niches: niches, target_locations: locs });
+        content = `✅ *Novo produto cadastrado no portfólio!*\n• Nome: **${prod.name}** [ID: \`${prod.id}\`]\n• Descrição: _${prod.description}_\n\nPara ativá-lo na prospecção: \`/prospector usar ${prod.id}\``;
+      }
     } else if (sub === "run") {
-      content = "⏳ *Iniciando ciclo de busca e prospecção autônoma agora... Notificarei assim que novas vagas e abordagens forem processadas.*";
+      content = "⏳ *Iniciando ciclo de busca e prospecção de clientes agora... Notificarei no Telegram assim que novos clientes forem minerados.*";
       prospector.runCycle().then((r) => {
-        console.log("[Prospector] Ciclo manual concluído:", r);
+        console.log("[Prospector Zenda] Ciclo concluído:", r);
       }).catch((e) => console.error("[Prospector] Erro no ciclo:", e.message));
     } else if (sub === "toggle" || sub === "pause" || sub === "start") {
       const current = prospector.getSettings();
@@ -363,17 +402,17 @@ async function processMessage(chatId, text, userName, ctx = {}) {
         target_keywords: kw || undefined,
         target_location: loc || undefined,
       });
-      content = `✅ *Novos critérios de busca salvos!*\n• Termos: _${updated.target_keywords}_\n• Local: _${updated.target_location}_`;
+      content = `✅ *Novos critérios de busca salvos!*\n• Nichos: _${updated.target_keywords}_\n• Cidades: _${updated.target_location}_`;
     } else if (sub === "list") {
       const leads = prospector.listLeads(10);
       if (leads.length === 0) {
-        content = "📭 Nenhuma oportunidade registrada ainda. Use `/prospector run` para iniciar uma busca imediata.";
+        content = "📭 Nenhum cliente registrado ainda. Use `/prospector run` para iniciar uma busca imediata.";
       } else {
-        content = `📋 *Últimas ${leads.length} Oportunidades & Abordagens:*\n\n` +
-          leads.map((l) => `• *${l.title}* — _${l.company}_ (${l.location})\n  Status: \`${l.status}\` | Canal: ${l.phone ? "📱 WA" : ""} ${l.instagram_handle ? "📸 IG" : ""}\n  _Msg: ${l.wa_message ? l.wa_message.slice(0, 120) + "..." : "Sem rascunho"}_`).join("\n\n");
+        content = `📋 *Últimos ${leads.length} Clientes Prospectados:*\n\n` +
+          leads.map((l) => `• *${l.name}* (${l.category} - ${l.city})\n  Status: \`${l.status}\` | Canal: ${l.phone ? `📱 WA: ${l.phone}` : ""} ${l.instagram_handle ? `📸 @${l.instagram_handle}` : ""}\n  _Abordagem: ${l.wa_message ? l.wa_message.slice(0, 120) + "..." : "Sem rascunho"}_`).join("\n\n");
       }
     } else {
-      content = `❓ *Comandos do Prospector 24/7:*\n• \`/prospector status\` — Ver status e métricas\n• \`/prospector run\` — Rodar ciclo de busca agora\n• \`/prospector add <termos>; [local]\` — Atualizar termos de busca\n• \`/prospector toggle\` — Ativar/pausar\n• \`/prospector list\` — Listar últimas vagas e abordagens`;
+      content = `❓ *Comandos do Prospector B2B:*\n• \`/prospector status\` — Status e métricas\n• \`/prospector avatar <nicho>\` — Pesquisa de mercado e Avatar/ICP\n• \`/prospector produtos\` — Portfólio de produtos\n• \`/prospector usar <produto_id>\` — Mudar produto\n• \`/prospector run\` — Rodar ciclo agora\n• \`/prospector add <nichos>; [cidades]\` — Critérios de busca\n• \`/prospector list\` — Listar clientes minerados`;
     }
 
     session.msgs.push({ role: "assistant", content });

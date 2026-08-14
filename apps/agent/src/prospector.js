@@ -53,17 +53,81 @@ db.exec(`
     FOREIGN KEY (lead_id) REFERENCES prospector_leads(id)
   );
 
+  CREATE TABLE IF NOT EXISTS prospector_products (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    target_niches TEXT NOT NULL,
+    target_locations TEXT NOT NULL,
+    value_props TEXT NOT NULL,
+    default_pitch TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+
+  CREATE TABLE IF NOT EXISTS prospector_market_research (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id TEXT NOT NULL,
+    niche TEXT NOT NULL,
+    avatar_title TEXT NOT NULL,
+    pain_points TEXT NOT NULL,
+    objections TEXT NOT NULL,
+    hooks TEXT NOT NULL,
+    full_dossier TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+
   CREATE INDEX IF NOT EXISTS idx_prospector_leads_status ON prospector_leads(status, created_at);
   CREATE INDEX IF NOT EXISTS idx_prospector_outreach_lead ON prospector_outreach(lead_id, channel);
+  CREATE INDEX IF NOT EXISTS idx_prospector_products_active ON prospector_products(is_active);
 `);
 
 // Migrações seguras de colunas para bancos já criados
 try { db.exec("ALTER TABLE prospector_settings ADD COLUMN product_name TEXT DEFAULT 'Zenda AI'"); } catch {}
+try { db.exec("ALTER TABLE prospector_settings ADD COLUMN active_product_id TEXT DEFAULT 'zenda-ai'"); } catch {}
 try { db.exec("ALTER TABLE prospector_leads ADD COLUMN name TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE prospector_leads ADD COLUMN category TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE prospector_leads ADD COLUMN city TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE prospector_leads ADD COLUMN contact_person TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE prospector_leads ADD COLUMN website_url TEXT DEFAULT ''"); } catch {}
+try { db.exec("ALTER TABLE prospector_leads ADD COLUMN matched_product_id TEXT DEFAULT ''"); } catch {}
+
+// Seed de produtos padrão no portfólio
+try {
+  const hasZenda = db.prepare("SELECT id FROM prospector_products WHERE id = 'zenda-ai'").get();
+  if (!hasZenda) {
+    db.prepare(`
+      INSERT INTO prospector_products (id, name, description, target_niches, target_locations, value_props, default_pitch, is_active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+    `).run(
+      'zenda-ai',
+      'Zenda AI (Clínicas & Consultórios)',
+      'Agente de IA e Atendimento 24/7 para WhatsApp integrado ao Google Calendar para agendamento automático de consultas.',
+      'Clínica Odontológica, Clínica de Estética, Consultório Médico, Hospital Veterinário, Dermatologia, Fisioterapia, Nutrição',
+      'São Paulo, Rio de Janeiro, Curitiba, Belo Horizonte, Campinas, Brasil',
+      'Atendimento 24/7 no WhatsApp, Agendamento automático no Google Calendar, Redução de no-show, Zero perda de pacientes fora do horário comercial',
+      'Atende pacientes instantaneamente, tira dúvidas de procedimentos e agenda consultas no Google Calendar sem sobrecarregar a recepção.'
+    );
+  }
+
+  const hasMaxrouter = db.prepare("SELECT id FROM prospector_products WHERE id = '9router-gateway'").get();
+  if (!hasMaxrouter) {
+    db.prepare(`
+      INSERT INTO prospector_products (id, name, description, target_niches, target_locations, value_props, default_pitch, is_active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+    `).run(
+      '9router-gateway',
+      'MaxRouter LLM Gateway (B2B Tech)',
+      'Gateway unificado de IA com roteamento inteligente, fallback automático de modelos e redução de até 80% nos custos de token.',
+      'Startups de Tecnologia, Software Houses, Desenvolvedores, Agências Digitais, Empresas de SaaS',
+      'Brasil, São Paulo, Remoto, Internacional',
+      '140+ modelos de IA em 1 endpoint, Zero downtime com failover instantâneo, Cache semântico de alta velocidade',
+      'Roteador inteligente de LLMs com alta resiliência e fallback automático para suas aplicações de IA.'
+    );
+  }
+} catch (err) {
+  console.warn("[Prospector Seed] Erro ao registrar produtos padrão:", err.message);
+}
 
 // Garante configuração padrão inicial para o Zenda
 const defaultSettings = db.prepare("SELECT * FROM prospector_settings WHERE id = 'default'").get();
@@ -94,7 +158,7 @@ function updateSettings(settings) {
   db.prepare(`
     UPDATE prospector_settings
     SET enabled = ?, interval_min = ?, auto_send_wa = ?, auto_send_ig = ?,
-        target_keywords = ?, target_location = ?, product_name = ?, custom_pitch = ?
+        target_keywords = ?, target_location = ?, product_name = ?, custom_pitch = ?, active_product_id = ?
     WHERE id = 'default'
   `).run(
     next.enabled ? 1 : 0,
@@ -104,9 +168,135 @@ function updateSettings(settings) {
     next.target_keywords || '',
     next.target_location || '',
     next.product_name || 'Zenda AI',
-    next.custom_pitch || ''
+    next.custom_pitch || '',
+    next.active_product_id || 'zenda-ai'
   );
   return getSettings();
+}
+
+function addProduct({ id, name, description, target_niches, target_locations, value_props, default_pitch }) {
+  if (!name) throw new Error("Nome do produto obrigatório");
+  const prodId = id || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  db.prepare(`
+    INSERT INTO prospector_products (id, name, description, target_niches, target_locations, value_props, default_pitch, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      description = excluded.description,
+      target_niches = excluded.target_niches,
+      target_locations = excluded.target_locations,
+      value_props = excluded.value_props,
+      default_pitch = excluded.default_pitch
+  `).run(
+    prodId,
+    name,
+    description || "",
+    target_niches || "Clínicas, Consultórios, Empresas",
+    target_locations || "São Paulo, Rio de Janeiro, Brasil",
+    value_props || "",
+    default_pitch || ""
+  );
+  return getProduct(prodId);
+}
+
+function getProduct(id) {
+  return db.prepare("SELECT * FROM prospector_products WHERE id = ?").get(id);
+}
+
+function listProducts() {
+  return db.prepare("SELECT * FROM prospector_products ORDER BY is_active DESC, created_at DESC").all();
+}
+
+function setActiveProduct(id) {
+  const prod = getProduct(id);
+  if (!prod) throw new Error(`Produto "${id}" não encontrado`);
+  db.prepare("UPDATE prospector_products SET is_active = 0").run();
+  db.prepare("UPDATE prospector_products SET is_active = 1 WHERE id = ?").run(id);
+  updateSettings({
+    product_name: prod.name,
+    target_keywords: prod.target_niches,
+    target_location: prod.target_locations,
+    custom_pitch: prod.default_pitch,
+    active_product_id: prod.id,
+  });
+  return prod;
+}
+
+/**
+ * Realiza Pesquisa de Mercado com IA e WebSearch para mapear ICP / Avatar, Dores e Ganchos.
+ */
+async function researchMarketAvatar(niche, productName) {
+  const settings = getSettings();
+  const prodName = productName || settings.product_name || "Zenda AI";
+  const targetNiche = niche || settings.target_keywords.split(",")[0].trim() || "Clínicas Odontológicas";
+
+  console.log(`[MarketResearch] Realizando pesquisa de mercado e avatar para "${targetNiche}" focado em "${prodName}"...`);
+
+  // 1. Busca fatos de mercado na Web
+  let marketSnippets = "";
+  try {
+    const webQueries = [
+      `problemas gestão atendimento agendamento ${targetNiche}`,
+      `software automação whatsapp no-show ${targetNiche}`,
+    ];
+    const results = await Promise.all(webQueries.map((q) => webSearch.searchWeb(q, 3)));
+    marketSnippets = results.flat().map((r) => `- ${r.title}: ${r.snippet || ""}`).join("\n");
+  } catch (e) {
+    console.warn("[MarketResearch] WebSearch aviso:", e.message);
+  }
+
+  // 2. Análise Profunda com IA (LLM Market Strategist)
+  const prompt = `Você é um estrategista sênior de Go-To-Market e Vendas B2B para o produto "${prodName}".
+Analise o nicho "${targetNiche}" com base nas informações de mercado e monte o Dossiê Completo de Avatar / ICP.
+
+Fatos coletados da Web:
+${marketSnippets || "(Conhecimento geral do setor de saúde/serviços no Brasil)"}
+
+Estruture o dossiê com os seguintes tópicos obrigatórios:
+1. 👤 PERFIL DO CLIENTE IDEAL (ICP & AVATAR):
+   - Quem é o tomador de decisão (Dono da clínica, Sócio-médico, Gestor(a) de atendimento).
+   - Porte ideal da empresa (faturamento, nº de atendimentos/mês, tamanho da recepção).
+2. ⚡ TOP 3 DORES LATENTES:
+   - Os 3 maiores problemas que fazem o cliente perder dinheiro hoje (ex.: pacientes sem resposta fora do horário, secretária sobrecarregada, no-show/faltas).
+3. 🛡️ TOP 3 OBJEÇÕES DE COMPRA & COMO QUEBRAR:
+   - "Já tenho secretária", "IA é fria/robótica", "Não tenho tempo para configurar".
+4. 🎯 GANCHOS DE ABORDAGEM (PITCH ANGLES):
+   - 2 ganchos diretos para WhatsApp e Instagram DM focados em ROI e agendamento automático.
+5. 💡 OFERTA & PRICING SUGERIDO:
+   - Modelo de precificação ideal (Mensalidade recorrente SaaS + Setup).
+
+Retorne em Markdown bem formatado, profissional e pronto para orientar o robô de prospecção.`;
+
+  let dossier = "";
+  try {
+    const res = await proxy.complete([
+      { role: "system", content: "Você é um diretor de Go-To-Market e inteligência de mercado B2B." },
+      { role: "user", content: prompt },
+    ], { timeoutMs: 15000, maxRetries: 1 });
+    dossier = res.content.trim();
+  } catch (err) {
+    dossier = `### Dossiê de Avatar para ${targetNiche} (${prodName})\n\n**ICP:** Donos e gestores de ${targetNiche}.\n**Dores:** Perda de agendamentos no WhatsApp, sobrecarga da recepção, falta de atendimento 24/7.\n**Proposta de Valor:** Agente IA 24/7 integrado ao Google Calendar para agendamento automático.`;
+  }
+
+  // Salva no banco de dados
+  db.prepare(`
+    INSERT INTO prospector_market_research (product_id, niche, avatar_title, pain_points, objections, hooks, full_dossier)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    settings.active_product_id || 'zenda-ai',
+    targetNiche,
+    `Avatar ${targetNiche}`,
+    'Perda de pacientes fora do horário, sobrecarga da recepção, no-show',
+    'Já tenho recepcionista, medo de IA parecer robô',
+    'Aumento imediato de consultas e atendimento 24h sem custo fixo de pessoal',
+    dossier
+  );
+
+  return {
+    niche: targetNiche,
+    product: prodName,
+    dossier,
+  };
 }
 
 /**
@@ -453,5 +643,10 @@ module.exports = {
   generateOutreachMessage,
   sendWhatsAppOutreach,
   sendInstagramOutreach,
-  upsertLead
+  upsertLead,
+  addProduct,
+  getProduct,
+  listProducts,
+  setActiveProduct,
+  researchMarketAvatar,
 };
