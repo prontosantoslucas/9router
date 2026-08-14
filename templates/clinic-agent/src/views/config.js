@@ -39,6 +39,42 @@ export function renderConfigView({ runtimeConfig = {} }) {
         </div>
 
         <div class="space-y-4">
+          <h4 class="font-bold text-sm text-teal-400 border-b border-slate-800 pb-2">Configurações de IA & MaxRouter Gateway</h4>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Atrele seu Token de API do MaxRouter para que o Agente Zenda possa autenticar e utilizar o motor de Inteligência Artificial de forma única.
+          </p>
+
+          <div>
+            <label class="block text-xs text-slate-400 font-semibold mb-1">Token de API do MaxRouter (Chave de IA Única)</label>
+            <div class="relative">
+              <input 
+                type="password" 
+                id="maxrouter-token-input"
+                name="maxrouterToken" 
+                value="${escapeHtml(runtimeConfig.maxrouterToken || config.router.apiKey || "")}" 
+                placeholder="Cole seu token único (ex: sk-maxrouter-...)" 
+                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-teal-300 focus:outline-none focus:border-teal-500 font-mono pr-12"
+              />
+              <button 
+                type="button" 
+                onclick="const input = document.getElementById('maxrouter-token-input'); input.type = input.type === 'password' ? 'text' : 'password';"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 text-xs px-1"
+                title="Mostrar/Ocultar Token"
+              >
+                👁️
+              </button>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+              ${(runtimeConfig.maxrouterToken || (config.router.apiKey && !config.router.apiKey.startsWith("test_"))) ? `
+                <span class="text-emerald-400">✅ Token de IA único vinculado e ativo.</span>
+              ` : `
+                <span class="text-amber-400">⚠️ Nenhum token de IA vinculado. Insira o token acima para liberar o uso do LLM.</span>
+              `}
+            </p>
+          </div>
+        </div>
+
+        <div class="space-y-4">
           <h4 class="font-bold text-sm text-teal-400 border-b border-slate-800 pb-2">Modo do Agente de IA</h4>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

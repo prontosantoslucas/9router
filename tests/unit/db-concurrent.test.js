@@ -18,7 +18,11 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
+  if (tempDir) {
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch {}
+  }
   if (originalDataDir === undefined) delete process.env.DATA_DIR;
   else process.env.DATA_DIR = originalDataDir;
 });
@@ -27,11 +31,13 @@ describe("DB Concurrency — atomic safety", () => {
   it("100 parallel saveRequestUsage → no count loss", async () => {
     const N = 100;
     const promises = [];
+    const baseTime = Date.now();
     for (let i = 0; i < N; i++) {
       promises.push(db.saveRequestUsage({
+        timestamp: new Date(baseTime + i).toISOString(),
         provider: "openai", model: "gpt-4", connectionId: "c1",
         tokens: { prompt_tokens: 10, completion_tokens: 5 },
-        endpoint: "/v1/chat", status: "ok",
+        endpoint: `/v1/chat/${i}`, status: "ok",
       }));
     }
     await Promise.all(promises);
@@ -68,8 +74,10 @@ describe("DB Concurrency — atomic safety", () => {
 
   it("mixed concurrent: usage + details + connections + aliases", async () => {
     const ops = [];
+    const baseTime = Date.now();
     for (let i = 0; i < 50; i++) {
       ops.push(db.saveRequestUsage({
+        timestamp: new Date(baseTime + i).toISOString(),
         provider: "anthropic", model: `m-${i % 3}`, connectionId: "c2",
         tokens: { prompt_tokens: 20 }, status: "ok",
       }));
@@ -152,8 +160,10 @@ describe("DB Concurrency — atomic safety", () => {
   it("daily summary aggregates correctly under parallel writes", async () => {
     const N = 50;
     const promises = [];
+    const baseTime = Date.now();
     for (let i = 0; i < N; i++) {
       promises.push(db.saveRequestUsage({
+        timestamp: new Date(baseTime + i).toISOString(),
         provider: "google", model: "gemini-pro", connectionId: "cG",
         tokens: { prompt_tokens: 100, completion_tokens: 50 },
         status: "ok",

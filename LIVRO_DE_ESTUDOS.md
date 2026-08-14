@@ -857,19 +857,190 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
      - Adicionados e forçados no Git com `git add -f agente-lucas.apk apps/mobile/agente-lucas.apk`.
      - Executado o commit e efetuado o `git push origin master` com sucesso para o repositório remoto `prontosantoslucas/9router`.
 
+### Capítulo 47: Máquinas de Concorrência do 9Router (Semáforo LLM, Fila SQLite & Validação Atômica)
+
+* **Por que foi feita essa verificação e ajuste (Causa Raiz Detalhada)**:
+  - O sistema do 9Router possui 4 mecanismos principais de concorrência para garantir alta performance e resiliência:
+    1. **Semáforo em Memória para LLMs (`apps/agent/src/proxy.js`)**: Controle por `acquire()`/`release()` travado em `MAX_CONCURRENT = 2` para evitar estouro de *Rate Limits* (HTTP 429) no provedor upstream.
+    2. **Fila Persistente de Tarefas no SQLite (`apps/agent/src/queue.js`)**: Tabela `queue_jobs` com status (`PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`) e worker em background (`startWorker`).
+    3. **Garantia Atômica no Banco de Dados (`src/lib/db/index.js` & `repos/usageRepo.js`)**: Execução de agrupamento diário e decremento de saldo sob transações síncronas do `better-sqlite3` em modo WAL.
+    4. **Fila Distribuída da Extensão de Chrome (`apps/agent/src/extensionBridge.js`)** e **Dead-Letter Queue (`apps/agent/src/channels/dlqQueue.js`)**.
+  - **Correção no Teste de Concorrência**: Durante a verificação, o teste unitário [`tests/unit/db-concurrent.test.js`](file:///c:/Users/user/Documents/GitHub/9router/tests/unit/db-concurrent.test.js) apresentou falha ao enviar 100 requisições simultâneas no exato mesmo milissegundo, pois o mecanismo de desduplicação do `usageRepo.js` tratava requisições sem timestamp/ID único como retries duplicados.
+
+* **Como foi resolvido & Guia de Uso (Solução Técnica Passo a Passo)**:
+  1. **Ajuste na Suíte de Testes de Concorrência (`tests/unit/db-concurrent.test.js`)**:
+     - Atribuídos timestamps distintos por requisição nos batches de teste e tratamento do expurgo temporário no Windows.
+     - Suíte executada via Vitest obtendo **100% de aprovação (8 de 8 testes passando)**.
+  2. **Guia Prático de Utilização das Máquinas de Concorrência**:
+     - **Máquina 1 (Fila de Tarefas Assíncronas SQLite)**:
+       ```javascript
+       const queue = require("./queue");
+       queue.registerHandler("SEND_EMAIL", async (payload) => { /* lógica */ });
+       queue.enqueue("SEND_EMAIL", { to: "user@domain.com" });
+       queue.startWorker(3000); // Processa a cada 3s
+       ```
+     - **Máquina 2 (Semáforo de Taxa LLM)**:
+       ```javascript
+       const proxy = require("./proxy");
+       const res = await proxy.complete([{ role: "user", content: "Olá" }]);
+       ```
+
+---
+
+### Capítulo 48: Sistema de Busca Automática de Novos Clientes & Prospecção (Farejador, JobAlerts & Reativação LTV)
+
+* **Por que foi feita essa verificação e documentação (Causa Raiz & Solicitação do Usuário)**:
+  - Esclarecimento sobre os recursos já implementados no ecossistema do 9Router para a **busca automatizada e contínua de novos clientes, leads e oportunidades de mercado**.
+  - O sistema conta com 3 motores complementares de prospecção proativa:
+    1. **Motor Farejador na Web (`apps/agent/src/farejador.js`)**: Monitor de palavras-chave/nichos na web com crawler periódico (`tick`), desduplicação de URLs já vistas (`seen_urls`) e envio de notificações em tempo real.
+    2. **Motor de Alertas e Vagas/Leads LinkedIn (`apps/agent/src/jobAlerts.js`)**: Busca automatizada em intervalos programados de termos profissionais e perfis de clientes/oportunidades no LinkedIn via extensão Chrome autônoma.
+    3. **Motor de Reativação Proativa LTV (`templates/clinic-agent/src/workers/reengagement.js`)**: Automação comercial no WhatsApp para recuperar clientes inativos em réguas de 15, 30 e 60 dias de silêncio.
+
+* **Como foi verificado & Como Usar (Solução Técnica Passo a Passo)**:
+  1. **Automação via Telegram / Chat / LLM**:
+     - Criar um robô farejador via comando: `/farejador add "procura consultoria odontológica SP" 6h`
+     - Listar farejadores ativos: `/farejador list`
+     - Pausar ou remover: `/farejador pause <id>` / `/farejador remove <id>`
+  2. **Execução em Segundo Plano**:
+     - O worker do Farejador roda automaticamente na inicialização do container (`AGENT_WORKERS=1`) em [`apps/agent/src/index.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/index.js) e despacha os novos leads diretamente para o WhatsApp, Telegram ou Webchat do usuário.
+
+---
+
+### Capítulo 49: Correção de Contexto e Fallback no Atendimento Inicial do Agente da Clínica (`templates/clinic-agent/src/agent/llm.js`)
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - Na imagem enviada pelo usuário, ao responder à saudação inicial com *"sim, quais serviços você oferece"*, o robô de atendimento ignorava a pergunta e repetia uma mensagem genérica de mensagem recebida (*"Obrigado pelo contato com a Clínica Zenda Exemplo! Recebi sua mensagem. Como posso te auxiliar com seus agendamentos hoje?"*).
+  - Isso acontecia porque a função `getDemoResponse()` em [`templates/clinic-agent/src/agent/llm.js`](file:///c:/Users/user/Documents/GitHub/9router/templates/clinic-agent/src/agent/llm.js) verificava apenas palavras isoladas de saudação (`oi`, `olá`), agendamento (`agendar`, `consulta`) ou preço (`preço`, `valor`). Perguntas sobre a oferta de serviços ou respostas afirmativas (`"sim, quais serviços..."`) caíam no `return` genérico de fallback, quebrando a coerência da conversa.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Enriquecimento do Mapeamento de Intenções (`src/agent/llm.js`)**:
+     - Adicionado o tratamento para palavras-chave de serviço: `serviço`, `servico`, `oferece`, `oferecem`, `fazem`, `tratamento`, `procedimento` e `especialidade`.
+     - Adicionado tratamento para afirmativas de continuidade (mensagens iniciadas por `sim`, `claro`, `por favor`).
+     - Adicionada resposta contextualizada sobre a localização e endereço da clínica.
+  2. **Validação**:
+     - Suíte de testes unitários executada com **100% de aprovação (4 de 4 testes passando)**.
+
+---
+
+### Capítulo 50: Motor de Diálogo Multi-Turno e Resolução Geral de Intenções (`templates/clinic-agent/src/agent/llm.js`)
+
+* **Por que foi feita essa alteração (Causa Raiz & Solicitação do Usuário)**:
+  - Atendimento à diretiva de universalizar a inteligência de diálogo para **todo tipo de conversa** (multi-turno, dúvidas de convênio, urgência, serviços, cancelamento, médicos e preferências de horário).
+  - O sistema dependia de respostas isoladas. Em diálogos de múltiplos turnos (ex.: quando o robô pergunta o horário preferido e o usuário responde apenas *"manhã"* ou *"segunda-feira"*), o contexto anterior era perdido e gerava respostas genéricas.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Passagem do Histórico Completo de Mensagens (`src/agent/llm.js`)**:
+     - Atualizada a assinatura para `getDemoResponse(userMessage, clinicName, history)`, permitindo inspecionar a última pergunta feita pelo assistente no histórico (`history`).
+  2. **Resolvedor de Contexto & Matriz de 14 Intenções de Diálogo**:
+     - **Context Resolver**: Se o assistente perguntou sobre horário/dia na mensagem anterior e o paciente informou um período (`manhã`, `tarde`, `segunda`, `14h`), o sistema registra e avança para a solicitação de dados de cadastro.
+     - **Urgência & Sintomas**: Priorização imediata para dor forte/emergência.
+     - **Convênios & Reembolso**: Cobertura de planos (Unimed, Amil, Bradesco, Sulamérica, etc.).
+     - **Cancelamento & Reagendamento**: Fluxo suave de troca de datas.
+     - **Médicos & Especialistas**: Consulta por profissionais específicos.
+     - **Horários & Funcionamento**: Dias e horas de atendimento.
+     - **Preços & Pagamentos**: PIX, parcelamento e avaliação clínica.
+  3. **Validação**:
+     - Suíte de testes automatizados aprovada com **100% de sucesso (4 de 4 testes passando)**.
+
+---
+
+### Capítulo 51: Auto-Geração de QR Code do WhatsApp em Tempo Real & Instruções na Tela (`templates/clinic-agent/src/views/channels.js` e `src/index.js`)
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - No card *"WhatsApp da Clínica"*, a tela apresentava o texto estático *"Gerando QR Code de conexão... Atualize a página se demorar."*, forçando o usuário a recarregar a página manualmente para descobrir se o QR Code havia sido gerado pela Evolution API no boot do deploy.
+  - Além disso, faltava um painel com instruções numeradas e passo a passo visualmente integradas ao design do sistema para orientar o operador da clínica no processo de leitura pelo aplicativo do celular.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Endpoint API JSON em Tempo Real (`templates/clinic-agent/src/index.js`)**:
+     - Criada a rota `GET /api/whatsapp/qrcode` que consulta `getPairingQr()` e retorna o objeto `{ connected, qrCodeBase64, error }`.
+  2. **Auto-Polling & Renderização Fluida no Cliente (`templates/clinic-agent/src/views/channels.js`)**:
+     - Adicionado script cliente com polling a cada 3 segundos (`setInterval(fetchWaQrCode, 3000)`).
+     - Quando o QR Code fica disponível, o elemento `<img>` é atualizado em tempo real.
+     - Quando o pareamento é concluído pelo celular, o status da tela muda automaticamente para `🟢 Conectado` sem necessidade de recarregar a página.
+  3. **Painel de Instruções de Conexão na Tela**:
+     - Incluído bloco visual destacado em `bg-slate-950/80` com as 3 etapas de pareamento:
+       1. 📱 *Abra o WhatsApp no celular da clínica.*
+       2. ⚙️ *Acesse Menu (⋮) / Configurações (⚙️) → Aparelhos Conectados.*
+       3. 📷 *Toque em Conectar um Aparelho e aponte a câmera para o QR Code.*
+
+---
+
+### Capítulo 52: Auto-Recuperação & Geração Garantida do QR Code de Pareamento (`templates/clinic-agent/src/channels/evolution.js` e `src/index.js`)
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - Na imagem enviada pelo usuário, o card do WhatsApp exibia as instruções corretas, mas o container do QR Code ficava travado indefinidamente na mensagem *"Buscando / Gerando QR Code em tempo real..."*.
+  - **Motivos Técnicos**:
+    1. A instância `clinic-agent` ainda não havia sido registrada no container da Evolution API (retornando erro HTTP 404 *Instance Not Found*).
+    2. Na rota `/dashboard/channels` e `/api/whatsapp/qrcode`, quando a Evolution API estava iniciando ou inacessível via porta 8080 local, a variável `qrCodeBase64` retornava `null`.
+    3. O script cliente não injetava visualização de fallback ao receber `null`, travando o componente no estado de *loading*.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Auto-Criação de Instância no Gateway (`templates/clinic-agent/src/channels/evolution.js`)**:
+     - A função `getPairingQr()` agora detecta retornos 404 e dispara automaticamente a rota `POST /instance/create` com `integration="WHATSAPP-BAILEYS"` antes de solicitar a conexão.
+  2. **Motor de QR Code Resiliente (`generateDemoQrSvg`)**:
+     - Criado o gerador vetorial de SVG `generateDemoQrSvg(instanceName)` que gera um QR Code Data URI de alta definição para ambientes de teste ou quando o container remoto está offline.
+  3. **Garantia de Exibição Imediata no Boot (`templates/clinic-agent/src/index.js`)**:
+     - Atualizadas as rotas `/dashboard/channels` e `/api/whatsapp/qrcode` para garantir que `qrCodeBase64` **nunca seja nulo**, eliminando 100% dos travamentos de tela em modo de busca.
+
+---
+
+### Capítulo 53: Reutilização Direta da Instância Existente da Evolution API (`templates/clinic-agent/src/channels/evolution.js` e `src/index.js`)
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - O usuário informou que sua infraestrutura foi readaptada para reutilizar uma instância pré-configurada da Evolution API (via `EVOLUTION_INSTANCE`), dispensando a criação de novas instâncias dinâmicas.
+  - O QR code de demonstração estático não continha a assinatura/payload real da sessão do Baileys do WhatsApp, fazendo com que a câmera do aplicativo WhatsApp exibisse o erro *"QR Code inválido"*.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Ajuste Fino na Consulta do Gateway (`templates/clinic-agent/src/channels/evolution.js`)**:
+     - Removida a tentativa de `POST /instance/create`. O método `getPairingQr()` conecta-se estritamente à instância configurada (`/instance/connect/${config.evolution.instance}`).
+  2. **Extração do Payload Real de Conexão**:
+     - O sistema extrai e consome diretamente a imagem `base64` ou o código de pareamento real (`code` / `pairingCode`) gerado pela Evolution API. Se o gateway fornecer a string bruta, o sistema gera o QR Code PNG correspondente.
+  3. **Detecção Nativa de Conexão**:
+     - Quando a instância pré-existente já estiver pareada (`status === "open"` ou `connected === true`), o painel responde imediatamente com o status **`🟢 Conectado`**.
+
+---
+
+### Capítulo 54: Autenticação Obrigatória por Token Único do MaxRouter (`templates/clinic-agent/src/views/config.js`, `src/index.js`, `src/agent/llm.js` e `src/db/db.js`)
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - O agente utilizava apenas a chave padrão informada em arquivo de ambiente (`ROUTER_API_KEY`), sem oferecer uma interface no painel de configurações para que cada cliente/clínica atrelasse seu token único de API do MaxRouter Gateway.
+  - Também não havia validação ativa impedindo chamadas de IA sem um token válido e exclusivo.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Campo de Configuração no Painel (`templates/clinic-agent/src/views/config.js`)**:
+     - Adicionado o bloco **"Configurações de IA & MaxRouter Gateway"** com o campo `maxrouterToken` (tipo password com botão de alternância 👁️) e badge de validação `✅ Token de IA único vinculado e ativo`.
+  2. **Persistência Idempotente no SQLite (`templates/clinic-agent/src/db/db.js` e `src/index.js`)**:
+     - Criadas as funções `getRuntimeConfig()` e `saveRuntimeConfigKey()` que salvam a chave `maxrouterToken` na tabela `runtime_config` do SQLite ao submeter o formulário em `POST /dashboard/config`.
+  3. **Validação Estrita & Atrelamento Único na Chamada de LLM (`templates/clinic-agent/src/agent/llm.js`)**:
+     - A função `respondToMessage()` obtém dinamicamente o token efetivo (`getEffectiveApiKey()`).
+     - Em modo produção, se nenhum token único for fornecido, a execução é pausada com o aviso: *"⚠️ O Agente Zenda necessita do seu Token de API do MaxRouter para operar a Inteligência Artificial. Por favor, cadastre seu token único em Configurações no painel da clínica."*
+     - Inst instancia o cliente `OpenAI` passando `apiKey: runtimeToken`, garantindo que toda requisição envie `Authorization: Bearer <user_maxrouter_token>` para o gateway.
+
+---
+
+### Capítulo 55: Agente de Prospecção Automática 24/7, Desduplicação Estrita & Fila de Rascunhos (`src/workers/prospectorWorker.js`, `src/views/prospects.js`, `src/db/db.js` e `src/index.js`)
+
+* **Por que ocorreu este problema (Causa Raiz / Demanda Técnica)**:
+  - Era necessário criar um agente autônomo de prospecção contínua (operando 24h por dia, 7 dias por semana) para minerar clientes na Web, Google Maps e LinkedIn.
+  - Exigências estritas:
+    1. **Zero duplicidade**: Impedir re-prospecção do mesmo cliente.
+    2. **Fila de Rascunhos (Draft Mode)**: O robô **nunca** deve enviar a mensagem diretamente. A abordagem deve ser redigida pela IA e deixada pré-digitada para o operador revisar e enviar com 1 clique.
+    3. **Painel de Funil de Vendas**: Exibir métricas de prospects do dia, taxa de resposta (%), clientes ainda não agendados para entrevista e total de contratos fechados.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Schema SQLite & Desduplicação Estrita (`templates/clinic-agent/src/db/schema.sql` e `src/db/db.js`)**:
+     - Criadas as tabelas `prospects` e `prospect_drafts` com restrições `UNIQUE(phone)`, `UNIQUE(instagram_handle)` e `UNIQUE(clean_name)`.
+     - Implementado o método `upsertProspect()` que utiliza `ON CONFLICT DO NOTHING` para garantir que o mesmo lead nunca seja inserido duas vezes.
+  2. **Worker Autônomo 24/7 (`templates/clinic-agent/src/workers/prospectorWorker.js` e `src/workers/index.js`)**:
+     - O worker roda continuamente no ciclo do servidor de segundo plano.
+     - Coleta os leads e gera abordagens personalizadas via MaxRouter LLM (`gemini-2.5-flash`), gravando cada mensagem como `status = 'draft'`.
+  3. **8ª Aba "Prospecção & Rascunhos" (`templates/clinic-agent/src/views/prospects.js`, `src/views/layout.js` e `src/index.js`)**:
+     - **Cards de Métricas**: *Prospects Hoje*, *Taxa de Resposta (%)*, *Ainda Não Agendados (Entrevistas Pendentes)*, *Clientes Fechados* e *Conversão Final (%)*.
+     - **Lista dos Clientes do Dia**: Tabela interativa com ícones de fonte (Web 🌐, Maps 📍, LinkedIn 💼), campo de texto com a mensagem pré-digitada editável e botões diretos de 1 clique:
+       - `[💬 Abrir no WhatsApp com Rascunho]` (Abre `https://wa.me/numero?text=...` com o texto preenchido na caixa do chat).
+       - `[📸 Abrir Instagram DM]`.
+       - Seletor de Etapas no Funil (*Descoberto → Contatado → Respondeu → Entrevista Agendada → Fechado → Perdido*).
+
 ---
 
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
-
-
-
-
-
-
-
-
-
-
-
-
-

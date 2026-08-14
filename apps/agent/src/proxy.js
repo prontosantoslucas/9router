@@ -3,9 +3,9 @@ const { getPriorityList, markExhausted } = require("./models");
 const cache = require("./cache");
 const metrics = require("./metrics");
 const keyrotator = require("./keyrotator");
-const OPENAI = require("openai");
-
-const client = new OPENAI({ baseURL: ROUTER_BASE_URL, apiKey: keyrotator.getKey() || "dummy_internal_key" });
+// NOTE: openai SDK is NOT imported here — all HTTP calls use native fetch directly.
+// The openai client lives in models.js (for openai.models.list()). Importing it here
+// caused startup hangs in some environments (web-runtime shim init).
 
 // Semáforo: max 2 requests simultâneos para não estourar rate limit do upstream
 const MAX_CONCURRENT = 2;

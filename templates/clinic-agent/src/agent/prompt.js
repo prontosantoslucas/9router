@@ -35,6 +35,15 @@ export function buildSystemPrompt(chatId) {
     OWNER_NAME: config.agent.ownerName,
     OWNER_WHATSAPP: config.agent.ownerWhatsapp,
     NOW: new Date().toISOString(),
+    // Personalidade/guardrails do memoria-template.md. Sem estes, o
+    // interpolate substituía por string vazia e o agente perdia tom de voz,
+    // política de emoji e as regras do que NÃO pode dizer.
+    CONSULTATION_PRICE: config.clinic.consultationPrice,
+    TONE_OF_VOICE: config.agent.toneOfVoice,
+    PATIENT_PROFILE: config.agent.patientProfile,
+    BRAND_WORDS: config.agent.brandWords,
+    FORBIDDEN_WORDS: config.agent.forbiddenWords,
+    EMOJI_POLICY: config.agent.emojiPolicy,
   };
 
   let system = interpolate(MEMORIA_BASE, vars);

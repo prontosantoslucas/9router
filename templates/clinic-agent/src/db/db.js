@@ -144,3 +144,199 @@ export function saveGoogleTokens({ accessToken, refreshToken = null, expiresAt =
 export function getGoogleTokens() {
   return db.prepare(`SELECT * FROM oauth_tokens WHERE provider = 'google'`).get();
 }
+
+// ============================================================
+// Runtime config helpers (Chave de IA do MaxRouter e configs dinâmicas)
+// ============================================================
+export function getRuntimeConfig() {
+  try {
+    const rows = db.prepare("SELECT key, value FROM runtime_config").all();
+    const cfg = {};
+    for (const r of rows) {
+      cfg[r.key] = r.value;
+    }
+    return cfg;
+  } catch (err) {
+    return {};
+  }
+}
+
+export function saveRuntimeConfigKey(key, value) {
+  return db.prepare(`
+    INSERT INTO runtime_config (key, value, updated_at)
+    VALUES (?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')
+  `).run(key, String(value));
+}
+
+// ============================================================
+// Prospecting 24/7 & Funil de Vendas Helpers
+// ============================================================
+export function upsertProspect(prospect) {
+  const cleanName = (prospect.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const phone = prospect.phone ? prospect.phone.replace(/\D/g, "") : null;
+  const instagram = prospect.instagramHandle ? prospect.instagramHandle.replace(/^@/, "").trim().toLowerCase() : null;
+
+  try {
+    const info = db.prepare(`
+      INSERT INTO prospects (name, clean_name, category, city, phone, instagram_handle, linkedin_url, website, source, stage, notes)
+      VALUES (@name, @cleanName, @category, @city, @phone, @instagram, @linkedinUrl, @website, @source, @stage, @notes)
+      ON CONFLICT(phone) DO NOTHING
+      ON CONFLICT(instagram_handle) DO NOTHING
+      ON CONFLICT(clean_name) DO NOTHING
+    `).run({
+      name: prospect.name,
+      cleanName: cleanName || null,
+      category: prospect.category || "Geral",
+      city: prospect.city || "São Paulo",
+      phone: phone || null,
+      instagram: instagram || null,
+      linkedinUrl: prospect.linkedinUrl || null,
+      website: prospect.website || null,
+      source: prospect.source || "web",
+      stage: prospect.stage || "discovered",
+      notes: prospect.notes || null,
+    });
+
+    if (info.changes > 0) {
+      return db.prepare("SELECT * FROM prospects WHERE id = ?").get(info.lastInsertRowid);
+    }
+
+    // Se já existia, recupera o registro existente para não duplicar
+    return db.prepare(`
+      SELECT * FROM prospects 
+      WHERE (phone IS NOT NULL AND phone = ?) 
+         OR (instagram_handle IS NOT NULL AND instagram_handle = ?) 
+         OR (clean_name IS NOT NULL AND clean_name = ?)
+    `).get(phone, instagram, cleanName);
+  } catch (err) {
+    console.warn("[db] Aviso ao inserir prospect:", err.message);
+    return null;
+  }
+}
+
+export function saveProspectDraft({ prospectId, channel = "whatsapp", draftMessage }) {
+  try {
+    const info = db.prepare(`
+      INSERT INTO prospect_drafts (prospect_id, channel, draft_message, status)
+      VALUES (?, ?, ?, 'draft')
+    `).run(prospectId, channel, draftMessage);
+    return db.prepare("SELECT * FROM prospect_drafts WHERE id = ?").get(info.lastInsertRowid);
+  } catch (err) {
+    console.warn("[db] Erro ao salvar rascunho de prospect:", err.message);
+    return null;
+  }
+}
+
+export function getProspectsWithDrafts() {
+  const rows = db.prepare(`
+    SELECT 
+      p.id AS prospect_id,
+      p.name,
+      p.category,
+      p.city,
+      p.phone,
+      p.instagram_handle,
+      p.linkedin_url,
+      p.website,
+      p.source,
+      p.stage,
+      p.notes,
+      p.created_at,
+      d.id AS draft_id,
+      d.channel AS draft_channel,
+      d.draft_message,
+      d.status AS draft_status
+    FROM prospects p
+    LEFT JOIN prospect_drafts d ON p.id = d.prospect_id
+    ORDER BY p.created_at DESC
+    LIMIT 100
+  `).all();
+  return rows;
+}
+
+export function getProspectingMetrics() {
+  const totalToday = db.prepare(`
+    SELECT COUNT(*) as cnt FROM prospects WHERE date(created_at) = date('now')
+  `).get()?.cnt || 0;
+
+  const totalAll = db.prepare(`SELECT COUNT(*) as cnt FROM prospects`).get()?.cnt || 0;
+
+  const contacted = db.prepare(`
+    SELECT COUNT(*) as cnt FROM prospects WHERE stage IN ('contacted', 'replied', 'interview_scheduled', 'closed', 'lost')
+  `).get()?.cnt || 0;
+
+  const replied = db.prepare(`
+    SELECT COUNT(*) as cnt FROM prospects WHERE stage IN ('replied', 'interview_scheduled', 'closed')
+  `).get()?.cnt || 0;
+
+  const interviewScheduled = db.prepare(`
+    SELECT COUNT(*) as cnt FROM prospects WHERE stage = 'interview_scheduled'
+  `).get()?.cnt || 0;
+
+  const closed = db.prepare(`
+    SELECT COUNT(*) as cnt FROM prospects WHERE stage = 'closed'
+  `).get()?.cnt || 0;
+
+  const responseRate = contacted > 0 ? Math.round((replied / contacted) * 100) : 0;
+  const conversionRate = contacted > 0 ? Math.round((closed / contacted) * 100) : 0;
+
+  return {
+    totalToday,
+    totalAll,
+    contacted,
+    replied,
+    interviewScheduled,
+    closed,
+    responseRate,
+    conversionRate
+  };
+}
+
+export function updateProspectStage(id, stage) {
+  db.prepare("UPDATE prospects SET stage = ? WHERE id = ?").run(stage, id);
+}
+
+export function updateDraftMessage(draftId, draftMessage) {
+  db.prepare("UPDATE prospect_drafts SET draft_message = ? WHERE id = ?").run(draftMessage, draftId);
+}
+
+export function deleteProspect(id) {
+  db.prepare("DELETE FROM prospect_drafts WHERE prospect_id = ?").run(id);
+  db.prepare("DELETE FROM prospects WHERE id = ?").run(id);
+}
+
+// Modo efetivo do agente: o painel (runtime_config) tem prioridade sobre a env
+// var. Sem isso o seletor "Produção/Teste" da tela de Config era decorativo —
+// gravava no banco e todo o código de envio continuava lendo AGENT_MODE, então
+// a clínica achava que tinha armado/desarmado o robô e não tinha.
+//
+// 'prod' = responde de verdade no WhatsApp. Qualquer outro valor = não envia.
+export function getEffectiveAgentMode() {
+  const fromPanel = getRuntimeConfig().agentMode;
+  if (fromPanel === "prod" || fromPanel === "test") return fromPanel;
+  return config.agent.mode;
+}
+
+// Allowlist de demonstração: quando preenchida, o agente só responde a estes
+// números, mesmo em modo prod. Existe pra permitir rodar a demo no número
+// pessoal/comercial sem que o robô responda a TODO mundo que chamar —
+// inclusive prospect, familiar e cliente real.
+//
+// Formato: lista separada por vírgula, só dígitos (5511999999999).
+// Vazia = sem restrição (comportamento normal de produção).
+export function getDemoAllowlist() {
+  const raw = getRuntimeConfig().demoAllowlist ?? process.env.DEMO_ALLOWLIST ?? "";
+  return String(raw)
+    .split(",")
+    .map((n) => n.replace(/\D/g, ""))
+    .filter(Boolean);
+}
+
+// chatId chega como "whatsapp:5511999999999"
+export function isAllowedForDemo(chatId) {
+  const list = getDemoAllowlist();
+  if (list.length === 0) return true;
+  const digits = String(chatId).replace(/\D/g, "");
+  return list.some((n) => digits.endsWith(n) || n.endsWith(digits));
+}

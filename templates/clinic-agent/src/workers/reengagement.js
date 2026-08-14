@@ -4,6 +4,8 @@ import {
   conversationsForReengagement,
   markReengaged,
   logWorkerEvent,
+  getEffectiveAgentMode,
+  isAllowedForDemo,
 } from "../db/db.js";
 import { sendWhatsapp } from "../channels/evolution.js";
 
@@ -106,13 +108,26 @@ export async function runReengagementWorker() {
       continue;
     }
 
-    // LGPD: só envia de fato em produção.
-    if (config.agent.mode !== "prod") {
+    // LGPD: só envia de fato em produção. Modo vem do painel com fallback na env.
+    if (getEffectiveAgentMode() !== "prod") {
       logWorkerEvent({
         kind: "reengagement",
         chatId: conv.chat_id,
         status: "skipped",
-        payload: { tier: tierLabel, reason: "AGENT_MODE!=prod", daysSilent: conv.days_silent },
+        payload: { tier: tierLabel, reason: "modo != prod", daysSilent: conv.days_silent },
+      });
+      skipped++;
+      continue;
+    }
+
+    // Nunca dispara campanha pra fora da allowlist quando ela está ativa —
+    // senão uma demo no número pessoal manda reativação pra base inteira.
+    if (!isAllowedForDemo(conv.chat_id)) {
+      logWorkerEvent({
+        kind: "reengagement",
+        chatId: conv.chat_id,
+        status: "skipped",
+        payload: { tier: tierLabel, reason: "fora da allowlist de demo" },
       });
       skipped++;
       continue;

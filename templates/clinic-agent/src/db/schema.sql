@@ -115,3 +115,41 @@ CREATE TABLE IF NOT EXISTS runtime_config (
   value      TEXT NOT NULL,
   updated_at TEXT DEFAULT (datetime('now'))
 );
+
+-- ============================================================
+-- Prospecção Automática 24/7 — Clientes & Desduplicação Estrita
+-- ============================================================
+CREATE TABLE IF NOT EXISTS prospects (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  name             TEXT NOT NULL,
+  clean_name       TEXT UNIQUE,
+  category         TEXT,
+  city             TEXT,
+  phone            TEXT UNIQUE,
+  instagram_handle TEXT UNIQUE,
+  linkedin_url     TEXT,
+  website          TEXT,
+  source           TEXT DEFAULT 'web',         -- 'maps' | 'web' | 'linkedin'
+  stage            TEXT DEFAULT 'discovered',  -- 'discovered' | 'contacted' | 'replied' | 'interview_scheduled' | 'closed' | 'lost'
+  notes            TEXT,
+  created_at       TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_prospects_stage ON prospects(stage);
+CREATE INDEX IF NOT EXISTS idx_prospects_created ON prospects(created_at);
+
+-- ============================================================
+-- Rascunhos de Abordagem Pré-Digitados (Strict Draft Mode)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS prospect_drafts (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  prospect_id   INTEGER NOT NULL,
+  channel       TEXT NOT NULL,               -- 'whatsapp' | 'instagram'
+  draft_message TEXT NOT NULL,               -- Mensagem gerada pela IA pronta para envio
+  status        TEXT DEFAULT 'draft',        -- 'draft' | 'approved' | 'sent' | 'discarded'
+  created_at    TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (prospect_id) REFERENCES prospects(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_drafts_prospect ON prospect_drafts(prospect_id);
+CREATE INDEX IF NOT EXISTS idx_drafts_status ON prospect_drafts(status);

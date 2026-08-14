@@ -43,6 +43,7 @@ export function renderLayout({ title, activeTab, content, clinicName }) {
       ${renderNavItem("/dashboard/patients", "groups", "Pacientes", activeTab === "patients")}
       ${renderNavItem("/dashboard/notes", "note_alt", "Notas & Prontuários", activeTab === "notes")}
       ${renderNavItem("/dashboard/reports", "insights", "Relatórios", activeTab === "reports")}
+      ${renderNavItem("/dashboard/prospects", "center_focus_strong", "Prospecção & Rascunhos", activeTab === "prospects")}
       ${renderNavItem("/dashboard/channels", "podcasts", "Canais & QR Code", activeTab === "channels")}
       ${renderNavItem("/dashboard/config", "tune", "Configurações", activeTab === "config")}
     </nav>

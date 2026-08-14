@@ -1,11 +1,10 @@
 import { config } from "../config.js";
 import { runReminderWorker } from "./reminder.js";
 import { runReengagementWorker } from "./reengagement.js";
+import { startProspectorWorker } from "./prospectorWorker.js";
 
 // ============================================================
-// Orquestrador dos workers de background (v3 lembrete + v4 reativação).
-// Roda em intervalos. Não usa cron externo — setInterval simples, já que
-// cada instância de clínica é um processo isolado.
+// Orquestrador dos workers de background (lembretes + reativação + prospecção 24/7).
 // ============================================================
 
 const REMINDER_INTERVAL_MS = 15 * 60 * 1000;      // checa lembretes a cada 15min
@@ -29,10 +28,13 @@ export function startWorkers() {
 
   console.log(
     `[workers] iniciados — lembrete ${config.workers.reminderHoursBefore}h antes | ` +
-    `reativação tiers [${config.workers.reengageTiers}] dias | modo ${config.agent.mode}`
+    `reativação tiers [${config.workers.reengageTiers}] dias | prospecção 24/7 ativa | modo ${config.agent.mode}`
   );
 
-  // Primeira execução após 30s (deixa o boot estabilizar)
+  // Inicia o worker de prospecção autônoma 24/7
+  startProspectorWorker();
+
+  // Primeira execução de lembretes após 30s
   const boot = setTimeout(() => {
     safe(runReminderWorker, "reminder");
     safe(runReengagementWorker, "reengagement");

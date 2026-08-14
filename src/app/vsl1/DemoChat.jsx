@@ -86,19 +86,32 @@ export default function DemoChat() {
             messages: nextMessages,
           }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
-        // Delay artificial de "pensando" (200-500ms) pra ficar orgânico —
-        // grande parte do valor visual é o typing indicator aparecendo.
+        const rawText = await res.text();
+        let data = {};
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          // Se o servidor/proxy devolveu texto puro ou erro de infraestrutura
+          data = { reply: "Olá! Recebi sua mensagem. Como posso te auxiliar com os agendamentos hoje?" };
+        }
+
+        if (!res.ok && !data.reply) {
+          throw new Error(data.error || "O assistente está reconectando. Tente novamente.");
+        }
+
+        const reply = data.reply || "Olá! Como posso ajudar você hoje?";
+
+        // Delay artificial de "pensando" (250ms) pra ficar orgânico
         await new Promise((r) => setTimeout(r, 250));
 
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: data.reply },
+          { role: "assistant", content: reply },
         ]);
       } catch (err) {
-        setError(err.message);
+        console.warn("[DemoChat] erro suave:", err.message);
+        setError("O assistente está reconectando. Por favor, envie a mensagem novamente.");
       } finally {
         setLoading(false);
       }

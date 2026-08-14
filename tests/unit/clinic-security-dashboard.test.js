@@ -24,6 +24,7 @@ import { renderAppointmentsView } from "../../templates/clinic-agent/src/views/a
 import { renderPatientsView } from "../../templates/clinic-agent/src/views/patients.js";
 import { renderNotesView } from "../../templates/clinic-agent/src/views/notes.js";
 import { renderReportsView } from "../../templates/clinic-agent/src/views/reports.js";
+import { renderProspectsView } from "../../templates/clinic-agent/src/views/prospects.js";
 import { renderChannelsView } from "../../templates/clinic-agent/src/views/channels.js";
 import { renderConfigView } from "../../templates/clinic-agent/src/views/config.js";
 import { renderLoginView } from "../../templates/clinic-agent/src/views/login.js";
@@ -52,7 +53,7 @@ describe("Zenda Clinic Agent — Autenticação, Segurança e Views", () => {
     expect(cookies.theme).toBe("dark");
   });
 
-  it("deve renderizar as 7 telas do painel e o login sem erros de template", () => {
+  it("deve renderizar as 8 telas do painel e o login sem erros de template", () => {
     const conversationsHtml = renderConversationsView({ conversations: [], selectedChat: null });
     expect(conversationsHtml).toContain("Conversas do Atendimento");
 
@@ -67,6 +68,9 @@ describe("Zenda Clinic Agent — Autenticação, Segurança e Views", () => {
 
     const reportsHtml = renderReportsView({ metrics: { totalConversations: 10 } });
     expect(reportsHtml).toContain("Relatórios & Desempenho");
+
+    const prospectsHtml = renderProspectsView({ metrics: { totalToday: 5, responseRate: 40 }, prospects: [] });
+    expect(prospectsHtml).toContain("Prospecção B2B de Novas Clínicas 24/7");
 
     const channelsHtml = renderChannelsView({ whatsappConnected: true });
     expect(channelsHtml).toContain("Canais & Divulgação");

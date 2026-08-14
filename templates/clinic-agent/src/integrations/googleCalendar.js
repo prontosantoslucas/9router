@@ -34,12 +34,13 @@ function getOAuth2Client() {
 // ============================================================
 // URL de autorização (chamada pelo /setup/google no server)
 // ============================================================
-export function getAuthUrl() {
+export function getAuthUrl(state) {
   const client = getOAuth2Client();
   return client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",  // força retornar refresh_token
     scope: ["https://www.googleapis.com/auth/calendar"],
+    ...(state ? { state } : {}),
   });
 }
 

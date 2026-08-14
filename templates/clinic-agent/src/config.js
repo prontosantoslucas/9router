@@ -36,6 +36,7 @@ export const config = {
     instagram: opt("CLINIC_INSTAGRAM"),
     website: opt("CLINIC_WEBSITE"),
     address: opt("CLINIC_ADDRESS"),
+    consultationPrice: opt("CONSULTATION_PRICE", "avaliação gratuita"),
   },
   router: {
     baseUrl: opt("ROUTER_BASE_URL", "https://maxrouter.up.railway.app/v1"),
@@ -59,6 +60,23 @@ export const config = {
     name: opt("AGENT_NAME", "atendimento"),
     ownerName: opt("AGENT_OWNER_NAME"),
     ownerWhatsapp: opt("AGENT_OWNER_WHATSAPP"),
+
+    // Personalidade e guardrails. Ficavam só no memoria-template.md como
+    // {{VARIÁVEIS}} que ninguém preenchia — o interpolate troca variável
+    // desconhecida por string vazia, então tom de voz, palavras proibidas e
+    // perfil do paciente sumiam silenciosamente do system prompt. Era a causa
+    // do agente soar genérico independentemente do questionário preenchido.
+    toneOfVoice: opt(
+      "TONE_OF_VOICE",
+      "Cordial e direto. Frases curtas (2-4 linhas). Português brasileiro informal, sem gíria excessiva."
+    ),
+    patientProfile: opt("PATIENT_PROFILE", "Pacientes adultos buscando atendimento particular ou por convênio."),
+    brandWords: opt("BRAND_WORDS", ""),
+    forbiddenWords: opt(
+      "FORBIDDEN_WORDS",
+      "Nunca prometa resultado clínico, não dê diagnóstico, não cite preço exato sem avaliação."
+    ),
+    emojiPolicy: opt("EMOJI_POLICY", "No máximo 1 emoji por mensagem, e não em todas."),
   },
   security: {
     dashboardPassword: need("DASHBOARD_PASSWORD"),

@@ -1,12 +1,24 @@
 import express from "express";
+import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
-import { db, getConversation, getMessages, upcomingAppointments } from "./db/db.js";
+import { 
+  db, 
+  getConversation, 
+  getMessages, 
+  upcomingAppointments, 
+  getProspectingMetrics, 
+  getProspectsWithDrafts, 
+  updateProspectStage, 
+  updateDraftMessage, 
+  deleteProspect 
+} from "./db/db.js";
 import { handleWebchat } from "./channels/webchat.js";
-import { handleEvolutionWebhook, getPairingQr } from "./channels/evolution.js";
+import { handleEvolutionWebhook, getPairingQr, generateDemoQrSvg } from "./channels/evolution.js";
 import { getAuthUrl, exchangeCodeForTokens } from "./integrations/googleCalendar.js";
 import { startWorkers } from "./workers/index.js";
+import { runProspectingCycle } from "./workers/prospectorWorker.js";
 
 // Módulos de Autenticação e Views
 import { 
@@ -21,6 +33,7 @@ import { renderAppointmentsView } from "./views/appointments.js";
 import { renderPatientsView } from "./views/patients.js";
 import { renderNotesView } from "./views/notes.js";
 import { renderReportsView } from "./views/reports.js";
+import { renderProspectsView } from "./views/prospects.js";
 import { renderChannelsView } from "./views/channels.js";
 import { renderConfigView } from "./views/config.js";
 import { renderLoginView } from "./views/login.js";
@@ -52,11 +65,43 @@ app.get("/login", (_req, res) => {
   res.type("html").send(renderLoginView({}));
 });
 
+// Rate limit do login. A senha do painel é o único portão pra conversa de
+// paciente (dado sensível, LGPD art. 11) — sem limite ela é força-brutável.
+const loginAttempts = new Map();
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 8;
+
+function loginRateOk(ip) {
+  const now = Date.now();
+  const e = loginAttempts.get(ip);
+  if (!e || now > e.resetAt) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    return true;
+  }
+  e.count++;
+  return e.count <= LOGIN_MAX_ATTEMPTS;
+}
+
 app.post("/login", (req, res) => {
+  const ip = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
+  if (!loginRateOk(ip)) {
+    return res
+      .status(429)
+      .type("html")
+      .send(renderLoginView({ error: "Muitas tentativas. Aguarde 10 minutos." }));
+  }
+
   const { password } = req.body || {};
   if (authenticatePassword(password)) {
+    loginAttempts.delete(ip);
     const token = createSessionToken(24);
-    res.setHeader("Set-Cookie", `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Strict`);
+    // Secure fora de dev: o painel roda em domínio público, e sem essa flag o
+    // cookie de sessão trafega em claro se alguém acessar via http://.
+    const secure = config.server.env === "production" ? " Secure;" : "";
+    res.setHeader(
+      "Set-Cookie",
+      `${COOKIE_NAME}=${token}; Path=/; HttpOnly;${secure} SameSite=Strict; Max-Age=86400`
+    );
     return res.redirect("/dashboard/conversations");
   }
   res.status(401).type("html").send(renderLoginView({ error: "Senha de acesso incorreta." }));
@@ -85,12 +130,32 @@ app.use(["/setup", "/dashboard"], requireAuth);
 // ============================================================
 // Setup: Google OAuth (Protegido)
 // ============================================================
+// `state` é gerado aqui (rota já protegida por requireAuth) e conferido no
+// callback. Sem ele, qualquer um autoriza com a PRÓPRIA conta Google e chama o
+// callback da clínica: `oauth_tokens` tem PK por provider, então a linha é
+// sobrescrita e os agendamentos dos pacientes passam a ser criados na agenda
+// do atacante — com nome, serviço e horário de cada um.
+const pendingOAuthStates = new Map();
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+
 app.get("/setup/google", (_req, res) => {
-  res.redirect(getAuthUrl());
+  const state = crypto.randomBytes(16).toString("hex");
+  pendingOAuthStates.set(state, Date.now() + OAUTH_STATE_TTL_MS);
+  res.redirect(getAuthUrl(state));
 });
 
 app.get("/oauth/google/callback", async (req, res) => {
   try {
+    const { state } = req.query;
+    const expiresAt = state ? pendingOAuthStates.get(state) : null;
+    if (!expiresAt || Date.now() > expiresAt) {
+      pendingOAuthStates.delete(state);
+      return res
+        .status(400)
+        .send("Requisição de autorização inválida ou expirada. Refaça a conexão pelo painel.");
+    }
+    pendingOAuthStates.delete(state);
+
     await exchangeCodeForTokens(req.query.code);
     res.send(`
       <h2>Google Calendar conectado</h2>
@@ -102,22 +167,28 @@ app.get("/oauth/google/callback", async (req, res) => {
 });
 
 // ============================================================
-// Setup: QR code do WhatsApp (Protegido)
+// Endpoint API JSON: QR Code em tempo real (Polling)
 // ============================================================
-app.get("/setup/whatsapp", async (_req, res) => {
+// requireAuth explícito: esta rota está fora dos prefixos /setup e /dashboard
+// cobertos pelo middleware acima, e devolve o QR de pareamento. Sem a trava,
+// qualquer um busca o QR e vincula o próprio aparelho ao WhatsApp da clínica.
+app.get("/api/whatsapp/qrcode", requireAuth, async (_req, res) => {
   try {
     const data = await getPairingQr();
-    const qr = data.base64 || data.qrcode?.base64 || null;
-    if (!qr) return res.send(`<p>Instância já pareada ou sem QR disponível: ${JSON.stringify(data).slice(0,200)}</p>`);
-    res.send(`
-      <h2>Escanear com WhatsApp Business</h2>
-      <p>Abra o WhatsApp Business → Aparelhos conectados → Conectar aparelho → aponte para o QR abaixo.</p>
-      <img src="${qr.startsWith("data:") ? qr : `data:image/png;base64,${qr}`}" style="max-width:400px" />
-      <p><a href="/dashboard/channels">← Voltar para o painel</a></p>
-    `);
+    if (data.connected) {
+      return res.json({ connected: true, qrCodeBase64: null });
+    }
+    return res.json({ connected: false, qrCodeBase64: data.base64 || null, error: data.error || null });
   } catch (err) {
-    res.status(500).send(`Falha: ${err.message}`);
+    return res.json({ connected: false, qrCodeBase64: null, error: err.message });
   }
+});
+
+// ============================================================
+// Setup: QR code do WhatsApp em Tela Cheia (Protegido)
+// ============================================================
+app.get("/setup/whatsapp", (_req, res) => {
+  res.redirect("/dashboard/channels");
 });
 
 // ============================================================
@@ -236,6 +307,46 @@ app.get("/dashboard/reports", (_req, res) => {
   }));
 });
 
+// Tela 8: Prospecção Automática & Rascunhos
+app.get("/dashboard/prospects", (_req, res) => {
+  const metrics = getProspectingMetrics();
+  const prospects = getProspectsWithDrafts();
+  res.type("html").send(renderProspectsView({ metrics, prospects }));
+});
+
+app.post("/api/prospects/search-now", async (_req, res) => {
+  try {
+    await runProspectingCycle();
+  } catch (err) {
+    console.warn("[prospects] erro ao buscar prospects:", err.message);
+  }
+  res.redirect("/dashboard/prospects");
+});
+
+app.post("/api/prospects/stage", (req, res) => {
+  const { prospectId, stage } = req.body || {};
+  if (prospectId && stage) {
+    updateProspectStage(Number(prospectId), stage);
+  }
+  res.redirect("/dashboard/prospects");
+});
+
+app.post("/api/prospects/draft", (req, res) => {
+  const { draftId, draftMessage } = req.body || {};
+  if (draftId && draftMessage !== undefined) {
+    updateDraftMessage(Number(draftId), draftMessage);
+  }
+  res.redirect("/dashboard/prospects");
+});
+
+app.post("/api/prospects/delete", (req, res) => {
+  const { prospectId } = req.body || {};
+  if (prospectId) {
+    deleteProspect(Number(prospectId));
+  }
+  res.json({ ok: true });
+});
+
 // Tela 6: Canais & QR Code
 app.get("/dashboard/channels", async (_req, res) => {
   let whatsappConnected = false;
@@ -243,13 +354,10 @@ app.get("/dashboard/channels", async (_req, res) => {
 
   try {
     const data = await getPairingQr();
-    if (data.connected || data.status === "open") {
+    if (data.connected) {
       whatsappConnected = true;
     } else {
-      qrCodeBase64 = data.base64 || data.qrcode?.base64 || null;
-      if (qrCodeBase64 && !qrCodeBase64.startsWith("data:")) {
-        qrCodeBase64 = `data:image/png;base64,${qrCodeBase64}`;
-      }
+      qrCodeBase64 = data.base64 || null;
     }
   } catch (err) {
     console.warn("[channels] Erro ao verificar status do WhatsApp:", err.message);
@@ -276,7 +384,7 @@ app.get("/dashboard/config", (_req, res) => {
 });
 
 app.post("/dashboard/config", (req, res) => {
-  const { agentMode, ownerWhatsapp, workingHours } = req.body || {};
+  const { agentMode, ownerWhatsapp, workingHours, maxrouterToken, demoAllowlist } = req.body || {};
 
   const upsert = db.prepare(`
     INSERT INTO runtime_config (key, value, updated_at) VALUES (?, ?, datetime('now'))
@@ -286,6 +394,17 @@ app.post("/dashboard/config", (req, res) => {
   if (agentMode) upsert.run("agentMode", agentMode);
   if (ownerWhatsapp) upsert.run("ownerWhatsapp", ownerWhatsapp);
   if (workingHours) upsert.run("workingHours", workingHours);
+  // Allowlist de demo — precisa ser editável aqui (e não só no .env) porque o
+  // roteiro de demonstração manda incluir o número do prospect antes da call e
+  // limpar depois. Editar .env + redeploy no meio de uma call não é viável.
+  if (demoAllowlist !== undefined) {
+    upsert.run("demoAllowlist", String(demoAllowlist).replace(/[^\d,]/g, ""));
+  }
+  if (maxrouterToken !== undefined) {
+    const trimmedToken = maxrouterToken.trim();
+    upsert.run("maxrouterToken", trimmedToken);
+    config.router.apiKey = trimmedToken;
+  }
 
   res.redirect("/dashboard/config");
 });

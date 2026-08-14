@@ -13,9 +13,10 @@ RUN npm install
 COPY . ./
 
 # Instala deps do agente (workspace independente).
-# --ignore-scripts evita o postinstall que tenta git submodule update
-# (submodule 9router não é usado no deploy unificado).
-RUN cd apps/agent && npm install --omit=dev --no-audit --no-fund --ignore-scripts
+# Sem --ignore-scripts: permite que better-sqlite3 compile o addon nativo
+# (python3/make/g++ disponíveis neste estágio). O postinstall do agent
+# (git submodule update) falha graciosamente com "|| echo" no package.json.
+RUN cd apps/agent && npm install --omit=dev --no-audit --no-fund
 
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build

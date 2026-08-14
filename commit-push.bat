@@ -9,7 +9,7 @@ REM  >>> A CADA ALTERACAO, edite SOMENTE a linha COMMIT_MSG abaixo. <<<
 REM  O resto do script nao precisa mudar.
 REM =====================================================================
 
-set "COMMIT_MSG=feat(coder): layout 2 colunas com chat, parser tolerante, erros visiveis no preview e loop de auto-correcao; guard protege /coder"
+set "COMMIT_MSG=fix(agent): remove import openai morto no proxy.js que causava hang na inicializacao; Dockerfile sem --ignore-scripts para compilar better-sqlite3"
 
 REM Roda sempre a partir da pasta onde este .bat esta (a raiz do repo).
 cd /d "%~dp0"
