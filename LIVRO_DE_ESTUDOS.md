@@ -1368,4 +1368,33 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 68: Geração de Ícones Oficiais do App Mobile e Auditoria Visual da Aplicação
+
+* **Por que foi feita essa alteração (Causa Raiz & Demanda do Usuário)**:
+  - O aplicativo Android estava com arquivos de ícone vazios / placeholders na pasta de assets ([`apps/mobile/assets/`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile/assets)), fazendo com que o APK ficasse sem o ícone personalizado na tela inicial do dispositivo.
+  - Havia a necessidade de auditar e validar o visual completo da interface mobile (login, chat, modo live, 2º cérebro Notion e aba de insights).
+
+* **Como foi implementado (Solução Técnica Passo a Passo)**:
+  1. **Geração da Identidade Visual e Ícone 3D com IA**:
+     - Gerado ícone oficial de alta resolução com estética futurista: orbe neural com ondas de energia ciano e índigo, acabamento 3D glassmorphism e fundo escuro em ardósia metálica (`#0f172a`).
+  2. **Pipeline Automatizado de Resolução de Ícones (`scripts/generate-mobile-icons.js`)**:
+     - Processados e redimensionados via biblioteca `sharp` para todas as densidades exigidas pelo ecossistema Android e Expo:
+       - `assets/icon.png` (1024x1024)
+       - `assets/adaptive-icon.png` (1024x1024)
+       - `assets/splash-icon.png` (1024x1024)
+       - `android/app/src/main/res/mipmap-mdpi/` (48px)
+       - `android/app/src/main/res/mipmap-hdpi/` (72px)
+       - `android/app/src/main/res/mipmap-xhdpi/` (96px)
+       - `android/app/src/main/res/mipmap-xxhdpi/` (144px)
+       - `android/app/src/main/res/mipmap-xxxhdpi/` (192px)
+       - Ícones adaptativos circulares (`ic_launcher_round.png`) e de primeiro plano (`ic_launcher_foreground.png`).
+  3. **Auditoria e Validação do Design da Interface**:
+     - **Login (`app/login.tsx`)**: Card escuro com anel de destaque, suporte a input de senha e alternador de URL de servidor customizada.
+     - **Chat (`app/(tabs)/index.tsx`)**: Renderizador Markdown completo, prompts rápidos temáticos, seletor de câmera/galeria com Haptics, integração direta para salvar notas no Notion.
+     - **Modo ao Vivo (`app/(tabs)/live.tsx`)**: Orbe animado reativo com feedback háptico, estados cromáticos dinâmicos (*Escuta em Azul Violeta, Processamento em Roxo Neon, Fala em Ciano Veloce*) e reprodução nativa de áudio neural.
+     - **2º Cérebro (`app/(tabs)/brain.tsx`)**: Listagem categorizada de memórias e anotações sincronizadas.
+     - **Insights (`app/(tabs)/insights.tsx`)**: Painel de alertas e oportunidades mineradas com badge de notificação em tempo real.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
