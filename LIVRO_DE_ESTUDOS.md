@@ -1311,4 +1311,33 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 66: Correção do Modo ao Vivo (TTS 100% Real) e Autenticação do App Mobile (APK)
+
+* **Por que estava dando esse problema (Causa Raiz Detalhada)**:
+  1. **Falha no Modo ao Vivo e Preview de Voz (*"Preview falhou: TTS indisponível (provider de voz não configurado no gateway)"*)**:
+     - O endpoint `/api/audio/tts` em [`apps/agent/src/index.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/index.js) delegava a síntese para [`apps/agent/src/audio/ttsService.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/audio/ttsService.js), que tentava fazer uma requisição HTTP externa para o gateway OpenAI-compatível (`/v1/audio/speech`).
+     - Caso o gateway estivesse sem provedor de voz comercial com chave configurada ou retornasse erro de roteamento, o `ttsService` retornava `null`, provocando o erro 503 retornado na interface do usuário.
+  2. **Falha no App Mobile (APK)**:
+     - No login mobile ([`src/app/api/auth/login/route.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/auth/login/route.js)), o servidor apenas definia o cookie HTTP `Set-Cookie: auth_token=...` e não retornava o token no corpo JSON da resposta. No ecossistema React Native (Android/iOS), os cookies HTTP de sessão não são propagados de forma transparente entre requisições HTTP REST.
+     - Além disso, nas rotas protegidas ([`src/dashboardGuard.js`](file:///c:/Users/user/Documents/GitHub/9router/src/dashboardGuard.js), [`src/app/api/agent/[[...path]]/route.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/agent/%5B%5B...path%5D%5D/route.js) e [`src/app/api/auth/status/route.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/auth/status/route.js)), a autenticação validava estritamente `request.cookies.get("auth_token")` e ignorava o cabeçalho `Authorization: Bearer <jwt-token>` enviado pelo aplicativo Android, resultando em 401 Unauthorized imediato no APK.
+     - Na tela de ligação ao vivo do mobile ([`apps/mobile/app/(tabs)/live.tsx`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile/app/%28tabs%29/live.tsx)), a função de fala utilizava simulação com `setTimeout` no Android em vez de reproduzir áudio real.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Motor de Síntese de Voz 100% Real com Microsoft Neural Edge TTS ([`apps/agent/src/audio/ttsService.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/audio/ttsService.js))**:
+     - Implementado sintetizador neural nativo Edge TTS com suporte completo a vozes em Português do Brasil (`pt-BR-FranciscaNeural`, `pt-BR-AntonioNeural`, etc.).
+     - O motor gera arquivos de áudio MP3 reais (Buffer/Base64) sem depender de API keys pagas e sem falhar.
+     - Se o gateway estiver configurado, ele tenta o gateway; se indisponível, faz a síntese nativa de alta fidelidade instantaneamente.
+  2. **Retorno do Token JWT no Login para Clientes Mobile ([`src/app/api/auth/login/route.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/auth/login/route.js) e [`src/lib/auth/dashboardSession.js`](file:///c:/Users/user/Documents/GitHub/9router/src/lib/auth/dashboardSession.js))**:
+     - O endpoint `/api/auth/login` agora retorna `{ success: true, token, mustChangePassword }` no corpo JSON, permitindo que o APK armazene o token de forma segura no `expo-secure-store`.
+  3. **Suporte a `Authorization: Bearer <token>` em Todos os Guards de Segurança**:
+     - [`src/dashboardGuard.js`](file:///c:/Users/user/Documents/GitHub/9router/src/dashboardGuard.js): `hasValidToken(request)` agora aceita tanto cookie quanto `Authorization: Bearer`.
+     - [`src/app/api/agent/[[...path]]/route.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/agent/%5B%5B...path%5D%5D/route.js): Validação do proxy para o agente aceita Bearer token.
+     - [`src/app/api/auth/status/route.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/auth/status/route.js): Endpoint de status reconhece o token Bearer e retorna `authenticated: true`.
+  4. **Áudio Real no App Mobile ([`apps/mobile/src/services/api.ts`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile/src/services/api.ts) e [`apps/mobile/app/(tabs)/live.tsx`](file:///c:/Users/user/Documents/GitHub/9router/apps/mobile/app/%28tabs%29/live.tsx))**:
+     - Instalados e configurados `expo-av` e `expo-speech`.
+     - Adicionado método `synthesizeTts` no `apiService`.
+     - Atualizada a tela `live.tsx` para reproduzir o áudio real retornado pelo backend via `Audio.Sound.createAsync`, proporcionando experiência de voz contínua 100% real.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*

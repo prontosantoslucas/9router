@@ -65,6 +65,7 @@ export async function setDashboardAuthCookie(cookieStore, request, claims = {}) 
     sameSite: "lax",
     path: "/",
   });
+  return token;
 }
 
 export function clearDashboardAuthCookie(cookieStore) {

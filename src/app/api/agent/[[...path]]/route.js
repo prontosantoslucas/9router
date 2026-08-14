@@ -131,6 +131,39 @@ function generateHmacSignature() {
 // Métodos HTTP sem body — mantidos como no fetch spec para não passar body vazio.
 const NO_BODY_METHODS = new Set(["GET", "HEAD"]);
 
+// ─────────────────────────────────────────────────────────────
+// Timeout de TIME-TO-FIRST-BYTE no loopback do agente.
+// Sem ele o fetch fica pendurado indefinidamente quando o agente trava, e quem
+// derruba a conexão acaba sendo o edge do Railway — que responde `upstream error`
+// em texto puro, sem status útil e sem log nosso, impossível de diagnosticar.
+//
+// O timer é cancelado assim que os HEADERS da resposta chegam e deliberadamente
+// NÃO cobre o streaming do body: o agente serve SSE (apps/agent/src/proxy.js),
+// e abortar pelo tempo total da resposta cortaria stream longo no meio.
+// Consequência aceita: um body que trava depois dos headers ainda depende do
+// edge. O caso observado (nenhuma resposta) é coberto.
+// ─────────────────────────────────────────────────────────────
+const DEFAULT_UPSTREAM_TIMEOUT_MS = 120_000;
+const SLOW_UPSTREAM_TIMEOUT_MS = 300_000;
+
+// Caminhos com trabalho pesado antes do primeiro byte (upload de 50MB base64,
+// geração de imagem, transcrição, indexação RAG).
+const SLOW_PATHS = [
+  "/api/upload",
+  "/api/imagine",
+  "/api/video/process",
+  "/api/audio/transcribe",
+  "/api/rag/",
+  "/api/agent/video/process",
+  "/api/agent/audio/transcribe",
+  "/api/agent/rag/",
+];
+
+function resolveUpstreamTimeout(targetPath) {
+  const isSlow = SLOW_PATHS.some((p) => targetPath === p || targetPath.startsWith(p));
+  return isSlow ? SLOW_UPSTREAM_TIMEOUT_MS : DEFAULT_UPSTREAM_TIMEOUT_MS;
+}
+
 async function handleProxy(request, context) {
   const pathSegments = (await context.params)?.path || [];
   const targetPath = pathSegments.length > 0 ? `/api/${pathSegments.join("/")}` : "/api";
@@ -150,7 +183,10 @@ async function handleProxy(request, context) {
     const settings = await getSettings().catch(() => ({}));
     const requireLogin = settings?.requireLogin !== false;
     if (requireLogin) {
-      const token = request.cookies.get("auth_token")?.value;
+      const cookieToken = request.cookies.get("auth_token")?.value;
+      const authHeader = request.headers.get("authorization");
+      const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+      const token = cookieToken || bearerToken;
       const isValid = await verifyDashboardAuthToken(token);
       if (!isValid) {
         return NextResponse.json({ error: "Unauthorized — Token de sessão JWT ausente ou inválido" }, { status: 401 });
@@ -199,8 +235,17 @@ async function handleProxy(request, context) {
     }
   }
 
+  const timeoutMs = resolveUpstreamTimeout(targetPath);
+  const abortController = new AbortController();
+  const timeoutTimer = setTimeout(() => abortController.abort(), timeoutMs);
+  fetchInit.signal = abortController.signal;
+
   try {
     const upstreamResponse = await fetch(upstreamUrl, fetchInit);
+
+    // Headers chegaram — o agente está vivo. Solta o timer para o body poder
+    // streamar sem limite (SSE).
+    clearTimeout(timeoutTimer);
 
     // Preserva headers relevantes da resposta (Content-Type, Content-Length, Cache-Control, etc.)
     const responseHeaders = new Headers();
@@ -215,6 +260,25 @@ async function handleProxy(request, context) {
       headers: responseHeaders,
     });
   } catch (err) {
+    clearTimeout(timeoutTimer);
+
+    // Timeout nosso: o agente aceitou a conexão mas não devolveu headers a tempo.
+    // Devolver 504 em JSON aqui é o que impede o edge do host de responder
+    // `upstream error` em texto puro, que não dá para diagnosticar.
+    if (abortController.signal.aborted) {
+      console.error(
+        `[Proxy Timeout] Agente Lucas não respondeu em ${timeoutMs}ms — ${request.method} ${upstreamUrl}`
+      );
+      return NextResponse.json(
+        {
+          error: `O Agente Lucas não respondeu em ${Math.round(timeoutMs / 1000)}s (timeout no loopback)`,
+          path: targetPath,
+          timeoutMs,
+        },
+        { status: 504 }
+      );
+    }
+
     console.error(`[Proxy Error] Falha ao comunicar com o Agente Lucas em ${upstreamUrl}:`, err.message);
     return NextResponse.json(
       { error: "Erro de comunicação com o Agente Lucas (loopback indisponível)", details: err.message },

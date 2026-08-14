@@ -12,6 +12,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useKeepAwake } from 'expo-keep-awake';
 import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
+import * as Speech from 'expo-speech';
 import { apiService } from '../../src/services/api';
 
 type CallStatus = 'OFF' | 'LISTENING' | 'THINKING' | 'SPEAKING';
@@ -146,31 +148,73 @@ export default function LiveScreen() {
     }
   };
 
-  // Síntese de fala (Text-to-Speech) no navegador / dispositivo
-  const speakText = (text: string, onEnd?: () => void) => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'pt-BR';
-      utterance.rate = 1.05;
-      utterance.onend = () => {
+  const soundRef = useRef<Audio.Sound | null>(null);
+
+  // Síntese de fala 100% Real (Text-to-Speech via Edge TTS / expo-av)
+  const speakText = async (text: string, onEnd?: () => void) => {
+    let completed = false;
+    const handleEnd = () => {
+      if (!completed) {
+        completed = true;
         if (onEnd) onEnd();
-      };
-      utterance.onerror = () => {
-        if (onEnd) onEnd();
-      };
-      window.speechSynthesis.speak(utterance);
-    } else {
-      // Simulação mobile nativa de duração de fala baseada no número de palavras
-      const words = text.split(' ').length;
-      const durationMs = Math.max(1500, words * 280);
-      setTimeout(() => {
-        if (onEnd) onEnd();
-      }, durationMs);
+      }
+    };
+
+    try {
+      // 1. Tenta sintetizar a voz real com IA através do backend
+      const ttsData = await apiService.synthesizeTts(text);
+      if (ttsData && ttsData.base64) {
+        // Para som anterior se houver
+        if (soundRef.current) {
+          try {
+            await soundRef.current.stopAsync();
+            await soundRef.current.unloadAsync();
+          } catch {}
+          soundRef.current = null;
+        }
+
+        const uri = `data:${ttsData.mimeType || 'audio/mpeg'};base64,${ttsData.base64}`;
+        const { sound } = await Audio.Sound.createAsync(
+          { uri },
+          { shouldPlay: true },
+          (playbackStatus) => {
+            if (playbackStatus.isLoaded && playbackStatus.didJustFinish) {
+              handleEnd();
+            }
+          }
+        );
+        soundRef.current = sound;
+        return;
+      }
+    } catch (err: any) {
+      console.warn('[Live] Falha ao sintetizar via Edge TTS backend, usando voz local:', err?.message);
+    }
+
+    // 2. Fallback para Speech nativo do dispositivo
+    try {
+      Speech.stop();
+      Speech.speak(text, {
+        language: 'pt-BR',
+        rate: 1.05,
+        onDone: handleEnd,
+        onError: handleEnd,
+      });
+    } catch {
+      handleEnd();
     }
   };
 
-  const stopSpeech = () => {
+  const stopSpeech = async () => {
+    if (soundRef.current) {
+      try {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+      } catch {}
+      soundRef.current = null;
+    }
+    try {
+      Speech.stop();
+    } catch {}
     if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }

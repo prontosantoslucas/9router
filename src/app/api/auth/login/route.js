@@ -55,14 +55,14 @@ export async function POST(request) {
     if (isValid) {
       recordSuccess(ip);
       const cookieStore = await cookies();
-      await setDashboardAuthCookie(cookieStore, request);
+      const token = await setDashboardAuthCookie(cookieStore, request);
 
       // Default password still in use on a remote client → force a password
       // change before the dashboard is exposed remotely (keeps local UX intact).
       const mustChangePassword =
         !storedHash && !process.env.INITIAL_PASSWORD && !isLocalRequest(request);
 
-      return NextResponse.json({ success: true, mustChangePassword }, { headers: NO_STORE_HEADERS });
+      return NextResponse.json({ success: true, token, mustChangePassword }, { headers: NO_STORE_HEADERS });
     }
 
     const { remainingBeforeLock } = recordFail(ip);

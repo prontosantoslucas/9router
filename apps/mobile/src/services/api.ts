@@ -172,6 +172,15 @@ export const apiService = {
     };
   },
 
+  // ──────── API DE SÍNTESE DE VOZ REAL (TTS) ────────
+  async synthesizeTts(text: string, voice?: string): Promise<{ base64: string; mimeType: string }> {
+    const data = await this.request('/api/agent/audio/tts', {
+      method: 'POST',
+      body: JSON.stringify({ text, voice }),
+    });
+    return data;
+  },
+
   // ──────── API DE NOTION / 2º CÉREBRO ────────
   async listNotes(): Promise<NotionNote[]> {
     try {

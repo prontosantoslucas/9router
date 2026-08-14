@@ -4,19 +4,25 @@ import { getSettings } from "@/lib/localDb";
 import { isOidcConfigured } from "@/lib/auth/oidc";
 import { getDashboardAuthSession } from "@/lib/auth/dashboardSession";
 
-export async function GET() {
+export async function GET(request) {
   try {
     const settings = await getSettings();
     const cookieStore = await cookies();
-    const session = await getDashboardAuthSession(cookieStore.get("auth_token")?.value);
+    const authHeader = request?.headers?.get?.("authorization");
+    const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+    const token = cookieStore.get("auth_token")?.value || bearerToken;
+    const session = await getDashboardAuthSession(token);
     const requireLogin = settings.requireLogin !== false;
     const authMode = settings.authMode || "password";
     const oidcName = String(session?.oidcName || "").trim();
     const oidcEmail = String(session?.oidcEmail || "").trim();
     const displayName = oidcName || oidcEmail || (session?.oidc ? "OIDC user" : "Password user");
     const loginMethod = session?.oidc ? "OIDC" : "Password";
+    const isAuthenticated = !requireLogin || !!session;
 
     return NextResponse.json({
+      authenticated: isAuthenticated,
+      success: isAuthenticated,
       requireLogin,
       authMode,
       oidcConfigured: isOidcConfigured(settings),
@@ -30,6 +36,8 @@ export async function GET() {
     });
   } catch {
     return NextResponse.json({
+      authenticated: false,
+      success: false,
       requireLogin: true,
       authMode: "password",
       oidcConfigured: false,

@@ -165,7 +165,10 @@ async function canAccessLocalOnlyRoute(request) {
 }
 
 async function hasValidToken(request) {
-  const token = request.cookies.get("auth_token")?.value;
+  const cookieToken = request.cookies.get("auth_token")?.value;
+  const authHeader = request.headers.get("authorization");
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+  const token = cookieToken || bearerToken;
   return await verifyDashboardAuthToken(token);
 }
 
