@@ -1172,4 +1172,27 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 60: Prospecção B2B de Clientes para o Zenda AI & Conexão Multi-Canal do Instagram
+
+* **Por que foi feita essa alteração (Causa Raiz & Esclarecimento do Usuário)**:
+  - O usuário esclareceu a meta comercial do sistema: o objetivo **não é buscar vagas de emprego**, mas sim **prospectar clientes B2B (clínicas odontológicas, consultórios médicos, clínicas de estética, veterinárias e empresas) para vender a plataforma Zenda AI**.
+  - Além disso, foi solicitada a explicação de como conectar o **Instagram** para disparar DMs comerciais automáticas para os estabelecimentos minerados.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Adaptação do Motor B2B do Zenda (`apps/agent/src/prospector.js`)**:
+     - Configurados os nichos e cidades-alvo por padrão (*Odontologia, Estética, Medicina, Veterinária, Dermatologia em SP, RJ, Curitiba, BH, etc.*).
+     - Implementado o extrator de contatos comerciais (WhatsApp brasileiro `extractContactsFromText` e perfis de Instagram `@handle`).
+     - **Copywriting B2B Especializado em Vendas do Zenda**: A IA gera abordagens personalizadas focadas no valor do Zenda (Agente de Atendimento 24/7 integrado ao WhatsApp e Google Calendar que agenda consultas e responde pacientes automaticamente).
+  2. **Três Métodos de Integração do Instagram para Prospecção**:
+     - **Método 1: Extensão Chrome do 9Router (Mais seguro e automático)**:
+       - Utiliza a sessão já logada no Instagram Web no Chrome do usuário via `apps/agent/src/extensionBridge.js`. O agente enfileira a tarefa `instagram_send_dm` e a extensão envia a mensagem na DM do perfil da clínica com controle de delay para evitar bloqueios.
+     - **Método 2: Deep Link com Rascunho Pré-Preenchido de 1 Clique (`https://ig.me/m/<handle>`)**:
+       - Gera o link direto no painel com o rascunho de vendas do Zenda pronto. Ao clicar, a DM no Instagram abre instantaneamente com o texto preenchido.
+     - **Método 3: Meta Graph API (Oficial para Contas Business)**:
+       - Conexão via Webhook/Token do Facebook Developers para envio programático via Graph API.
+  3. **Validação & Testes**:
+     - Suíte de testes [`tests/unit/prospector-engine.test.js`](file:///c:/Users/user/Documents/GitHub/9router/tests/unit/prospector-engine.test.js) aprovada com **100% de sucesso**.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
