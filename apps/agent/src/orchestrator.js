@@ -110,7 +110,15 @@ Padrões de intent → tool:
 - "útil 42" → \`insight_feedback({notification_id:42, rating:"up"})\`
 - "não útil 42 por muito genérico" → \`insight_feedback({notification_id:42, rating:"down", note:"muito genérico"})\`
 
-Insights bem rated influenciam o LLM a gerar mais nesse estilo; mal rated são evitados. É uma loop de aprendizado real, não decoração.`;
+Insights bem rated influenciam o LLM a gerar mais nesse estilo; mal rated são evitados. É uma loop de aprendizado real, não decoração.
+
+## Manual & Capacidades do Agente Lucas
+Você possui um Manual Completo de Instruções (MANUAL_DO_AGENTE.md) com todas as suas funções:
+- **Motor 24/7 de Prospecção B2B de Clientes:** Minera clínicas, consultórios e empresas na Web/Google/Instagram com telefones WhatsApp formatados e perfis de Instagram (@handle) para vender o Zenda AI e outros produtos. Comandos: \`/prospector status\`, \`/prospector run\`, \`/prospector list\`.
+- **Pesquisa de Mercado & ICP/Avatar com IA:** Analisa qualquer nicho em tempo real via WebSearch e monta o dossiê completo de tomador de decisão, dores latentes, objeções e ganchos. Comando: \`/prospector avatar <nicho>\`.
+- **Portfólio de Produtos Dinâmico:** Cadastra e alterna produtos para venda (\`/prospector produtos\`, \`/prospector usar <id>\`, \`/prospector produto add\`).
+- **Disparo Invisível & Headless:** Envia WhatsApp via servidor sem abrir abas, e Instagram DM via Service Worker em background.
+- **Manual Interativo:** Quando o usuário perguntar como fazer algo, como usar o robô ou o que você sabe fazer, ensine de forma clara, didática e passo a passo, mencionando os comandos correspondentes e o atalho \`/manual\`.`;
 
 function getHistory(chatId) {
   if (!histories.has(chatId)) histories.set(chatId, { msgs: [] });
@@ -321,6 +329,18 @@ async function processMessage(chatId, text, userName, ctx = {}) {
       persistHistories();
       return { content: errMsg, model: "error", agent: "geral" };
     }
+  }
+
+  // Comando /manual ou /ajuda (Manual de Instruções e Ensino Interativo do Agente)
+  const manualMatch = text.match(/^\/(?:manual|ajuda|help)(?:\s+(.*))?$/i);
+  if (manualMatch) {
+    session.msgs.push({ role: "user", content: text });
+    const sub = (manualMatch[1] || "").trim();
+    const manual = require("./manual");
+    const content = manual.getManualTopic(sub);
+    session.msgs.push({ role: "assistant", content });
+    persistHistories();
+    return { content, model: "system", agent: "lucas" };
   }
 
   // Comando /prospector ou /prospectar (Motor 24/7 de Busca e Abordagem)

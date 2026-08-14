@@ -1236,4 +1236,21 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 63: Manual Oficial de Instruções e Motor Interativo de Ensino do Agente Lucas (`/manual`)
+
+* **Por que foi feita essa alteração (Causa Raiz & Demanda do Usuário)**:
+  - O usuário solicitou a criação de um **Manual de Instruções Completo e a implementação no próprio agente para que ele ensine interativamente e passo a passo tudo o que ele é capaz de fazer**, com todos os seus comandos, atalhos, automações e estratégias de venda.
+
+* **Como foi implementado (Solução Técnica Passo a Passo)**:
+  1. **Criação do Manual de Referência Oficial ([`MANUAL_DO_AGENTE.md`](file:///c:/Users/user/Documents/GitHub/9router/MANUAL_DO_AGENTE.md))**:
+     - Documento estruturado na raiz cobrindo 9 seções essenciais: Identidade, Motor 24/7 de Prospecção B2B (Zenda AI & Multi-Produto), Pesquisa de Mercado e ICP/Avatar com IA, Canais Headless/Invisíveis (WhatsApp & Instagram DM), Portfólio de Produtos, Automações e Agendamentos, Superbrain, Tabela de Comandos/Aliases e Guias Práticos Passo a Passo.
+  2. **Módulo Interativo de Ensino ([`apps/agent/src/manual.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/manual.js))**:
+     - Desenvolvido módulo com tópicos segmentados (`geral`, `prospeccao`, `avatar`, `produtos`, `invisivel`, `automacoes`, `comandos`, `passoapasso`, `tudo`).
+     - Função `getManualTopic(query)` que interpreta queries em linguagem natural (ex: *"como prospectar"*, *"avatar"*, *"invisivel"*) e retorna respostas didáticas formatadas.
+  3. **Integração no Orquestrador ([`apps/agent/src/orchestrator.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/orchestrator.js))**:
+     - Adicionado o comando `/manual` (ou `/ajuda`, `/help`) para navegação interativa de tópicos.
+     - Injetada instrução de tutoria no `TOOLS_PROMPT`, permitindo que o Agente Lucas atue como um tutor em conversas livres, ensinando o usuário passo a passo sobre qualquer função do sistema.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
