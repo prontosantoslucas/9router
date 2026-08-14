@@ -287,6 +287,17 @@ async function handleProxy(request, context) {
   }
 }
 
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+      "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, Origin, User-Agent, X-Requested-With, apikey, x-api-key",
+    },
+  });
+}
+
 export const GET = handleProxy;
 export const POST = handleProxy;
 export const PUT = handleProxy;

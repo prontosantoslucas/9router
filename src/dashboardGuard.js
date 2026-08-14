@@ -262,6 +262,19 @@ function isAllowedOnStorefront(pathname) {
 }
 
 export async function proxy(request) {
+  // CORS Preflight: Allow OPTIONS for all API and agent routes from mobile/web clients
+  if (request.method === "OPTIONS") {
+    return new NextResponse(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+        "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, Origin, User-Agent, X-Requested-With, apikey, x-api-key, x-9r-cli-token",
+        "Access-Control-Max-Age": "86400",
+      },
+    });
+  }
+
   const { pathname } = request.nextUrl;
 
   // Vitrine pública: se veio via host de storefront (zenda.app.br), só a VSL existe.

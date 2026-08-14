@@ -17,6 +17,17 @@ function isTunnelRequest(request, settings) {
   return (tunnelHost && host === tunnelHost) || (tailscaleHost && host === tailscaleHost);
 }
 
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
+}
+
 export async function POST(request) {
   try {
     const ip = getClientIp(request);

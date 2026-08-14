@@ -74,41 +74,39 @@ export const apiService = {
     const token = await this.getToken();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
       ...(options.headers as Record<string, string>),
     };
 
     if (token) {
-      headers['Cookie'] = `auth_token=${token}`;
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const url = `${customBaseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+    const cleanBase = customBaseUrl.replace(/\/+$/, '');
+    const cleanPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${cleanBase}${cleanPath}`;
 
-    const res = await fetch(url, {
-      ...options,
-      headers,
-    });
-
-    // Capturar Set-Cookie se retornado no login
-    const setCookieHeader = res.headers.get('set-cookie');
-    if (setCookieHeader && setCookieHeader.includes('auth_token=')) {
-      const match = setCookieHeader.match(/auth_token=([^;]+)/);
-      if (match && match[1]) {
-        await this.setToken(match[1]);
-      }
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        ...options,
+        headers,
+      });
+    } catch (fetchErr: any) {
+      console.warn(`[API] Erro de rede ao chamar ${url}:`, fetchErr.message);
+      throw new Error(`Falha de conexão com ${cleanBase}: ${fetchErr.message || 'Network request failed'}`);
     }
 
     const contentType = res.headers.get('content-type') || '';
     let data: any = {};
     if (contentType.includes('application/json')) {
-      data = await res.json();
+      data = await res.json().catch(() => ({}));
     } else {
-      data = { text: await res.text() };
+      data = { text: await res.text().catch(() => '') };
     }
 
     if (!res.ok) {
       if (res.status === 401) {
-        // Token inválido/expirado
         await this.removeToken();
       }
       const errorMessage = data.error || data.message || `Erro HTTP ${res.status}`;

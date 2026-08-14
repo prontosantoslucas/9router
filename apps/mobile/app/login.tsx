@@ -47,7 +47,7 @@ export default function LoginScreen() {
       } else if (err.status === 429) {
         setErrorMsg('Acesso temporariamente suspenso devido a múltiplas tentativas.');
       } else {
-        setErrorMsg('Falha ao autenticar. Verifique sua conexão e a URL do servidor.');
+        setErrorMsg(err.message || 'Falha ao autenticar. Verifique sua conexão e a URL do servidor.');
       }
     } finally {
       setLoading(false);
