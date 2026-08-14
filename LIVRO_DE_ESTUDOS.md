@@ -1253,4 +1253,29 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 64: Correção de Erro de Execução de Ferramenta do Prospector & Registro de Ferramentas Nativas
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  - Ao receber comandos de prospecção em linguagem natural ou no chat (ex.: *"rode o prospector"* ou *"busque clientes para o zenda"*), o modelo de IA tentava invocar a ferramenta genérica de shell `run_command` passando `cmd: "/prospector run"`.
+  - Como `/prospector` é um comando interno do agente e um módulo JavaScript ([`apps/agent/src/prospector.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/prospector.js)) e não um binário executável do sistema operacional (PATH do Windows/Linux), a execução pelo `child_process.execSync` falhava com erro de comando não encontrado.
+  - Ao receber o erro retornado pelo shell, a IA alucinava uma justificativa de *"Erro interno na integração do prospector. Comandos /prospector são internos do motor de busca, não comandos shell. A ferramenta de busca falhou por inconsistência de permissão/acesso..."*.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Criação de Ferramentas Nativas de IA para o Prospector (`apps/agent/src/tools/index.js`)**:
+     - Registradas as ferramentas nativas no catálogo `TOOLS`:
+       - `prospector_run`: Executa o ciclo de mineração e abordagem diretamente via `prospector.runCycle()`.
+       - `prospector_status`: Consulta métricas e status 24/7 via `prospector.getStats()`.
+       - `prospector_avatar`: Executa pesquisa de mercado e avatar via `prospector.researchMarketAvatar(niche)`.
+       - `prospector_list_leads`: Lista leads minerados e abordagens via `prospector.listLeads()`.
+       - `prospector_portfolio`: Lista os produtos à venda via `prospector.listProducts()`.
+       - `prospector_set_product`: Troca o produto ativo via `prospector.setActiveProduct()`.
+  2. **Intercepção Segura em `run_command`**:
+     - Adicionada camada defensiva em `run_command` para que, caso o modelo ainda tente executar `/prospector run`, `/prospector status` ou `/prospector avatar` via comando de terminal, o sistema intercepte e execute o método JavaScript correspondente sem chamar o shell do SO.
+  3. **Disponibilização para Todos os Agentes (`apps/agent/src/agents.js`)**:
+     - Adicionado `PROSPECTOR_TOOL_NAMES` à lista `COMMON_TOOLS`, garantindo que o agente Lucas e demais personas tenham acesso direto a essas ferramentas nativas.
+  4. **Testes & Deploy**:
+     - Suíte completa de testes unitários ([`tests/unit/prospector-engine.test.js`](file:///c:/Users/user/Documents/GitHub/9router/tests/unit/prospector-engine.test.js)) aprovada com **15 de 15 testes passando (100%)**.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*

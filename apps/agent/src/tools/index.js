@@ -147,7 +147,25 @@ const TOOLS = {
       required: ["cmd"],
     },
     run: async (args) => {
-      const cmd = String(args.cmd);
+      const cmd = String(args.cmd).trim();
+      // Intercepta comandos internos do prospector se invocados via shell tool
+      if (/^\/?prospector\s+run/i.test(cmd)) {
+        const prospector = require("../prospector");
+        const res = await prospector.runCycle();
+        return `✅ Ciclo de prospecção executado: ${res.discovered} clientes minerados, ${res.outreached} abordagens enviadas.`;
+      }
+      if (/^\/?prospector\s+status/i.test(cmd)) {
+        const prospector = require("../prospector");
+        const stats = prospector.getStats();
+        return JSON.stringify(stats, null, 2);
+      }
+      if (/^\/?prospector\s+avatar\s+(.*)/i.test(cmd)) {
+        const niche = cmd.match(/^\/?prospector\s+avatar\s+(.*)/i)[1].trim();
+        const prospector = require("../prospector");
+        const res = await prospector.researchMarketAvatar(niche);
+        return res.dossier;
+      }
+
       const blocked = ["rm -rf", "format", "del /", "rd /", "shutdown", "restart", ">", "|"];
       if (blocked.some((b) => cmd.toLowerCase().includes(b))) return "Comando bloqueado.";
       try {
@@ -1071,6 +1089,90 @@ Exemplos de uso:
   },
 };
 
+const PROSPECTOR_TOOLS = {
+  prospector_run: {
+    name: "prospector_run",
+    desc: "Executa imediatamente um ciclo de busca e mineração de novos clientes (para o Zenda AI ou produto ativo) e gera abordagens de vendas.",
+    args: { type: "object", properties: {} },
+    run: async () => {
+      const prospector = require("../prospector");
+      const res = await prospector.runCycle();
+      return `✅ Ciclo de prospecção concluído: ${res.discovered} novos clientes minerados, ${res.outreached} mensagens despachadas.`;
+    },
+  },
+  prospector_status: {
+    name: "prospector_status",
+    desc: "Consulta o status em tempo real do motor de prospecção 24/7, métricas do dia, produto ativo e total de leads.",
+    args: { type: "object", properties: {} },
+    run: async () => {
+      const prospector = require("../prospector");
+      const s = prospector.getStats();
+      return `📊 Status do Prospector:\n• Produto Ativo: ${s.settings.product_name}\n• Ativo 24/7: ${s.running ? "Sim" : "Não"}\n• Total de Clientes: ${s.totalLeads}\n• Abordagens Enviadas: ${s.sentOutreach}\n• Rascunhos Prontos: ${s.draftedOutreach}\n• Nichos: ${s.settings.target_keywords}\n• Cidades: ${s.settings.target_location}`;
+    },
+  },
+  prospector_avatar: {
+    name: "prospector_avatar",
+    desc: "Realiza pesquisa de mercado com IA e WebSearch para mapear o Avatar, ICP, Dores latentes, Objeções e Ganchos de vendas para qualquer nicho.",
+    args: {
+      type: "object",
+      properties: {
+        niche: { type: "string", description: "Nicho a pesquisar (ex: 'Clínicas Odontológicas', 'Clínicas de Estética', 'Escritórios')" },
+        product: { type: "string", description: "Nome do produto (opcional, default: produto ativo)" },
+      },
+      required: ["niche"],
+    },
+    run: async (args) => {
+      const prospector = require("../prospector");
+      const res = await prospector.researchMarketAvatar(args.niche, args.product);
+      return res.dossier;
+    },
+  },
+  prospector_list_leads: {
+    name: "prospector_list_leads",
+    desc: "Lista os últimos clientes prospectados com telefones WhatsApp, perfis do Instagram e abordagens geradas.",
+    args: {
+      type: "object",
+      properties: {
+        limit: { type: "number", description: "Quantidade de leads a listar (default 10)" },
+      },
+    },
+    run: async (args) => {
+      const prospector = require("../prospector");
+      const leads = prospector.listLeads(args.limit || 10);
+      if (!leads.length) return "Nenhum cliente registrado ainda.";
+      return leads.map((l, i) =>
+        `${i + 1}. **${l.name}** (${l.category} - ${l.city})\n   Status: ${l.status} | Canal: ${l.phone ? `📱 WA: ${l.phone}` : ""} ${l.instagram_handle ? `📸 @${l.instagram_handle}` : ""}\n   Msg: ${l.wa_message ? l.wa_message.slice(0, 100) + "..." : "Sem rascunho"}`
+      ).join("\n\n");
+    },
+  },
+  prospector_portfolio: {
+    name: "prospector_portfolio",
+    desc: "Lista os produtos cadastrados no portfólio de vendas e qual está ativo no momento.",
+    args: { type: "object", properties: {} },
+    run: async () => {
+      const prospector = require("../prospector");
+      const prods = prospector.listProducts();
+      return prods.map((p) => `• **${p.name}** [ID: \`${p.id}\`] ${p.is_active ? "🟢 *[ATIVO]*" : "⚪"}\n  _${p.description}_\n  Nichos: ${p.target_niches}\n  Cidades: ${p.target_locations}`).join("\n\n");
+    },
+  },
+  prospector_set_product: {
+    name: "prospector_set_product",
+    desc: "Ativa um produto do portfólio para a prospecção 24/7.",
+    args: {
+      type: "object",
+      properties: {
+        product_id: { type: "string", description: "ID do produto (ex: 'zenda-ai', '9router-gateway')" },
+      },
+      required: ["product_id"],
+    },
+    run: async (args) => {
+      const prospector = require("../prospector");
+      const active = prospector.setActiveProduct(args.product_id);
+      return `🚀 Produto ativo atualizado para "${active.name}". Nichos: ${active.target_niches}, Cidades: ${active.target_locations}.`;
+    },
+  },
+};
+
 Object.assign(TOOLS, PHONE_TOOLS);
 Object.assign(TOOLS, NOTION_TOOLS);
 Object.assign(TOOLS, CHANNEL_TOOLS);
@@ -1078,6 +1180,7 @@ Object.assign(TOOLS, GOOGLE_TOOLS);
 Object.assign(TOOLS, LINKEDIN_TOOLS);
 Object.assign(TOOLS, AUTOMATION_TOOLS);
 Object.assign(TOOLS, INTROSPECTION_TOOLS);
+Object.assign(TOOLS, PROSPECTOR_TOOLS);
 
 const TOOL_LIST = Object.values(TOOLS).map((t) => ({
   name: t.name,

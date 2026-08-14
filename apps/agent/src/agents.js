@@ -6,10 +6,16 @@ const GOOGLE_TOOL_NAMES = [
   "calendar_list", "calendar_create", "calendar_delete",
 ];
 
+const PROSPECTOR_TOOL_NAMES = [
+  "prospector_run", "prospector_status", "prospector_avatar",
+  "prospector_list_leads", "prospector_portfolio", "prospector_set_product",
+];
+
 const COMMON_TOOLS = [
   "web_search", "web_fetch", "notify", "schedule", "phone",
   "save_memory", "search_memory", "github_api",
   ...GOOGLE_TOOL_NAMES,
+  ...PROSPECTOR_TOOL_NAMES,
 ];
 
 // ── Core personality: human, grounded, self-improving ──
