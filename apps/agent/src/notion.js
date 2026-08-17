@@ -87,6 +87,23 @@ function titlePropertyName(schema) {
   return entry ? entry[0] : "title";
 }
 
+// A API do Notion corta rich_text em 2000 chars POR BLOCO. Mandar o texto
+// inteiro em um bloco só truncava dossiês e transcrições em silêncio — o save
+// retornava ok e metade do conteúdo sumia. Fatiar em vários blocos preserva
+// tudo. Limite de 100 children por request é da própria API.
+const NOTION_BLOCK_LIMIT = 1900;
+const NOTION_MAX_BLOCKS = 100;
+
+function splitIntoParagraphBlocks(content) {
+  const text = String(content || "");
+  if (!text) return [""];
+  const chunks = [];
+  for (let i = 0; i < text.length && chunks.length < NOTION_MAX_BLOCKS; i += NOTION_BLOCK_LIMIT) {
+    chunks.push(text.slice(i, i + NOTION_BLOCK_LIMIT));
+  }
+  return chunks;
+}
+
 async function createPage(title, content, tags = [], source = "chat", categoria = "", databaseId = config.NOTION_DATABASE_ID) {
   if (!isConfigured()) return { ok: false, error: "Notion não configurado" };
   const schema = await getSchema(databaseId);
@@ -105,15 +122,13 @@ async function createPage(title, content, tags = [], source = "chat", categoria 
   const body = {
     parent: { database_id: databaseId },
     properties,
-    children: [
-      {
-        object: "block",
-        type: "paragraph",
-        paragraph: {
-          rich_text: [{ type: "text", text: { content: content.slice(0, 2000) } }],
-        },
+    children: splitIntoParagraphBlocks(content).map((chunk) => ({
+      object: "block",
+      type: "paragraph",
+      paragraph: {
+        rich_text: [{ type: "text", text: { content: chunk } }],
       },
-    ],
+    })),
   };
   try {
     const res = await fetch("https://api.notion.com/v1/pages", {

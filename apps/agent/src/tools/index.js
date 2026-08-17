@@ -163,7 +163,7 @@ const TOOLS = {
         const niche = cmd.match(/^\/?prospector\s+avatar\s+(.*)/i)[1].trim();
         const prospector = require("../prospector");
         const res = await prospector.researchMarketAvatar(niche);
-        return res.dossier;
+        return res.ok ? res.dossier : `❌ A pesquisa de mercado para "${niche}" falhou: ${res.error}`;
       }
 
       const blocked = ["rm -rf", "format", "del /", "rd /", "shutdown", "restart", ">", "|"];
@@ -1124,7 +1124,7 @@ const PROSPECTOR_TOOLS = {
     run: async (args) => {
       const prospector = require("../prospector");
       const res = await prospector.researchMarketAvatar(args.niche, args.product);
-      return res.dossier;
+      return res.ok ? res.dossier : `❌ A pesquisa de mercado para "${args.niche}" falhou: ${res.error}`;
     },
   },
   prospector_list_leads: {

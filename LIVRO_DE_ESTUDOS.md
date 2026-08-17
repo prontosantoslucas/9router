@@ -1425,4 +1425,45 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 70: Diagnóstico e Resolução do Motor 24/7 de Prospecção B2B de Leads (Causa Raiz de 0 Leads / "Busca Seca")
+
+* **Por que ocorreu este problema (Causa Raiz Detalhada)**:
+  1. **Duplo URL-Encoding na Cadeia de Busca (`webSearch.js` → `/v1/web/fetch` → Jina Reader)**:
+     - O módulo [`webSearch.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/tools/webSearch.js) codificava os termos de pesquisa com `encodeURIComponent(query)` ao montar a URL alvo do Bing (`https://www.bing.com/search?q=Cl%C3%ADnica...`).
+     - Em seguida, o manipulador de requisições web do gateway ([`open-sse/handlers/fetch/index.js`](file:///c:/Users/user/Documents/GitHub/9router/open-sse/handlers/fetch/index.js)) executava novamente `https://r.jina.ai/${encodeURIComponent(url)}`.
+     - Isso gerava codificação dupla de caracteres: espaços (`%20`) viravam `%2520`, aspas (`%22`) viravam `%2522` e caracteres acentuados (`%C3%AD`) viravam `%25C3%25AD`. Ao receber a requisição, o buscador Bing recebia os símbolos `%` de forma literal e os interpretava como operadores de módulo e porcentagem aritmética, retornando tutoriais de cálculo (*"Adding and Subtracting Integers Calculator"*) e fórmulas de planilha (*"QUERY function Google Docs"*) em vez de estabelecimentos comerciais.
+  2. **Geolocalização de IP dos Servidores Jina Reader (Europa) sem Parâmetros Regionais**:
+     - Os nós de processamento do Jina Reader estão localizados em datacenters na Europa (Alemanha/Holanda). Sem parâmetros explícitos de localização do Brasil (`&setlang=pt-br&cc=BR` no Bing ou `kl=br-pt` no DuckDuckGo), os motores de busca ignoravam o contexto geográfico brasileiro das consultas e retornavam páginas genéricas ou locais de Amsterdã.
+  3. **Incompatibilidade Estrita de Regex no Parser Markdown**:
+     - A expressão regular no `webSearch.js` esperava unicamente o padrão rígido do Bing (`/^\s*\d+\.\s+##\s+\[(.*?)\]\((.*?)\)\s*$/`). Quando o retorno vinha em formatos como DuckDuckGo Lite (`1.[Título](url)`) ou markdown sem duplo cerquilha, o parser descartava 100% dos resultados.
+  4. **Ausência de Raspagem de Websites para Captura de Contatos (WhatsApp / Instagram)**:
+     - Os snippets resumidos dos buscadores raramente trazem o número de WhatsApp celular no texto de 1 linha. Eles trazem o endereço do site oficial da clínica (ex: `https://nippodents.com.br/`). Como o robô apenas lia o snippet de busca e não visitava o website do estabelecimento, nenhum contato celular ou Instagram era encontrado, resultando em 0 leads qualificados para abordagem.
+  5. **Falta de Reconhecimento de Links Diretos `wa.me` e Falso-Positivos em Instagram**:
+     - O extrator anterior não capturava URLs do tipo `wa.me/55...` ou `api.whatsapp.com/send?phone=...` presentes nos botões das páginas, e aceitava domínios de e-mail (ex: `@gmail.com`) ou termos como `@username` como se fossem perfis reais de Instagram.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Eliminação do Duplo Encoding no Jina Reader ([`open-sse/handlers/fetch/index.js`](file:///c:/Users/user/Documents/GitHub/9router/open-sse/handlers/fetch/index.js))**:
+     - Modificada a construção da URL em `runJina` para verificar se o endereço já é uma URL HTTP/HTTPS válida, evitando a re-codificação de parâmetros:
+       ```javascript
+       const target = /^https?:\/\//i.test(url) ? `https://r.jina.ai/${url}` : `https://r.jina.ai/${encodeURIComponent(url)}`;
+       ```
+  2. **Arquitetura de Busca Multi-Motor Geolocalizada para o Brasil ([`apps/agent/src/tools/webSearch.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/tools/webSearch.js))**:
+     - Implementada busca com fallback ordenado entre múltiplos motores configurados para o mercado brasileiro:
+       1. `https://lite.duckduckgo.com/lite/?q=...` (DuckDuckGo Lite de alta velocidade)
+       2. `https://www.bing.com/search?q=...&setlang=pt-br&cc=BR&count=N` (Bing com idioma e país BR)
+       3. `https://html.duckduckgo.com/html/?q=...&kl=br-pt` (DuckDuckGo HTML BR)
+     - Decodificação transparente de links de redirecionamento (`uddg` do DuckDuckGo e base64 `u` do Bing) e descarte de URLs internas de infraestrutura.
+     - Parser universal de Markdown com suporte a listas numeradas e cabeçalhos.
+  3. **Raspador de Páginas Web para Estabelecimentos ([`apps/agent/src/prospector.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/prospector.js))**:
+     - Implementada a função `scrapeLeadWebsite(url)`. Quando o snippet de busca não contém o telefone direto e o lead possui website institucional, o robô faz uma leitura rápida da homepage (primeiros 15.000 caracteres) para extrair o botão de WhatsApp e o perfil do Instagram diretamente do site da empresa.
+  4. **Extrator de Contatos Avançado com Validação Rigorosa de DDDs e Blacklist**:
+     - Captura de links diretos de WhatsApp (`wa.me/55...`, `api.whatsapp.com/send?phone=...`).
+     - Normalização e validação de números celulares de 9 dígitos com os 67 DDDs atribuídos pela Anatel no Brasil (11 a 99).
+     - Blacklist de handles de Instagram (`IG_BLACKLIST`) impedindo falsos positivos como `@gmail.com`, `@username`, `@stories`, `@reels`, `@cookies`, etc.
+  5. **Geração de Abordagens Comerciais com IA Personalizadas para WhatsApp e Instagram**:
+     - Integração de geração automática de mensagens de abordagem comercial B2B para cada lead minerado, prontas para envio seguro ou aprovação no painel/Telegram.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+

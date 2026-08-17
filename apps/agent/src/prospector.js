@@ -5,6 +5,8 @@
 const crypto = require("node:crypto");
 const db = require("./db");
 const proxy = require("./proxy");
+const config = require("./config");
+const keyrotator = require("./keyrotator");
 const webSearch = require("./tools/webSearch");
 const extensionBridge = require("./extensionBridge");
 
@@ -225,6 +227,13 @@ function setActiveProduct(id) {
 /**
  * Realiza Pesquisa de Mercado com IA e WebSearch para mapear ICP / Avatar, Dores e Ganchos.
  */
+// Orçamento de tempo da pesquisa de mercado. O comando /prospector avatar é
+// síncrono e responde dentro do timeout de 120s do proxy do dashboard, então
+// o pior caso aqui precisa caber com folga:
+//   busca web (2 queries em paralelo, 30s cada) + síntese (teto abaixo) < 120s.
+const LLM_ATTEMPT_TIMEOUT_MS = 45_000;   // por tentativa de modelo
+const RESEARCH_DEADLINE_MS = 75_000;     // teto total da síntese, todos os modelos somados
+
 async function researchMarketAvatar(niche, productName) {
   const settings = getSettings();
   const prodName = productName || settings.product_name || "Zenda AI";
@@ -267,18 +276,47 @@ Estruture o dossiê com os seguintes tópicos obrigatórios:
 
 Retorne em Markdown bem formatado, profissional e pronto para orientar o robô de prospecção.`;
 
+  // 15s por tentativa era pouco para um dossiê de 5 seções e fazia o fallback
+  // enlatado disparar quase sempre. Mas proxy.complete() percorre TODA a fila
+  // de modelos (proxy.js), então o pior caso é `nº de modelos × timeoutMs` —
+  // só aumentar o valor por tentativa estouraria o teto do chat síncrono.
+  // Por isso são dois limites: um por tentativa e um teto de tempo total.
   let dossier = "";
+  let deadlineTimer = null;
   try {
-    const res = await proxy.complete([
-      { role: "system", content: "Você é um diretor de Go-To-Market e inteligência de mercado B2B." },
-      { role: "user", content: prompt },
-    ], { timeoutMs: 15000, maxRetries: 1 });
-    dossier = res.content.trim();
+    const completion = await Promise.race([
+      proxy.complete([
+        { role: "system", content: "Você é um diretor de Go-To-Market e inteligência de mercado B2B." },
+        { role: "user", content: prompt },
+      ], { timeoutMs: LLM_ATTEMPT_TIMEOUT_MS, maxRetries: 1 }),
+      new Promise((_, reject) => {
+        deadlineTimer = setTimeout(
+          () => reject(new Error(`a síntese excedeu ${Math.round(RESEARCH_DEADLINE_MS / 1000)}s`)),
+          RESEARCH_DEADLINE_MS
+        );
+      }),
+    ]);
+    dossier = (completion?.content || "").trim();
   } catch (err) {
-    dossier = `### Dossiê de Avatar para ${targetNiche} (${prodName})\n\n**ICP:** Donos e gestores de ${targetNiche}.\n**Dores:** Perda de agendamentos no WhatsApp, sobrecarga da recepção, falta de atendimento 24/7.\n**Proposta de Valor:** Agente IA 24/7 integrado ao Google Calendar para agendamento automático.`;
+    // NUNCA devolver texto genérico como se fosse pesquisa. A versão anterior
+    // retornava um dossiê hardcoded aqui — idêntico para qualquer nicho e
+    // indistinguível de um resultado real, que ainda seria arquivado no Notion
+    // como se fosse inteligência de mercado. Falha tem que parecer falha.
+    console.error(`[MarketResearch] Falha na síntese para "${targetNiche}": ${err.message}`);
+    return { ok: false, niche: targetNiche, product: prodName, dossier: null, error: err.message };
+  } finally {
+    if (deadlineTimer) clearTimeout(deadlineTimer);
   }
 
-  // Salva no banco de dados
+  if (!dossier) {
+    console.error(`[MarketResearch] Modelo retornou dossiê vazio para "${targetNiche}".`);
+    return { ok: false, niche: targetNiche, product: prodName, dossier: null, error: "o modelo retornou um dossiê vazio" };
+  }
+
+  // Só grava quando há pesquisa real. As colunas estruturadas ficam vazias
+  // de propósito: o esquema é NOT NULL, e a versão anterior preenchia as três
+  // com frases fixas no código — iguais para qualquer nicho, independentes do
+  // que o LLM produziu. `full_dossier` é a única fonte de verdade aqui.
   db.prepare(`
     INSERT INTO prospector_market_research (product_id, niche, avatar_title, pain_points, objections, hooks, full_dossier)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -286,13 +324,14 @@ Retorne em Markdown bem formatado, profissional e pronto para orientar o robô d
     settings.active_product_id || 'zenda-ai',
     targetNiche,
     `Avatar ${targetNiche}`,
-    'Perda de pacientes fora do horário, sobrecarga da recepção, no-show',
-    'Já tenho recepcionista, medo de IA parecer robô',
-    'Aumento imediato de consultas e atendimento 24h sem custo fixo de pessoal',
+    '',
+    '',
+    '',
     dossier
   );
 
   return {
+    ok: true,
     niche: targetNiche,
     product: prodName,
     dossier,
@@ -420,26 +459,110 @@ function upsertLead(leadData) {
   return { lead, isNew: true };
 }
 
-// Helper para extrair telefones e handles de Instagram de textos/snippets
+// Helper para extrair telefones e handles de Instagram de textos/snippets/websites
+// ─────────────────────────────────────────────────────────────
+// DDDs efetivamente atribuídos no Plano Nacional de Numeração.
+const VALID_DDDS = new Set([
+  "11", "12", "13", "14", "15", "16", "17", "18", "19",
+  "21", "22", "24", "27", "28",
+  "31", "32", "33", "34", "35", "37", "38",
+  "41", "42", "43", "44", "45", "46", "47", "48", "49",
+  "51", "53", "54", "55",
+  "61", "62", "63", "64", "65", "66", "67", "68", "69",
+  "71", "73", "74", "75", "77", "79",
+  "81", "82", "83", "84", "85", "86", "87", "88", "89",
+  "91", "92", "93", "94", "95", "96", "97", "98", "99",
+]);
+
+const IG_BLACKLIST = new Set([
+  "p", "reel", "reels", "explore", "stories", "direct", "accounts", "login",
+  "share", "terms", "privacy", "about", "cookies", "settings", "home",
+  "username", "seu_instagram", "perfil", "exemplo", "yourusername",
+  "gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "icloud.com"
+]);
+
 function extractContactsFromText(text) {
+  const source = String(text || "");
   let phone = null;
   let instagram = null;
 
-  // Regex para WhatsApp brasileiro: (11) 98888-7777, 11988887777, +55 11 9...
-  const phoneMatch = text.match(/(?:\+?55\s?)?(?:\(?([1-9]{2})\)?\s?)?(?:9\s?)?([0-9]{4})[\s.-]?([0-9]{4})/);
-  if (phoneMatch) {
-    const ddd = phoneMatch[1] || '11';
-    const digits = `${phoneMatch[2]}${phoneMatch[3]}`;
-    phone = `55${ddd}9${digits}`;
+  // 1. Links diretos de WhatsApp (wa.me/55... ou api.whatsapp.com/send?phone=...)
+  const waLinkMatch = source.match(/(?:wa\.me\/(?:55)?|api\.whatsapp\.com\/send\?(?:[^&]*&)?phone=(?:55)?|whatsapp\.com\/send\?(?:[^&]*&)?phone=(?:55)?)(\d{10,11})/i);
+  if (waLinkMatch) {
+    const rawNum = waLinkMatch[1];
+    const ddd = rawNum.slice(0, 2);
+    if (VALID_DDDS.has(ddd)) {
+      const rest = rawNum.slice(2);
+      if (rest.length === 9 && rest.startsWith("9")) {
+        phone = `55${ddd}${rest}`;
+      } else if (rest.length === 8) {
+        phone = `55${ddd}9${rest}`;
+      }
+    }
   }
 
-  // Regex para Instagram: @handle ou instagram.com/handle
-  const igMatch = text.match(/(?:@|instagram\.com\/)([a-zA-Z0-9._]{3,30})/i);
-  if (igMatch && !['p', 'reel', 'explore', 'stories'].includes(igMatch[1].toLowerCase())) {
-    instagram = igMatch[1].toLowerCase();
+  // 2. Celular brasileiro com DDD no texto: (11) 98765-4321, 11 98765-4321, etc.
+  if (!phone) {
+    const phoneRegex = /(?:(?:\+|00)?55\s*)?(?:\(?([1-9][0-9])\)?\s*)(?:(9\s?[0-9]{4})[\s.-]?([0-9]{4}))/g;
+    for (const m of source.matchAll(phoneRegex)) {
+      const ddd = m[1];
+      if (!VALID_DDDS.has(ddd)) continue;
+      const part1 = m[2].replace(/\D/g, "");
+      const part2 = m[3].replace(/\D/g, "");
+      if (part1.length === 5 && part2.length === 4 && part1.startsWith("9")) {
+        phone = `55${ddd}${part1}${part2}`;
+        break;
+      }
+    }
+  }
+
+  // 3. Instagram: @handle ou instagram.com/handle
+  const igRegex = /(?:instagram\.com\/|@)([a-zA-Z0-9._]{3,30})/gi;
+  for (const m of source.matchAll(igRegex)) {
+    const handle = m[1].toLowerCase().replace(/^@/, "").replace(/\/$/, "");
+    if (!IG_BLACKLIST.has(handle) && !handle.endsWith(".com") && !handle.endsWith(".br")) {
+      instagram = handle;
+      break;
+    }
   }
 
   return { phone, instagram };
+}
+
+// Raspagem do site do estabelecimento caso não tenha contato direto no snippet do buscador
+async function scrapeLeadWebsite(url) {
+  if (!url || !/^https?:\/\//i.test(url)) return {};
+  if (url.includes("instagram.com") || url.includes("facebook.com") || url.includes("linkedin.com") || url.includes("youtube.com")) {
+    return {};
+  }
+  try {
+    const base = (config.ROUTER_BASE_URL || "").replace(/\/v1$/, "").replace(/\/+$/, "");
+    let text = "";
+    try {
+      const res = await fetch(`${base}/v1/web/fetch`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${keyrotator.getKey()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "jina-reader", url, format: "markdown", max_characters: 15000 }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        text = data.content?.text || "";
+      }
+    } catch {}
+
+    if (!text) {
+      const directRes = await fetch(`https://r.jina.ai/${url}`, { signal: AbortSignal.timeout(12000) });
+      if (directRes.ok) text = await directRes.text();
+    }
+
+    if (text) {
+      return extractContactsFromText(text.slice(0, 15000));
+    }
+  } catch (err) {
+    console.warn(`[Prospector] Raspagem de website (${url}) falhou:`, err.message);
+  }
+  return {};
 }
 
 /**
@@ -468,18 +591,29 @@ async function runCycle(onNotify) {
   for (const cat of categories.slice(0, 3)) {
     for (const city of cities.slice(0, 2)) {
       try {
-        const query = `${cat} "${city}" whatsapp agendamento instagram`;
+        const query = `${cat} ${city} whatsapp instagram agendamento`;
         const results = await webSearch.searchWeb(query, 5);
 
         for (const r of results) {
-          const combined = `${r.title} ${r.snippet || ''}`;
-          const contacts = extractContactsFromText(combined);
+          const combined = `${r.title} ${r.snippet || ''} ${r.url || ''}`;
+          let contacts = extractContactsFromText(combined);
 
-          // Limpa o nome da empresa
-          const cleanName = r.title.replace(/\s*[-–|].*$/, "").trim();
+          // Se não encontrou telefone no snippet e tem website próprio, raspa o site do estabelecimento
+          if (!contacts.phone && r.url && !r.url.includes("instagram.com")) {
+            const siteContacts = await scrapeLeadWebsite(r.url);
+            if (siteContacts.phone) contacts.phone = siteContacts.phone;
+            if (siteContacts.instagram && !contacts.instagram) contacts.instagram = siteContacts.instagram;
+          }
+
+          // Limpa o nome da empresa removendo títulos e caracteres extras
+          const cleanName = r.title
+            .replace(/\s*[-–|].*$/, "")
+            .replace(/\(@[a-zA-Z0-9._]+\)/g, "")
+            .replace(/@\w+/g, "")
+            .trim();
 
           const { lead, isNew } = upsertLead({
-            name: cleanName,
+            name: cleanName || "Estabelecimento",
             category: cat,
             city: city,
             description: r.snippet || "",
@@ -605,6 +739,37 @@ function stop() {
   }
 }
 
+/**
+ * Dispara um ciclo imediato reaproveitando o notificador registrado no start().
+ * O chamador do chat não tem acesso ao `globalNotifier`, e chamar runCycle()
+ * sem argumento — como o comando /prospector run fazia — silenciava a
+ * notificação de leads encontrados.
+ */
+function runCycleNow() {
+  return runCycle(globalNotifier);
+}
+
+/**
+ * Zera a base de prospecção para recomeçar as buscas do zero.
+ * DESTRUTIVO: remove leads e abordagens (inclusive as já enviadas, cujo
+ * histórico se perde). Confirmação é responsabilidade de quem chama.
+ */
+function resetProspection({ includeResearch = false } = {}) {
+  const leads = db.prepare("SELECT COUNT(*) as n FROM prospector_leads").get().n;
+  const outreach = db.prepare("SELECT COUNT(*) as n FROM prospector_outreach").get().n;
+  let research = 0;
+
+  db.prepare("DELETE FROM prospector_outreach").run();
+  db.prepare("DELETE FROM prospector_leads").run();
+  if (includeResearch) {
+    research = db.prepare("SELECT COUNT(*) as n FROM prospector_market_research").get().n;
+    db.prepare("DELETE FROM prospector_market_research").run();
+  }
+
+  console.log(`[Prospector] Base zerada: ${leads} lead(s), ${outreach} abordagem(ns), ${research} pesquisa(s).`);
+  return { leads, outreach, research };
+}
+
 function getStats() {
   const totalLeads = db.prepare("SELECT COUNT(*) as n FROM prospector_leads").get().n;
   const sentOutreach = db.prepare("SELECT COUNT(*) as n FROM prospector_outreach WHERE status = 'sent'").get().n;
@@ -636,6 +801,8 @@ module.exports = {
   start,
   stop,
   runCycle,
+  runCycleNow,
+  resetProspection,
   getSettings,
   updateSettings,
   getStats,
@@ -644,6 +811,7 @@ module.exports = {
   sendWhatsAppOutreach,
   sendInstagramOutreach,
   upsertLead,
+  extractContactsFromText,
   addProduct,
   getProduct,
   listProducts,

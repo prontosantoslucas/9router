@@ -370,14 +370,42 @@ async function processMessage(chatId, text, userName, ctx = {}) {
         `• \`/prospector usar <produto_id>\` — Mudar produto da prospecção\n` +
         `• \`/prospector run\` — Rodar ciclo de busca agora\n` +
         `• \`/prospector add <nichos>; [cidades]\` — Atualizar termos de busca\n` +
+        `• \`/prospector reset\` — Zerar a base e recomeçar as buscas do zero\n` +
         `• \`/prospector toggle\` — Ativar/pausar`;
     } else if (sub.startsWith("avatar ") || sub.startsWith("pesquisar ")) {
       const niche = sub.replace(/^(?:avatar|pesquisar)\s+/i, "").trim();
-      content = `🔬 *Realizando Pesquisa de Mercado & ICP Avatar para "${niche}"...*\n\n_Aguarde alguns instantes enquanto consulto a Web e sintetizo as dores e ganchos..._`;
-      prospector.researchMarketAvatar(niche).then((res) => {
-        session.msgs.push({ role: "assistant", content: res.dossier });
-        persistHistories();
-      }).catch((e) => console.error("[Prospector Research] Erro:", e.message));
+      // Síncrono de propósito. A versão anterior devolvia "aguarde..." e rodava
+      // a pesquisa em fire-and-forget, empurrando o dossiê só para session.msgs
+      // — o histórico do LLM. O chat web não tem push/polling, então a resposta
+      // prometida NUNCA chegava ao usuário.
+      try {
+        const res = await prospector.researchMarketAvatar(niche);
+        if (!res.ok) {
+          throw new Error(res.error);
+        }
+        content = res.dossier;
+
+        // Arquiva no Notion. Fail-open: o dossiê já foi entregue no chat, então
+        // problema no Notion vira aviso no rodapé, nunca perda do resultado.
+        try {
+          const notion = require("./notion");
+          if (notion.isConfigured()) {
+            const page = await notion.createPage(
+              `Dossiê de Mercado — ${res.niche} (${res.product})`,
+              res.dossier,
+              ["prospeccao", "icp", "avatar"],
+              "prospector"
+            );
+            content += page.ok
+              ? `\n\n---\n📓 _Arquivado no Notion:_ ${page.url}`
+              : `\n\n---\n⚠️ _Não consegui salvar no Notion: ${page.error}_`;
+          }
+        } catch (e) {
+          content += `\n\n---\n⚠️ _Não consegui salvar no Notion: ${e.message}_`;
+        }
+      } catch (err) {
+        content = `❌ Não consegui concluir a pesquisa de mercado para "${niche}": ${err.message}`;
+      }
     } else if (sub === "produtos" || sub === "portfolio" || sub === "portfólio") {
       const prods = prospector.listProducts();
       content = `📦 *Portfólio de Produtos para Prospecção:*\n\n` +
@@ -404,10 +432,31 @@ async function processMessage(chatId, text, userName, ctx = {}) {
         content = `✅ *Novo produto cadastrado no portfólio!*\n• Nome: **${prod.name}** [ID: \`${prod.id}\`]\n• Descrição: _${prod.description}_\n\nPara ativá-lo na prospecção: \`/prospector usar ${prod.id}\``;
       }
     } else if (sub === "run") {
-      content = "⏳ *Iniciando ciclo de busca e prospecção de clientes agora... Notificarei no Telegram assim que novos clientes forem minerados.*";
-      prospector.runCycle().then((r) => {
+      // Mantido assíncrono (um ciclo pode levar minutos), mas sem prometer uma
+      // notificação que talvez não exista: runCycleNow() reaproveita o
+      // notificador do start() — se nenhum foi registrado, ninguém é avisado.
+      // Por isso a mensagem aponta para comandos que mostram o resultado.
+      content = "⏳ *Ciclo de busca iniciado em segundo plano.*\n\n" +
+        "_Acompanhe com_ `/prospector list` _(clientes minerados) ou_ `/prospector status` _(métricas)._";
+      prospector.runCycleNow().then((r) => {
         console.log("[Prospector Zenda] Ciclo concluído:", r);
       }).catch((e) => console.error("[Prospector] Erro no ciclo:", e.message));
+    } else if (sub === "reset" || sub.startsWith("reset ")) {
+      if (!/\bconfirmar\b/i.test(sub)) {
+        const stats = prospector.getStats();
+        content = `⚠️ *Isto apaga toda a base de prospecção.*\n\n` +
+          `• Clientes cadastrados: **${stats.totalLeads}**\n` +
+          `• Abordagens enviadas: **${stats.sentOutreach}** _(o histórico se perde)_\n` +
+          `• Rascunhos: **${stats.draftedOutreach}**\n\n` +
+          `_Os telefones gravados antes da correção do extrator podem ser de terceiros — recomeçar do zero é o recomendado._\n\n` +
+          `Para confirmar: \`/prospector reset confirmar\``;
+      } else {
+        const r = prospector.resetProspection();
+        content = `🧹 *Base de prospecção zerada.*\n\n` +
+          `• Clientes removidos: **${r.leads}**\n` +
+          `• Abordagens removidas: **${r.outreach}**\n\n` +
+          `As buscas recomeçam do zero, já com a validação nova de telefone. Para rodar agora: \`/prospector run\``;
+      }
     } else if (sub === "toggle" || sub === "pause" || sub === "start") {
       const current = prospector.getSettings();
       const nextEnabled = sub === "start" ? true : (sub === "pause" ? false : !current.enabled);
@@ -432,7 +481,7 @@ async function processMessage(chatId, text, userName, ctx = {}) {
           leads.map((l) => `• *${l.name}* (${l.category} - ${l.city})\n  Status: \`${l.status}\` | Canal: ${l.phone ? `📱 WA: ${l.phone}` : ""} ${l.instagram_handle ? `📸 @${l.instagram_handle}` : ""}\n  _Abordagem: ${l.wa_message ? l.wa_message.slice(0, 120) + "..." : "Sem rascunho"}_`).join("\n\n");
       }
     } else {
-      content = `❓ *Comandos do Prospector B2B:*\n• \`/prospector status\` — Status e métricas\n• \`/prospector avatar <nicho>\` — Pesquisa de mercado e Avatar/ICP\n• \`/prospector produtos\` — Portfólio de produtos\n• \`/prospector usar <produto_id>\` — Mudar produto\n• \`/prospector run\` — Rodar ciclo agora\n• \`/prospector add <nichos>; [cidades]\` — Critérios de busca\n• \`/prospector list\` — Listar clientes minerados`;
+      content = `❓ *Comandos do Prospector B2B:*\n• \`/prospector status\` — Status e métricas\n• \`/prospector avatar <nicho>\` — Pesquisa de mercado e Avatar/ICP\n• \`/prospector produtos\` — Portfólio de produtos\n• \`/prospector usar <produto_id>\` — Mudar produto\n• \`/prospector run\` — Rodar ciclo agora\n• \`/prospector add <nichos>; [cidades]\` — Critérios de busca\n• \`/prospector list\` — Listar clientes minerados\n• \`/prospector reset\` — Zerar a base e recomeçar do zero`;
     }
 
     session.msgs.push({ role: "assistant", content });

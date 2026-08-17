@@ -1,7 +1,6 @@
 /**
- * Busca na web gratuita: Jina Reader (r.jina.ai, sem API key) sobre o Bing.
- * A requisição passa pelo gateway MAXROUTER (/v1/web/fetch) para não expor
- * o IP do datacenter nem depender de credenciais de provedores de busca.
+ * Motor de Busca Web com Resiliência Multi-Buscador (DuckDuckGo + Bing BR) via Jina Reader.
+ * Utiliza o gateway MAXROUTER (/v1/web/fetch) com fallback direto para r.jina.ai.
  */
 
 const { ROUTER_BASE_URL } = require("../config");
@@ -12,19 +11,25 @@ function cleanTitle(s) {
     .replace(/\*\*/g, "")
     .replace(/&amp;/g, "&")
     .replace(/&#\d+;/g, "")
+    .replace(/^\[|\]$/g, "")
     .trim();
 }
 
-// URLs do Bing vêm como redirecionamento (/ck/a?...&u=a1<base64>); o destino
-// real está decodificado no parâmetro `u`.
-function decodeBingUrl(href) {
+// Decodifica URLs de redirecionamento do DuckDuckGo e Bing
+function decodeRedirectUrl(href) {
   try {
     const u = new URL(href);
-    if (u.hostname.includes("bing.com")) {
+    // DuckDuckGo redirect
+    if (u.hostname.includes("duckduckgo.com") && u.searchParams.has("uddg")) {
+      const target = decodeURIComponent(u.searchParams.get("uddg"));
+      if (/^https?:\/\//i.test(target)) return target;
+    }
+    // Bing redirect
+    if (u.hostname.includes("bing.com") && u.searchParams.has("u")) {
       const b64 = (u.searchParams.get("u") || "").replace(/-/g, "+").replace(/_/g, "/");
       if (b64.startsWith("a1")) {
         const real = Buffer.from(b64.slice(2), "base64").toString("utf8");
-        if (/^https?:\/\//.test(real)) return real;
+        if (/^https?:\/\//i.test(real)) return real;
       }
     }
     return href;
@@ -33,26 +38,50 @@ function decodeBingUrl(href) {
   }
 }
 
-function parseBingMarkdown(text, limit) {
+// Parser resiliente de Markdown de busca (DuckDuckGo Lite, Bing, HTML)
+function parseSearchMarkdown(text, limit = 5) {
   const out = [];
   const lines = String(text || "").split("\n");
+
+  // Padrões aceitos:
+  // 1. DuckDuckGo Lite: "1.[Título](url)" ou "1. [Título](url)"
+  // 2. Bing: "1.   ## [Título](url)"
+  // 3. Padrão genérico: "## [Título](url)" ou "[Título](url)"
+  const linkRegex = /(?:^\s*\d+\.?\s*(?:##\s*)?\[|^\s*##\s*\[)(.*?)\]\((https?:\/\/[^\s)]+)\)/;
+
   let cur = null;
   for (const line of lines) {
-    const m = line.match(/^\s*\d+\.\s+##\s+\[(.*?)\]\((.*?)\)\s*$/);
+    const m = line.match(linkRegex);
     if (m) {
+      const title = cleanTitle(m[1]);
+      const rawUrl = decodeRedirectUrl(m[2]);
+
+      // Ignora links internos de infraestrutura dos buscadores
+      if (
+        rawUrl.includes("duckduckgo.com") ||
+        rawUrl.includes("bing.com") ||
+        rawUrl.includes("google.com/search") ||
+        rawUrl.includes("microsoft.com") ||
+        rawUrl.includes("yahoo.com")
+      ) {
+        continue;
+      }
+
       if (cur && (cur.title || cur.url)) out.push(cur);
       if (out.length >= limit) break;
-      cur = { title: cleanTitle(m[1]), url: decodeBingUrl(m[2]), snippet: "" };
+      cur = { title, url: rawUrl, snippet: "" };
       continue;
     }
+
     if (cur) {
       const t = line.trim();
-      if (t && !/^#{1,3}\s/.test(t) && !/^-{3,}/.test(t)) {
+      if (t && !/^#{1,3}\s/.test(t) && !/^-{3,}/.test(t) && !/^\[/.test(t)) {
         cur.snippet = cur.snippet ? `${cur.snippet} ${t}` : t;
-        if (cur.snippet.length > 300) cur.snippet = cur.snippet.slice(0, 300);
+        if (cur.snippet.length > 400) cur.snippet = cur.snippet.slice(0, 400);
       }
     }
   }
+
   if (cur && (cur.title || cur.url)) out.push(cur);
   return out.slice(0, limit);
 }
@@ -65,26 +94,58 @@ function parseBingMarkdown(text, limit) {
 async function searchWeb(query, limit = 5) {
   if (!query) return [];
   const n = Math.max(1, Math.min(Number(limit) || 5, 10));
-  try {
-    const base = (ROUTER_BASE_URL || "").replace(/\/v1$/, "").replace(/\/+$/, "");
-    const target = `https://www.bing.com/search?q=${encodeURIComponent(String(query))}&count=${n}`;
-    console.log(`[WebSearch] Buscando: "${query}" (${n} resultados)`);
-    const res = await fetch(`${base}/v1/web/fetch`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${keyrotator.getKey()}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "jina-reader", url: target, format: "markdown", max_characters: 20000 }),
-      signal: AbortSignal.timeout(30000),
-    });
-    if (!res.ok) {
-      console.error(`[WebSearch] Gateway falhou: ${res.status}`);
-      return [];
+  const cleanQuery = String(query).replace(/["+]/g, " ").replace(/\s+/g, " ").trim();
+
+  // Ordem de busca com fallback geolocalizado para o Brasil
+  const engineUrls = [
+    `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(cleanQuery)}`,
+    `https://www.bing.com/search?q=${encodeURIComponent(cleanQuery)}&setlang=pt-br&cc=BR&count=${n}`,
+    `https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleanQuery)}&kl=br-pt`
+  ];
+
+  console.log(`[WebSearch] Buscando: "${cleanQuery}" (${n} resultados)`);
+
+  for (const engineUrl of engineUrls) {
+    try {
+      // 1. Tenta via gateway MaxRouter
+      const base = (ROUTER_BASE_URL || "").replace(/\/v1$/, "").replace(/\/+$/, "");
+      let rawText = "";
+
+      try {
+        const res = await fetch(`${base}/v1/web/fetch`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${keyrotator.getKey()}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "jina-reader", url: engineUrl, format: "markdown", max_characters: 25000 }),
+          signal: AbortSignal.timeout(20000),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          rawText = data.content?.text || "";
+        }
+      } catch {}
+
+      // 2. Fallback direto se o gateway local/remoto não responder
+      if (!rawText) {
+        const directRes = await fetch(`https://r.jina.ai/${engineUrl}`, {
+          signal: AbortSignal.timeout(15000)
+        });
+        if (directRes.ok) {
+          rawText = await directRes.text();
+        }
+      }
+
+      if (rawText) {
+        const results = parseSearchMarkdown(rawText, n);
+        if (results.length > 0) {
+          return results;
+        }
+      }
+    } catch (err) {
+      console.warn(`[WebSearch] Aviso no motor ${engineUrl.slice(0, 40)}:`, err.message);
     }
-    const data = await res.json();
-    return parseBingMarkdown(data.content?.text || "", n);
-  } catch (err) {
-    console.error("[WebSearch] Erro:", err.message);
-    return [];
   }
+
+  return [];
 }
 
-module.exports = { searchWeb };
+module.exports = { searchWeb, parseSearchMarkdown, decodeRedirectUrl };

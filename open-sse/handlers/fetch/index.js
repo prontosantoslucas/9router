@@ -151,7 +151,7 @@ async function runFirecrawl({ url, fmt, timeoutMs, apiKey, maxCharacters, costPe
 }
 
 async function runJina({ url, fmt, timeoutMs, apiKey, maxCharacters, costPerQuery, startedAt }) {
-  const target = `https://r.jina.ai/${encodeURIComponent(url)}`;
+  const target = /^https?:\/\//i.test(url) ? `https://r.jina.ai/${url}` : `https://r.jina.ai/${encodeURIComponent(url)}`;
   const upstreamStart = Date.now();
   const r = await tryFetch(target, {
     method: "GET",
