@@ -86,6 +86,18 @@ function parseSearchMarkdown(text, limit = 5) {
   return out.slice(0, limit);
 }
 
+// Rótulo curto por engine — evita que cada linha de log carregue a URL inteira.
+function engineLabel(url) {
+  if (url.includes("lite.duckduckgo")) return "ddg-lite";
+  if (url.includes("html.duckduckgo")) return "ddg-html";
+  if (url.includes("bing.com")) return "bing";
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "desconhecido";
+  }
+}
+
 /**
  * @param {string} query
  * @param {number} [limit=5] 1–10
@@ -106,10 +118,12 @@ async function searchWeb(query, limit = 5) {
   console.log(`[WebSearch] Buscando: "${cleanQuery}" (${n} resultados)`);
 
   for (const engineUrl of engineUrls) {
+    const engine = engineLabel(engineUrl);
     try {
       // 1. Tenta via gateway MaxRouter
       const base = (ROUTER_BASE_URL || "").replace(/\/v1$/, "").replace(/\/+$/, "");
       let rawText = "";
+      let via = "";
 
       try {
         const res = await fetch(`${base}/v1/web/fetch`, {
@@ -121,30 +135,55 @@ async function searchWeb(query, limit = 5) {
         if (res.ok) {
           const data = await res.json();
           rawText = data.content?.text || "";
+          via = "gateway";
+          if (!rawText) console.warn(`[WebSearch] ${engine}: gateway respondeu 200 com conteúdo VAZIO (provider jina-reader configurado?)`);
+        } else {
+          console.warn(`[WebSearch] ${engine}: gateway HTTP ${res.status} — caindo para r.jina.ai direto`);
         }
-      } catch {}
+      } catch (err) {
+        console.warn(`[WebSearch] ${engine}: gateway inacessível (${err.message}) — caindo para r.jina.ai direto`);
+      }
 
       // 2. Fallback direto se o gateway local/remoto não responder
       if (!rawText) {
-        const directRes = await fetch(`https://r.jina.ai/${engineUrl}`, {
-          signal: AbortSignal.timeout(15000)
-        });
-        if (directRes.ok) {
-          rawText = await directRes.text();
+        try {
+          const directRes = await fetch(`https://r.jina.ai/${engineUrl}`, {
+            signal: AbortSignal.timeout(15000)
+          });
+          if (directRes.ok) {
+            rawText = await directRes.text();
+            via = "r.jina.ai";
+          } else {
+            const hint = directRes.status === 429 ? " (rate-limit do uso anônimo — precisa de JINA_API_KEY)"
+              : directRes.status === 403 ? " (bloqueio/consentimento)"
+              : "";
+            console.warn(`[WebSearch] ${engine}: r.jina.ai HTTP ${directRes.status}${hint}`);
+          }
+        } catch (err) {
+          console.warn(`[WebSearch] ${engine}: r.jina.ai falhou (${err.message})`);
         }
       }
 
-      if (rawText) {
-        const results = parseSearchMarkdown(rawText, n);
-        if (results.length > 0) {
-          return results;
-        }
+      if (!rawText) continue;
+
+      const results = parseSearchMarkdown(rawText, n);
+      console.log(`[WebSearch] ${engine}: ${rawText.length} chars via ${via} → ${results.length} resultado(s)`);
+      if (results.length > 0) {
+        return results;
       }
+
+      // Chegou markdown mas o parser não extraiu nada. Quase sempre é página de
+      // consentimento/captcha ou mudança de layout do buscador — e a amostra é o
+      // único jeito de distinguir os dois casos sem adivinhar.
+      console.warn(`[WebSearch] ${engine}: markdown recebido mas o parser não extraiu NADA. Amostra: ${rawText.slice(0, 300).replace(/\s+/g, " ")}`);
     } catch (err) {
-      console.warn(`[WebSearch] Aviso no motor ${engineUrl.slice(0, 40)}:`, err.message);
+      console.warn(`[WebSearch] ${engine}: erro inesperado — ${err.message}`);
     }
   }
 
+  // Antes esta saída era muda: zero resultados e nenhuma linha de log, o que
+  // tornava impossível saber em qual camada a busca morreu.
+  console.warn(`[WebSearch] NENHUM resultado para "${cleanQuery}" após tentar ${engineUrls.length} engines.`);
   return [];
 }
 
