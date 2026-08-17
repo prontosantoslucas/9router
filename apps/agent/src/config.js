@@ -8,7 +8,34 @@ const cfg = {
   PORT: parseInt(process.env.AGENT_PORT) || 3717,
   MAX_HISTORY: parseInt(process.env.MAX_HISTORY) || 20,
   QUOTA_RETRY_SEC: parseInt(process.env.QUOTA_RETRY_SEC) || 120,
-  MODEL_RANKING: (process.env.MODEL_RANKING || "opencode/gemini-2.5-flash,opencode/claude-3-5-haiku,opencode/gpt-4o-mini,mimo-free/mimo-v1,gemini-2.5-flash,gpt-4o-mini,gpt-4o,claude-3-5-sonnet,deepseek-chat")
+  // Ordem verificada por teste real contra o gateway em 2026-08-17: 60+ modelos
+  // chamados com 5 tokens cada, latência medida. O default anterior listava
+  // modelos inexistentes neste gateway (`gpt-4o-mini`, `claude-3-5-sonnet`,
+  // `deepseek-chat`, `opencode/*`) — sem MODEL_RANKING no env, NADA funcionava.
+  //
+  // Critérios da ordem:
+  //  1. Kiro primeiro: 34/34 modelos com cota, e é onde o Claude está vivo.
+  //  2. Diversidade de provedor entre as primeiras posições — se a conta de um
+  //     provedor cair (foi o que aconteceu com Gemini e Antigravity), o
+  //     fallback não cai junto.
+  //  3. Gemini por ÚLTIMO: funciona, mas o free tier corta em 20 req/dia por
+  //     modelo. Como líder ele esgota a cota e derruba o agente no meio do dia.
+  //
+  // Fora da lista, verificados sem cota/credencial nesta conta:
+  //   ag/antigravity 429 em TODOS (conta esgotada, inclusive os Claude)
+  //   cc 401 · gh 403 sem licença Copilot · cl 402 · kc 402 · ds 402 sem saldo
+  //   groq 404 (modelos descontinuados) · ollama 410 · gc 404 · nvidia/deepseek-* 410
+  MODEL_RANKING: (process.env.MODEL_RANKING || [
+    "kr/claude-haiku-4.5",                  // ~1.8s · Claude, rápido — cavalo de batalha
+    "nvidia/minimaxai/minimax-m3",          // ~0.8s · outro provedor (diversidade)
+    "kimchi/deepseek-v4-flash",             // ~1.2s · outro provedor
+    "kr/claude-sonnet-4.5",                 // ~3.7s · melhor qualidade disponível
+    "kr/glm-5",                             // ~1.0s
+    "kr/deepseek-3.2",                      // ~1.2s
+    "kimchi/kimi-k2.7",                     // ~1.7s
+    "oc/auto",                              // ~2.0s
+    "gemini/gemini-3.1-flash-lite-preview", // último: free tier, 20 req/dia
+  ].join(","))
     .split(",")
     .map((m) => m.trim())
     .filter(Boolean),

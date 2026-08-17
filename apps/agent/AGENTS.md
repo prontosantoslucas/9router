@@ -32,7 +32,7 @@
 - Fix: sempre avisar Ctrl+F5 quando arquivos em `public/` mudarem
 
 ### 5. ANTHROPIC_BASE_URL aponta pro upstream, NÃO pro proxy
-- Claude Code deve conectar DIRETAMENTE em `https://maxrouter-prod.up.railway.app/v1`, não no proxy `maxrouter.up.railway.app/v1`
+- ⚠️ **DESATUALIZADO (verificado 2026-08-13): `maxrouter-prod.up.railway.app` não existe mais** — responde `HTTP 404 {"message":"Application not found"}`. O gateway vivo é `https://maxrouter.up.railway.app/v1` (testado: `/v1/web/fetch` com jina-reader devolve 200 + conteúdo). Apontar para o `-prod` faz toda busca web e chamada de LLM falhar em silêncio — foi a causa do prospector retornar 0 leads por dias.
 - O proxy (`maxrouter.up.railway.app`) é para webchat e Telegram, não para Claude Code
 - Razão: Claude Code envia requests Anthropic format e o upstream (combo system) roteia corretamente via "auto"
 - Proxy só adiciona latência e confusão de modelo pra Claude Code

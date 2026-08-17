@@ -103,9 +103,22 @@ function engineLabel(url) {
  * @param {number} [limit=5] 1–10
  * @returns {Promise<Array<{title: string, url: string, snippet: string}>>}
  */
+// Última falha da camada de fetch, para quem chama poder distinguir
+// "busquei e não achei nada" de "não consegui buscar". Sem isso, o prospector
+// reportava `discovered: 0` nos dois casos e o LLM narrava "filtros exaustos"
+// — mandando o usuário trocar de nicho quando o problema era o gateway morto.
+let lastFetchFailure = null;
+
+function getLastFetchFailure() {
+  return lastFetchFailure;
+}
+
 async function searchWeb(query, limit = 5) {
   if (!query) return [];
   const n = Math.max(1, Math.min(Number(limit) || 5, 10));
+  // zera por chamada — só interessa a falha desta busca
+  lastFetchFailure = null;
+  let fetchLayerReached = false;
   const cleanQuery = String(query).replace(/["+]/g, " ").replace(/\s+/g, " ").trim();
 
   // Ordem de busca com fallback geolocalizado para o Brasil
@@ -165,6 +178,9 @@ async function searchWeb(query, limit = 5) {
       }
 
       if (!rawText) continue;
+      // Chegou HTML/markdown de algum engine: a infra de fetch está de pé.
+      // Se der 0 resultados daqui pra frente, é parser/consulta, não infra.
+      fetchLayerReached = true;
 
       const results = parseSearchMarkdown(rawText, n);
       console.log(`[WebSearch] ${engine}: ${rawText.length} chars via ${via} → ${results.length} resultado(s)`);
@@ -183,8 +199,18 @@ async function searchWeb(query, limit = 5) {
 
   // Antes esta saída era muda: zero resultados e nenhuma linha de log, o que
   // tornava impossível saber em qual camada a busca morreu.
-  console.warn(`[WebSearch] NENHUM resultado para "${cleanQuery}" após tentar ${engineUrls.length} engines.`);
+  if (!fetchLayerReached) {
+    // Nenhum dos engines devolveu UM byte: não é "não achei", é "não consegui
+    // buscar". Praticamente sempre gateway fora do ar ou r.jina.ai em 429.
+    lastFetchFailure =
+      `nenhum dos ${engineUrls.length} engines retornou conteúdo — ` +
+      `verifique se ROUTER_BASE_URL aponta para um gateway vivo e se o provider ` +
+      `jina-reader está configurado (o fallback anônimo r.jina.ai é rate-limitado)`;
+    console.error(`[WebSearch] FALHA DE INFRAESTRUTURA: ${lastFetchFailure}`);
+  } else {
+    console.warn(`[WebSearch] NENHUM resultado para "${cleanQuery}" após tentar ${engineUrls.length} engines.`);
+  }
   return [];
 }
 
-module.exports = { searchWeb, parseSearchMarkdown, decodeRedirectUrl };
+module.exports = { searchWeb, parseSearchMarkdown, decodeRedirectUrl, getLastFetchFailure };

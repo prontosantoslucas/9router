@@ -421,6 +421,30 @@ async function sendInstagramOutreach(instagramHandle, message) {
 /**
  * Salva ou atualiza um Lead com desduplicação rigorosa (SHA-256).
  */
+// Colunas que a tabela REALMENTE tem, lidas do banco.
+//
+// Existem duas gerações de schema em circulação e o INSERT precisa servir as
+// duas:
+//   - Banco NOVO (o de produção): tem `name`/`category`/`city`. NÃO tem
+//     `title`/`company`/`location` — o CREATE TABLE atual não as cria e a
+//     migração não as adiciona.
+//   - Banco LEGADO (do garimpo de vagas, anterior ao pivot): tem
+//     `title`/`company`/`location` como NOT NULL sem default, e recebeu
+//     `name`/`category`/`city` via ALTER.
+//
+// Um INSERT fixo quebra em um dos dois: citando as legadas explode no banco
+// novo ("no such column: title" — causa do prospector ficar em 0 leads por
+// dias); omitindo-as explode no legado (NOT NULL constraint failed).
+let leadColumnsCache = null;
+function leadColumns() {
+  if (!leadColumnsCache) {
+    leadColumnsCache = new Set(
+      db.prepare("PRAGMA table_info('prospector_leads')").all().map((c) => c.name)
+    );
+  }
+  return leadColumnsCache;
+}
+
 function upsertLead(leadData) {
   const cleanName = (leadData.name || '').trim();
   const cleanCity = (leadData.city || '').trim();
@@ -435,25 +459,33 @@ function upsertLead(leadData) {
   const catVal = leadData.category || "Saúde / Estética";
   const cityVal = cleanCity || "São Paulo";
 
-  db.prepare(`
-    INSERT INTO prospector_leads (
-      id, title, company, name, category, city, location, description, contact_person, phone, instagram_handle, website_url, source, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'discovered')
-  `).run(
-    hash,
-    nameVal,
-    nameVal,
-    nameVal,
-    catVal,
-    cityVal,
-    cityVal,
-    leadData.description || "",
-    leadData.contact_person || null,
-    leadData.phone || null,
-    leadData.instagram_handle || null,
-    leadData.website_url || null,
-    leadData.source || "web"
-  );
+  // Canônicas + legadas espelhando o mesmo valor (title/company = name,
+  // location = city), incluídas só se a coluna existir neste banco.
+  const candidates = [
+    ["id", hash],
+    ["name", nameVal],
+    ["category", catVal],
+    ["city", cityVal],
+    ["description", leadData.description || ""],
+    ["contact_person", leadData.contact_person || null],
+    ["phone", leadData.phone || null],
+    ["instagram_handle", leadData.instagram_handle || null],
+    ["website_url", leadData.website_url || null],
+    ["source", leadData.source || "web"],
+    ["status", "discovered"],
+    ["title", nameVal],
+    ["company", nameVal],
+    ["location", cityVal],
+  ];
+
+  const cols = leadColumns();
+  const present = candidates.filter(([col]) => cols.has(col));
+  const names = present.map(([col]) => col);
+  const values = present.map(([, val]) => val);
+
+  db.prepare(
+    `INSERT INTO prospector_leads (${names.join(", ")}) VALUES (${names.map(() => "?").join(", ")})`
+  ).run(...values);
 
   const lead = db.prepare("SELECT * FROM prospector_leads WHERE id = ?").get(hash);
   return { lead, isNew: true };
@@ -583,6 +615,7 @@ async function runCycle(onNotify) {
   let discoveredCount = 0;
   let outreachedCount = 0;
   const discoveredLeads = [];
+  const cycleErrors = [];
 
   const categories = settings.target_keywords.split(",").map(s => s.trim()).filter(Boolean);
   const cities = settings.target_location.split(",").map(s => s.trim()).filter(Boolean);
@@ -629,7 +662,13 @@ async function runCycle(onNotify) {
           }
         }
       } catch (err) {
-        console.warn(`[Prospector Zenda] Erro ao buscar ${cat} em ${city}:`, err.message);
+        // Este catch já engoliu um bug de schema por dias: o INSERT falhava em
+        // TODAS as combinações, o ciclo terminava com discovered=0, e o LLM que
+        // lê esse retorno inventava "filtros exaustos / nicho restritivo" —
+        // mandando trocar de nicho quando nada disso tinha relação. O erro
+        // agora sobe no retorno, não só no log.
+        console.error(`[Prospector Zenda] Erro ao buscar ${cat} em ${city}:`, err.message);
+        cycleErrors.push(`${cat} em ${city}: ${err.message}`);
       }
     }
   }
@@ -686,6 +725,42 @@ async function runCycle(onNotify) {
       discoveredLeads.slice(0, 4).map(l => `• *${l.name}* (${l.category} - ${l.city})\n  Canal: ${l.phone ? `📱 ${l.phone}` : ''} ${l.instagram_handle ? `📸 @${l.instagram_handle}` : ''}`).join("\n") +
       `\n\n💬 *Abordagens comerciais de venda do Zenda geradas e prontas para envio.*`;
     try { await onNotify(notifyText); } catch {}
+  }
+
+  // Se nada foi descoberto E a camada de busca não conseguiu buscar, isso NÃO
+  // é "0 leads / filtros exaustos" — é falha de infraestrutura. A distinção
+  // importa porque quem lê esse retorno é um LLM: recebendo só `discovered: 0`
+  // ele inventa explicação plausível ("nicho restritivo", "filtros exaustos")
+  // e manda o usuário trocar de nicho por dias, enquanto a causa real era o
+  // gateway de busca fora do ar.
+  const fetchFailure = discoveredCount === 0 ? webSearch.getLastFetchFailure?.() : null;
+  if (fetchFailure) {
+    console.error(`[Prospector Zenda 24/7] ABORTADO por falha de infraestrutura: ${fetchFailure}`);
+    return {
+      ok: false,
+      reason: "search_infrastructure_down",
+      error: `A busca na web não funcionou — nenhum resultado foi obtido dos buscadores. NÃO é problema de nicho, cidade ou filtro: trocar esses parâmetros não vai resolver. Detalhe técnico: ${fetchFailure}`,
+      discovered: 0,
+      outreached: 0,
+      leads: [],
+    };
+  }
+
+  // Erro em TODAS as combinações com zero leads = falha técnica, não mercado.
+  const combinations = Math.min(categories.length, 3) * Math.min(cities.length, 2);
+  if (discoveredCount === 0 && cycleErrors.length >= combinations && combinations > 0) {
+    return {
+      ok: false,
+      reason: "cycle_errors",
+      error:
+        `A busca encontrou resultados mas TODAS as ${cycleErrors.length} combinações falharam ao gravar. ` +
+        `Isso é erro técnico (provavelmente schema do banco), NÃO é nicho, cidade nem filtro — ` +
+        `trocar esses parâmetros não resolve. Erros: ${cycleErrors.slice(0, 3).join(" | ")}`,
+      discovered: 0,
+      outreached: 0,
+      errors: cycleErrors,
+      leads: [],
+    };
   }
 
   return {

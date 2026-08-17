@@ -1465,5 +1465,25 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
 
 ---
 
+### Capítulo 71: Instrumentação de Diagnóstico da Busca Web, Fail-Open e Testes de Resiliência
+
+* **Por que foi feita essa implementação (Causa Raiz Detalhada)**:
+  - Quando a busca web falhava silenciosamente (por exemplo, gateway inacessível ou rate-limit anônimo no Jina Reader), a função `searchWeb` retornava uma lista vazia (`[]`) sem emitir logs claros sobre a camada que causou a falha.
+  - Isso fazia com que o robô reportasse `discovered: 0` e o modelo de linguagem interpretasse erroneamente que os nichos ou cidades estavam "esgotados", quando na verdade a falha era de infraestrutura de rede/gateway.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Instrumentação e Diagnóstico por Engine (`apps/agent/src/tools/webSearch.js`)**:
+     - Implementada a função `engineLabel(url)` que identifica a engine em execução (`ddg-lite`, `bing`, `ddg-html`).
+     - Adicionado o rastreamento explícito `lastFetchFailure` e a função `getLastFetchFailure()`.
+     - Logs detalhados em cada estágio: status HTTP do gateway, fallback direto no `r.jina.ai` (com detecção de 429 rate limit e 403 consentimento), tamanho do payload em caracteres e amostra de 300 caracteres quando o parser não encontra links.
+  2. **Contrato Fail-Open e Resiliência**:
+     - O sistema nunca quebra a execução do agente em caso de falha de busca, retornando fallback seguro e alertando com precisão o motivo da indisponibilidade de rede.
+  3. **Suíte de Testes Automatizados (`tests/unit/websearch-parser.test.js` & `tests/unit/prospector-engine.test.js`)**:
+     - 10 testes cobrindo parsing de DuckDuckGo Lite, Bing, descarte de links de infraestrutura, decodificação de redirecionamentos, queries vazias e diagnóstico de falha de infraestrutura.
+     - 21 testes cobrindo o motor completo de prospecção, geração de pitch comercial do Zenda, pesquisa de mercado e avatar de nichos.
+     - **Resultado**: 100% de aprovação (31 testes passando).
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 

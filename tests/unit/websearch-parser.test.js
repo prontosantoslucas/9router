@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 const webSearch = require("../../apps/agent/src/tools/webSearch");
 
-const { parseSearchMarkdown, decodeRedirectUrl, searchWeb } = webSearch;
+const { parseSearchMarkdown, decodeRedirectUrl, searchWeb, getLastFetchFailure } = webSearch;
 
 describe("parseSearchMarkdown — extração de resultados do markdown do Jina Reader", () => {
   it("extrai resultados no formato DuckDuckGo Lite", () => {
@@ -80,6 +80,7 @@ describe("searchWeb — contrato fail-open e instrumentação", () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async () => { throw new Error("ENOTFOUND r.jina.ai"); };
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
 
     try {
@@ -89,9 +90,33 @@ describe("searchWeb — contrato fail-open e instrumentação", () => {
 
       // Antes da instrumentação esta saída era completamente muda — zero
       // resultados e nenhuma linha de log, impossível saber onde morreu.
-      const mensagens = warn.mock.calls.map((c) => c.join(" ")).join("\n");
-      expect(mensagens).toMatch(/NENHUM resultado/);
-      expect(mensagens).toMatch(/ddg-lite|bing|ddg-html/);
+      const warnMsgs = warn.mock.calls.map((c) => c.join(" ")).join("\n");
+      const errorMsgs = error.mock.calls.map((c) => c.join(" ")).join("\n");
+      expect(warnMsgs).toMatch(/ddg-lite|bing|ddg-html/);
+      expect(errorMsgs).toMatch(/FALHA DE INFRAESTRUTURA/);
+      expect(getLastFetchFailure()).toMatch(/nenhum dos \d+ engines retornou conteúdo/i);
+    } finally {
+      globalThis.fetch = originalFetch;
+      warn.mockRestore();
+      error.mockRestore();
+      log.mockRestore();
+    }
+  });
+
+  it("avisa NENHUM resultado quando o markdown é recebido mas o parser não extrai links", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({ content: { text: "Sem links aqui, apenas texto corrido." } })
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    try {
+      const out = await searchWeb("termo teste", 5);
+      expect(out).toEqual([]);
+      const warnMsgs = warn.mock.calls.map((c) => c.join(" ")).join("\n");
+      expect(warnMsgs).toMatch(/NENHUM resultado/);
     } finally {
       globalThis.fetch = originalFetch;
       warn.mockRestore();
