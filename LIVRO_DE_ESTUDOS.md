@@ -1483,6 +1483,48 @@ Documento de estudo e registro técnico incremental sobre a arquitetura do **9Ro
      - 21 testes cobrindo o motor completo de prospecção, geração de pitch comercial do Zenda, pesquisa de mercado e avatar de nichos.
      - **Resultado**: 100% de aprovação (31 testes passando).
 
+
+### Capítulo 72: A Causa Final dos 0 Leads — Deriva de Schema, Erro Silencioso e Testes que Validavam o Banco Errado
+
+Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encoding, geolocalização, regex do parser, raspagem de site, instrumentação). Mesmo assim o motor continuou retornando **0 leads em produção por dias**. Este capítulo registra o que faltava.
+
+* **Causa raiz: deriva de schema entre ambientes (`apps/agent/src/prospector.js`)**
+  - O `INSERT` de `upsertLead` citava colunas de **duas gerações de schema ao mesmo tempo**: as canônicas (`name`, `category`, `city`) e as legadas do tempo em que o motor garimpava vagas (`title`, `company`, `location`).
+  - O banco de **desenvolvimento** é antigo: tem as legadas (`NOT NULL`) e recebeu as canônicas via `ALTER TABLE`. O `INSERT` passava.
+  - O banco de **produção** foi criado pelo `CREATE TABLE` atual, que **não** cria as legadas — e a lista de migrações nunca as adicionou. Toda gravação estourava `table prospector_leads has no column named title`.
+  - Diagnóstico enganoso clássico: "funciona na minha máquina" **porque** a máquina local estava desatualizada, não apesar disso.
+
+* **Agravante: o erro era engolido**
+  - O `try/catch` do laço de categorias registrava a falha como `console.warn` e seguia. Com as 6 combinações falhando, o ciclo terminava `discovered: 0` sem sinal de erro no retorno.
+  - Quem lê esse retorno é um LLM. Recebendo apenas `0`, ele **inventava** explicação plausível — "filtros exaustos", "nicho restritivo demais" — e sugeria trocar nicho e remover restrição geográfica. Nada disso tinha relação com a falha, e essas pistas falsas custaram dias.
+
+* **Por que os testes não pegaram (31 verdes, produção quebrada)**
+  - Os testes chamam `upsertLead` de verdade, mas rodam contra o banco local **legado**, que tem as colunas. Passavam com o bug presente.
+  - Rodando a mesma suíte com `DATA_DIR` limpo (schema idêntico ao de produção), o teste quebra sem a correção. **Lição: suíte que valida um schema que não existe em produção não é verificação, é falso conforto.**
+
+* **Terceiro defeito, independente: um modelo morto no topo derrubava todo o LLM**
+  - `llmGatewayClient.js` usava `model || cfg.MODEL_RANKING[0]` — **só o primeiro** item, sem iterar.
+  - Quando a cota gratuita do Gemini esgotou (free tier: 20 req/dia por modelo), toda chamada de LLM do agente morria, com sete modelos saudáveis logo abaixo na lista, intocados. Foi o que zerou a geração de pitch (`outreached: 0`).
+  - O default de `MODEL_RANKING` no `config.js` também apontava para modelos inexistentes neste gateway (`gpt-4o-mini`, `claude-3-5-sonnet`, `deepseek-chat`, `opencode/*`) — sem a env var, nada funcionava.
+
+* **Como foi resolvido**
+  1. `upsertLead` monta o `INSERT` dinamicamente a partir de `PRAGMA table_info`, incluindo as colunas legadas só quando existem. Testado nos dois schemas: produção insere e deduplica; legado insere e espelha `title`/`company`/`location`.
+  2. Falha em todas as combinações com zero leads agora retorna `ok: false` com texto explícito de que **não é nicho, cidade nem filtro** — fechando a porta para a narrativa inventada.
+  3. `chatCompletion` percorre `MODEL_RANKING` inteiro, tratando 429/402/401/403/404/410/5xx como "tenta o próximo" e propagando 400 (payload inválido, onde trocar de modelo não ajudaria).
+  4. `MODEL_RANKING` reordenado a partir de teste real (60+ modelos, latência medida).
+
+* **Mapa de cota verificado (2026-08-17, chamadas reais de 5 tokens)**
+  - **Kiro `kr/*`: 34/34 com cota** — é onde o Claude está vivo (`claude-haiku-4.5` ~1.8s, `claude-sonnet-4.5` ~3.7s), além de `glm-5`, `deepseek-3.2`, `qwen3-coder-next`, `minimax-m2.1/m2.5`.
+  - Também vivos: `nvidia/minimaxai/minimax-m3` (~0.8s), `kimchi/*` (4 modelos), `oc/auto`, `oc/big-pickle`.
+  - Sem cota/credencial: `ag/*` 429 (conta do gateway esgotada no upstream — o IDE usa outra sessão OAuth), `gemini/*` 429 exceto `3.1-flash-lite` (free tier 20/dia), `cc` 401, `gh` 403 sem licença Copilot, `cl`/`kc`/`ds` 402 sem saldo, `groq` 404 (modelos descontinuados), `ollama` 410, `gc` 404.
+
+* **Armadilha de diagnóstico registrada: a trava do próprio gateway**
+  - `markAccountUnavailable` (`src/sse/services/auth.js`) grava `modelLock_${model}` com **backoff exponencial** persistido no banco. Cada nova tentativa contra um provedor travado **renova e alonga** a trava.
+  - Consequência prática: testar um provedor em rajada paralela infla o backoff e faz o modelo parecer sem cota quando o problema é a trava local. Ao investigar cota, teste **sequencialmente e com espaçamento**, e leia o corpo do erro — `(reset after Xm)` é anotação do gateway, não do provedor.
+
+* **Documentação que induziu ao erro**
+  - `apps/agent/AGENTS.md` mandava conectar em `https://maxrouter-prod.up.railway.app/v1`, que hoje responde `404 Application not found`. A instrução desatualizada gerou uma hipótese falsa de causa raiz durante a investigação. Corrigido com aviso explícito e data de verificação.
+
 ---
 
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
