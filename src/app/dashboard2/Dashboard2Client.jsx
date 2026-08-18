@@ -350,7 +350,7 @@ export default function Dashboard2Client() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-text-main via-text-main to-brand-500 bg-clip-text text-transparent">
-              Painel de Controle — Agente Lucas
+              Painel de Controle — Lucas
             </h1>
             <HealthDot status="ok" label="Agente Online" />
           </div>
