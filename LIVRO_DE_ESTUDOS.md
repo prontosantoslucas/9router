@@ -1765,6 +1765,25 @@ Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encod
 
 ---
 
+### Capítulo 85: Correção de Overflow Horizontal e Quebra de Linha Automática no Chat
+
+* **Por que foi feita essa alteração (Causa Raiz Detalhada)**:
+  1. **Estouro de Largura com Linhas Longas e Blocos Monospaced**:
+     - No [globals.css](file:///c:/Users/user/Documents/GitHub/9router/src/app/globals.css), as regras `.chat-prose pre` e `.chat-prose pre code` não possuíam `white-space: pre-wrap` e `word-break: break-word`.
+     - Quando o modelo gerava parágrafos longos dentro de blocos de código formatados (ex: mensagens de WhatsApp para copiar e colar), o navegador renderizava o texto com `white-space: pre` padrão sem quebrar a linha, empurrando o balão de mensagem para fora da tela (*horizontal overflow*).
+  2. **Falta de `min-w-0` e `max-w-full` na Coluna do Balão**:
+     - No [MessageBubble.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/primitives/MessageBubble.jsx), a coluna da mensagem não continha `min-w-0 max-w-full overflow-hidden`, permitindo que elementos filhos forçassem a expansão do container pai.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Atualização do Design System em [globals.css](file:///c:/Users/user/Documents/GitHub/9router/src/app/globals.css)**:
+     - Adicionados `word-break: break-word`, `overflow-wrap: anywhere`, `white-space: pre-wrap` e `max-width: 100%` em `.chat-prose`, `.chat-prose p`, `.chat-prose pre` e `.chat-prose pre code`.
+  2. **Contenção Estrita em [MessageBubble.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/primitives/MessageBubble.jsx) e [ChatPageClient.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/chat/ChatPageClient.jsx)**:
+     - Adicionado `min-w-0 w-full max-w-full overflow-hidden` nos balões e no wrapper do chat, garantindo que qualquer texto, tabela, link ou bloco de código fique perfeitamente confinado dentro do layout.
+  3. **Gatilho de Atualização do Railway**:
+     - Incrementada a versão no [apps/agent/package.json](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/package.json) para disparar a compilação no Railway.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 

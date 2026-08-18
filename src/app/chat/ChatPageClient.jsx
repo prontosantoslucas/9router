@@ -304,11 +304,11 @@ function ChatShell() {
       </header>
 
       {/* Main Body: Chat Column + Coder Workspace Column */}
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-          <div className="flex h-full w-full flex-col">
+      <div className="flex-1 flex min-h-0 min-w-0 overflow-hidden">
+          <div className="flex h-full w-full min-w-0 flex-col overflow-hidden">
             {/* Mensagens do Chat Geral */}
             <main className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4">
-              <div className="mx-auto max-w-4xl space-y-4">
+              <div className="mx-auto w-full max-w-4xl min-w-0 space-y-4">
                 {copilotDrafts.length > 0 && (
                   <div className="mb-6 space-y-3">
                     <h4 className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-500">
@@ -356,7 +356,7 @@ function ChatShell() {
 
             {/* Composer */}
             <footer className="shrink-0 border-t border-border bg-surface p-3 [padding-bottom:max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 dark:bg-surface-2 space-y-2">
-              <div className="mx-auto max-w-4xl space-y-2">
+              <div className="mx-auto w-full max-w-4xl min-w-0 space-y-2">
                 {attachments.length > 0 && (
                   <div className="flex flex-wrap gap-2 pb-2">
                     {attachments.map((att, i) => (

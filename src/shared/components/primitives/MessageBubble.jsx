@@ -42,7 +42,7 @@ export function MessageBubble({ message, onSaveNotion, onRetry }) {
   };
 
   return (
-    <div className={`flex w-full gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
+    <div className={`flex w-full min-w-0 gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
       {/* Avatar */}
       <div className="flex-shrink-0 pt-0.5">
         {isUser ? (
@@ -55,7 +55,7 @@ export function MessageBubble({ message, onSaveNotion, onRetry }) {
       </div>
 
       {/* Coluna da mensagem */}
-      <div className={`flex min-w-0 max-w-[82%] flex-col sm:max-w-[72%] ${isUser ? "items-end" : "items-start"}`}>
+      <div className={`flex min-w-0 max-w-[90%] sm:max-w-[85%] flex-col ${isUser ? "items-end ml-auto" : "items-start mr-auto flex-1"}`}>
         {/* Meta: nome + hora */}
         <div className={`mb-1 flex items-center gap-2 px-1 ${isUser ? "flex-row-reverse" : ""}`}>
           <span className="text-xs font-semibold text-text-main">
@@ -66,7 +66,7 @@ export function MessageBubble({ message, onSaveNotion, onRetry }) {
 
         {/* Balão */}
         <div
-          className={`group relative rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-soft ring-1 transition-all ${
+          className={`group relative min-w-0 max-w-full rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-soft ring-1 transition-all overflow-hidden ${
             isUser
               ? "rounded-tr-md bg-gradient-to-br from-brand-500 to-brand-600 text-white ring-brand-600/20"
               : message.isError
@@ -75,7 +75,7 @@ export function MessageBubble({ message, onSaveNotion, onRetry }) {
           }`}
         >
           <div
-            className={`chat-prose max-w-none break-words ${isUser ? "chat-prose-invert" : ""}`}
+            className={`chat-prose min-w-0 max-w-full break-words ${isUser ? "chat-prose-invert" : ""}`}
             dangerouslySetInnerHTML={{ __html: message.htmlContent || message.content }}
           />
 
