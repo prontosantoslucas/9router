@@ -33,6 +33,7 @@ const MODULES = [
       { href: "/chat", label: "Chat do Lucas", icon: "forum", desc: "Atendimento autônomo e memória" },
       { href: "/coder", label: "Coder do Lucas", icon: "code", desc: "IDE inteligente do Agente" },
       { href: "/dashboard", label: "Painel do Lucas", icon: "dashboard_customize", desc: "Status, métricas e canais" },
+      { href: "/dashboard/painel", label: "Hábitos & Progresso", icon: "psychology", desc: "Hábitos, humor, metas e estudos" },
     ],
   },
   {
