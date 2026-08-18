@@ -1136,6 +1136,98 @@ const PROSPECTOR_TOOLS = {
       return parts.join("\n");
     },
   },
+  whatsapp_outreach_list: {
+    name: "whatsapp_outreach_list",
+    desc: "Mostra os rascunhos de WhatsApp pendentes por completo, para revisao antes do envio, com link wa.me que abre a conversa JA COM A MENSAGEM PREENCHIDA. Use quando o usuario pedir para ver/revisar os rascunhos ou quiser enviar manualmente pelo celular.",
+    args: {
+      type: "object",
+      properties: {
+        limit: { type: "number", description: "Quantos rascunhos listar (default 5)" },
+        full: { type: "boolean", description: "true mostra o texto inteiro; false resume em 160 chars (default true)" },
+      },
+      required: [],
+    },
+    run: async (args = {}) => {
+      const db = require("../db");
+      const limit = Math.min(Math.max(Number(args.limit) || 5, 1), 15);
+      const full = args.full !== false;
+
+      const rows = db.prepare(
+        `SELECT l.name, l.city, l.phone, l.email, l.cnpj, o.id AS outreach_id, o.message
+         FROM prospector_outreach o
+         JOIN prospector_leads l ON l.id = o.lead_id
+         WHERE o.channel = 'whatsapp' AND o.status = 'draft'
+           AND l.phone IS NOT NULL AND l.phone != ''
+         ORDER BY l.created_at DESC LIMIT ?`
+      ).all(limit);
+
+      if (rows.length === 0) {
+        const semFone = db.prepare(
+          `SELECT COUNT(*) n FROM prospector_outreach o JOIN prospector_leads l ON l.id = o.lead_id
+           WHERE o.channel = 'whatsapp' AND o.status = 'draft' AND (l.phone IS NULL OR l.phone = '')`
+        ).get().n;
+        return semFone > 0
+          ? "Nenhum rascunho de WhatsApp com telefone. Ha " + semFone + " rascunho(s) de lead sem numero — esses so servem por Instagram ou e-mail."
+          : "Nenhum rascunho de WhatsApp pendente. Rode prospector_run para minerar leads.";
+      }
+
+      const out = [
+        "RASCUNHOS DE WHATSAPP - " + rows.length + " pendente(s)",
+        "O link abre a conversa com a mensagem JA PREENCHIDA. Revise antes de enviar.",
+        "",
+      ];
+      rows.forEach((r, i) => {
+        const msg = String(r.message || "").trim();
+        const fone = String(r.phone).replace(/\D/g, "");
+        out.push((i + 1) + ") " + r.name + (r.city ? " - " + r.city : "") + "  [id " + r.outreach_id + "]");
+        const extras = [];
+        if (r.email) extras.push("email: " + r.email);
+        if (r.cnpj) extras.push("CNPJ: " + r.cnpj);
+        if (extras.length) out.push("   " + extras.join(" | "));
+        // wa.me aceita ?text= pre-preenchido — diferente do Instagram, que nao
+        // permite. Um toque abre a conversa com o texto pronto.
+        out.push("   https://wa.me/" + fone + "?text=" + encodeURIComponent(msg));
+        out.push("   Texto: " + (full ? msg : msg.slice(0, 160) + (msg.length > 160 ? "..." : "")));
+        out.push("");
+      });
+      out.push("Depois de enviar: marcar whatsapp enviado <id> (ou o telefone).");
+      out.push("Para editar um texto antes de mandar, peca: reescreve o rascunho <id> com <instrucao>.");
+      return out.join("\n");
+    },
+  },
+  whatsapp_outreach_mark_sent: {
+    name: "whatsapp_outreach_mark_sent",
+    desc: "Marca um rascunho de WhatsApp como enviado, depois que o usuario mandou manualmente. Aceita o id do rascunho ou o telefone do lead.",
+    args: {
+      type: "object",
+      properties: {
+        outreach_id: { type: "number", description: "Id do rascunho (aparece na lista)" },
+        phone: { type: "string", description: "Telefone do lead, so digitos ou formatado" },
+      },
+      required: [],
+    },
+    run: async (args = {}) => {
+      const db = require("../db");
+      let row;
+      if (args.outreach_id) {
+        row = db.prepare("SELECT id, lead_id FROM prospector_outreach WHERE id = ? AND channel = 'whatsapp'").get(Number(args.outreach_id));
+      } else if (args.phone) {
+        // Compara so digitos: o numero e gravado normalizado (5511...) mas o
+        // usuario digita com parenteses e hifen.
+        const digits = String(args.phone).replace(/\D/g, "");
+        row = db.prepare(
+          `SELECT o.id, o.lead_id FROM prospector_outreach o JOIN prospector_leads l ON l.id = o.lead_id
+           WHERE o.channel = 'whatsapp' AND o.status = 'draft'
+             AND REPLACE(REPLACE(REPLACE(REPLACE(l.phone,'+',''),'-',''),' ',''),'(','') LIKE '%' || ? LIMIT 1`
+        ).get(digits.slice(-8));
+      }
+      if (!row) return "Nao achei esse rascunho de WhatsApp pendente. Rode whatsapp_outreach_list para ver os disponiveis.";
+
+      db.prepare("UPDATE prospector_outreach SET status = 'sent', sent_at = unixepoch() WHERE id = ?").run(row.id);
+      db.prepare("UPDATE prospector_leads SET status = 'sent', updated_at = unixepoch() WHERE id = ?").run(row.lead_id);
+      return "Marcado como enviado. Se responderem, me avise para registrar o retorno.";
+    },
+  },
   instagram_outreach_list: {
     name: "instagram_outreach_list",
     desc: "Lista as abordagens de Instagram pendentes prontas para envio MANUAL pelo celular: nome do lead, link ig.me que abre a conversa e o texto para colar. Use quando o usuario quiser prospectar pelo Instagram sem PC ligado.",
