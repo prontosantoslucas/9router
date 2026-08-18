@@ -19,42 +19,61 @@ function detectChannel(chatId) {
   return "webchat"; // default seguro
 }
 
+// Um envio só conta como enviado se o client confirmar. Os dois clients
+// sinalizam falha de formas diferentes — o userbot devolve { ok:false } em vez
+// de lançar — e ignorar isso fazia TODA notificação parecer entregue: o log
+// dizia "sem cliente conectado" e a função devolvia ok:true na linha seguinte.
+// Era por isso que a notificação no celular nunca chegava sem acusar erro.
 async function sendTelegram(chatId, text) {
-  // Prefere bot API (Telegraf); fallback pro userbot
+  const falhas = [];
+
+  // Preferido: bot API (Telegraf).
   try {
     const botManager = require("./botManager");
     const bot = botManager?.getBot?.();
     if (bot?.telegram?.sendMessage) {
-      await bot.telegram.sendMessage(chatId, text, { parse_mode: "Markdown" }).catch(() => {
-        // 2ª tentativa sem markdown (evita erro de parse por caracteres especiais)
-        return bot.telegram.sendMessage(chatId, text);
-      });
+      try {
+        await bot.telegram.sendMessage(chatId, text, { parse_mode: "Markdown" });
+      } catch (e1) {
+        // 2ª tentativa sem Markdown: caractere especial no texto derruba o parse.
+        await bot.telegram.sendMessage(chatId, text);
+      }
       return { ok: true, via: "tg-bot" };
     }
-  } catch (e) { /* fallthrough userbot */ }
+    falhas.push("bot Telegraf nao inicializado");
+  } catch (e) {
+    falhas.push(`bot: ${e.message}`);
+  }
 
+  // Fallback: userbot (MTProto).
   try {
     const userbot = require("./channels/telegram/userbotClient");
     if (userbot?.sendMessage) {
-      await userbot.sendMessage(chatId, text);
-      return { ok: true, via: "tg-userbot" };
+      const r = await userbot.sendMessage(chatId, text);
+      if (r && r.ok === false) falhas.push(`userbot: ${r.error || "falhou"}`);
+      else return { ok: true, via: "tg-userbot" };
+    } else {
+      falhas.push("userbot sem sendMessage");
     }
-  } catch (e) { /* fallthrough */ }
+  } catch (e) {
+    falhas.push(`userbot: ${e.message}`);
+  }
 
-  return { ok: false, error: "nenhum client Telegram disponível (bot=null, userbot=null)" };
+  return { ok: false, error: `Telegram nao enviou — ${falhas.join("; ")}` };
 }
 
+// O client nativo (Baileys) devolve { ok:false } quando o WhatsApp não está
+// pareado, em vez de lançar. Mesmo problema do Telegram: era descartado.
 async function sendWhatsApp(chatId, text) {
   try {
     const evo = require("./channels/evolution/evolutionApi");
-    if (evo?.sendTextMessage) {
-      await evo.sendTextMessage(chatId, text);
-      return { ok: true, via: "whatsapp-evolution" };
-    }
+    if (!evo?.sendTextMessage) return { ok: false, error: "evolution nao configurada" };
+    const r = await evo.sendTextMessage(chatId, text);
+    if (r && r.ok === false) return { ok: false, error: `whatsapp: ${r.error || "falhou"}` };
+    return { ok: true, via: "whatsapp-evolution" };
   } catch (e) {
     return { ok: false, error: `evolution: ${e.message}` };
   }
-  return { ok: false, error: "evolution não configurada" };
 }
 
 function sendWebchat(chatId, text) {

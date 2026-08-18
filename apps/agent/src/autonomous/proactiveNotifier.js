@@ -75,9 +75,16 @@ async function drain() {
         ? `\n\n_(id ${row.id} — responde "útil ${row.id}" ou "não útil ${row.id}")_`
         : "";
       const res = await channelSender.send(row.chat_id, row.body + feedbackHint);
+      // `ok` também é true quando o canal do celular falhou e a mensagem só
+      // ficou no webchat. Marcar isso como entregue sem registrar nada é o que
+      // fazia o toque das 7h/22h constar como enviado sem nunca chegar no
+      // celular. Grava o motivo junto, para a falha ficar visível.
       if (res.ok) {
-        db.prepare("UPDATE proactive_notifications SET sent_at = (unixepoch()) WHERE id = ?")
-          .run(row.id);
+        const nota = res.via === "webchat-fallback"
+          ? `so no webchat (push falhou: ${res.primary_error || "?"})`
+          : null;
+        db.prepare("UPDATE proactive_notifications SET sent_at = (unixepoch()), error = ? WHERE id = ?")
+          .run(nota, row.id);
       } else {
         db.prepare("UPDATE proactive_notifications SET error = ? WHERE id = ?")
           .run(res.error || "unknown", row.id);

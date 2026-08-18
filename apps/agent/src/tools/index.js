@@ -182,17 +182,81 @@ const TOOLS = {
   },
   notify: {
     name: "notify",
-    desc: "Envia uma notificação para o usuário no Telegram.",
+    desc: "Envia notificacao PUSH para o celular do usuario via Telegram. Use quando ele pedir para ser avisado de algo, ou quando algo importante acontecer fora da conversa.",
     args: {
       type: "object",
       properties: {
-        title: { type: "string", description: "Título (opcional)" },
-        text: { type: "string", description: "Conteúdo da notificação" },
+        title: { type: "string", description: "Titulo (opcional)" },
+        text: { type: "string", description: "Conteudo da notificacao" },
       },
       required: ["text"],
     },
-    run: async (args) => {
-      return `🔔 ${args.title || "Notificação"}: ${args.text}`;
+    run: async (args, ctx = {}) => {
+      // Esta tool era um STUB: a descricao dizia que enviava para o Telegram e o
+      // corpo apenas retornava a string, que aparecia no chat como se tivesse
+      // sido enviada. Era a causa de as notificacoes nunca chegarem no celular.
+      const channelSender = require("../channelSender");
+      const texto = (args.title ? `*${args.title}*\n` : "") + String(args.text || "").trim();
+
+      // Destino: o chat configurado do dono. Cai no chat atual se nao houver,
+      // para nunca perder a mensagem em silencio.
+      const destino = process.env.OWNER_CHAT_ID || process.env.SCANNER_NOTIFY_TELEGRAM_CHAT_ID || ctx.chatId;
+      if (!destino) {
+        return "Nao ha destino de notificacao configurado. Defina OWNER_CHAT_ID (id do seu chat no Telegram) para receber push no celular. Texto que eu enviaria:\n" + texto;
+      }
+
+      const r = await channelSender.send(destino, texto);
+      if (!r.ok) return "Nao consegui enviar a notificacao: " + (r.error || "falha desconhecida");
+      // via informa o canal real: se caiu no fallback de webchat, NAO houve push.
+      if (r.via === "webchat-fallback") {
+        return "O envio pelo canal principal falhou (" + (r.primary_error || "?") + ") e a mensagem ficou no webchat — voce NAO recebeu push no celular.";
+      }
+      return "Notificacao enviada via " + (r.via || "canal padrao") + ".";
+    },
+  },
+  notify_status: {
+    name: "notify_status",
+    desc: "Diagnostica por que a notificacao no celular chega ou nao: destino configurado, canal que sera usado, e se o client daquele canal esta realmente conectado. NAO envia nada.",
+    args: { type: "object", properties: {} },
+    run: async (args = {}, ctx = {}) => {
+      // Existe porque 'nao recebo notificacao' tem varias causas diferentes
+      // (sem destino, bot caido, WhatsApp despareado) e antes nao havia forma
+      // de distinguir sem tentar enviar de verdade.
+      const { detectChannel } = require("../channelSender");
+      const out = [];
+
+      const destino = process.env.OWNER_CHAT_ID || process.env.SCANNER_NOTIFY_TELEGRAM_CHAT_ID || ctx.chatId || null;
+      if (!destino) {
+        return "Nenhum destino de notificacao configurado. Defina OWNER_CHAT_ID com o id do seu chat no Telegram — sem isso nao existe para onde mandar push.";
+      }
+      const canal = detectChannel(destino);
+      const fonte = process.env.OWNER_CHAT_ID
+        ? "OWNER_CHAT_ID"
+        : process.env.SCANNER_NOTIFY_TELEGRAM_CHAT_ID ? "SCANNER_NOTIFY_TELEGRAM_CHAT_ID" : "chat atual";
+      out.push(`Destino: ${destino} (de ${fonte}) — canal ${canal}.`);
+
+      if (canal === "telegram") {
+        let bot = null, ub = null;
+        try { bot = require("../botManager").status?.(); } catch (e) { out.push(`botManager indisponivel: ${e.message}`); }
+        try { ub = require("../channels/telegram/userbotClient").status?.(); } catch (e) { /* opcional */ }
+        const botOn = !!(bot && (bot.running || bot.connected || bot.active));
+        const ubOn = !!(ub && (ub.running || ub.connected || ub.authorized));
+        out.push(`Bot Telegraf: ${botOn ? "conectado" : "NAO conectado"}${bot ? ` (${JSON.stringify(bot).slice(0, 160)})` : ""}`);
+        out.push(`Userbot: ${ubOn ? "conectado" : "NAO conectado"}`);
+        out.push(botOn || ubOn
+          ? "Resultado: push no celular deve funcionar."
+          : "Resultado: NAO vai chegar push. Os dois clients do Telegram estao fora — a mensagem cai no webchat. Reconecte o bot (TELEGRAM_BOT_TOKEN) para receber no celular.");
+      } else if (canal === "whatsapp") {
+        let st = null;
+        try { st = require("../channels/whatsapp/nativeClient").getStatus?.(); } catch (e) { /* pode estar em Evolution */ }
+        const on = st && (st.connected || st.state === "open" || st.connectionState === "open");
+        out.push(`WhatsApp: ${on ? "conectado" : "NAO conectado"}${st ? ` (${JSON.stringify(st).slice(0, 160)})` : ""}`);
+        if (process.env.EVOLUTION_API_URL) out.push("Evolution API configurada — o envio passa por ela, nao pelo client nativo.");
+      } else {
+        out.push("O destino e um chat de webchat: a mensagem aparece na interface, mas NAO gera push no celular. Configure OWNER_CHAT_ID com seu id do Telegram para isso.");
+      }
+
+      return out.join("\n");
     },
   },
   schedule: {
