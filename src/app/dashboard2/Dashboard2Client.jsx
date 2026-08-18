@@ -33,14 +33,17 @@ export default function Dashboard2Client() {
   const [waQrCode, setWaQrCode] = useState(null);
 
   // Toggles de Módulos
-  const [modules, setModules] = useState({
-    audioSttTts: true,
-    copilotMode: false,
-    dailyBriefing: true,
-    webBrowsing: true,
-    codeInterpreter: true,
-    autonomousInteractions: true,
-  });
+  // Controles de prospecção. Substituíram o card "Módulos Avançados", cujos seis
+  // checkboxes gravavam em agent_settings e NADA no código lia — desmarcar
+  // "Autonomous Interactions" não desligava nada, porque quem manda ali é a env
+  // var. Aqui só entra controle que o prospector.js de fato consulta:
+  //   enabled       -> runCycle aborta se false
+  //   interval_min  -> intervalo do timer 24/7
+  //   auto_send_wa  -> gate do envio real no WhatsApp
+  //   auto_send_ig  -> gate do envio real no Instagram
+  const [prospector, setProspector] = useState(null);
+  const [prospectorBusy, setProspectorBusy] = useState(false);
+  const [prospectorMsg, setProspectorMsg] = useState(null);
 
   // Integration Google Workspace
   const [googleStatus, setGoogleStatus] = useState(null);
@@ -52,37 +55,66 @@ export default function Dashboard2Client() {
     fetchGoogleStatus();
     fetchBotStatus();
     fetchSidecars();
-    fetchModules();
+    fetchProspector();
   }, []);
 
-  const fetchModules = async () => {
+  const fetchProspector = async () => {
     try {
-      const res = await fetch("/api/agent/modules");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.modules) setModules(data.modules);
-      }
+      const res = await fetch("/api/agent/prospector/status");
+      if (res.ok) setProspector(await res.json());
     } catch (err) {
-      console.error("[Dashboard2] Erro ao carregar módulos:", err);
+      console.error("[Dashboard2] Erro ao carregar prospector:", err);
     }
   };
 
-  const handleToggleModule = async (key) => {
-    const updated = { ...modules, [key]: !modules[key] };
-    setModules(updated);
+  const saveProspectorSetting = async (patch, aviso = null) => {
+    // Disparo automático manda mensagem REAL para empresas. Confirmação
+    // explícita porque um clique distraído aqui vira spam no número do usuário,
+    // com risco de banimento do WhatsApp.
+    if (aviso && !window.confirm(aviso)) return;
+
+    const anterior = prospector?.settings;
+    setProspector((p) => (p ? { ...p, settings: { ...p.settings, ...patch } } : p));
     try {
-      const res = await fetch("/api/agent/modules", {
+      const res = await fetch("/api/agent/prospector/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modules: updated }),
+        body: JSON.stringify(patch),
       });
-      if (!res.ok) {
-        setModules(modules);
-        console.error("Falha ao salvar módulo:", await res.text());
-      }
+      if (!res.ok) throw new Error(await res.text());
+      await fetchProspector();
     } catch (err) {
-      console.error("[Dashboard2] Erro ao salvar módulo:", err);
-      setModules(modules);
+      // Reverte na tela: mostrar ligado o que não salvou é o tipo de mentira
+      // que o card antigo fazia.
+      setProspector((p) => (p && anterior ? { ...p, settings: anterior } : p));
+      setProspectorMsg("Não salvou: " + String(err.message || err).slice(0, 120));
+    }
+  };
+
+  const runProspectorNow = async () => {
+    setProspectorBusy(true);
+    setProspectorMsg("Rodando ciclo… a busca leva de 30s a 2min.");
+    try {
+      const res = await fetch("/api/agent/prospector/run", { method: "POST" });
+      const data = await res.json();
+      const r = data.result || {};
+      // Respeita r.ok: o ciclo pode falhar por erro técnico e o HTTP voltar 200.
+      if (r.ok === false) {
+        setProspectorMsg("O ciclo NÃO concluiu: " + (r.error || r.reason || "falha desconhecida"));
+      } else {
+        const partes = [`${r.discovered ?? 0} novo(s) lead(s)`];
+        if (r.rejected) partes.push(`${(r.rejected.noContact || 0) + (r.rejected.aggregator || 0)} descartado(s)`);
+        if (r.outreached) partes.push(`${r.outreached} envio(s) confirmado(s)`);
+        if (r.queued) partes.push(`${r.queued} enfileirado(s) sem confirmação`);
+        if (r.notion) partes.push(r.notion.ok ? `${r.notion.synced} no Notion` : "Notion falhou");
+        setProspectorMsg(partes.join(" · "));
+      }
+      await fetchProspector();
+      fetchStats();
+    } catch (err) {
+      setProspectorMsg("Erro ao rodar: " + String(err.message || err).slice(0, 120));
+    } finally {
+      setProspectorBusy(false);
     }
   };
 
@@ -692,28 +724,104 @@ export default function Dashboard2Client() {
           )}
         </div>
 
-        {/* Card 4: Toggles dos Módulos Avançados */}
+        {/* Card 4: Prospecção 24/7 — só controles que o código realmente lê.
+            Substituiu "Módulos Avançados", onde 6 checkboxes gravavam no banco
+            e nada os consultava. */}
         <div className="card-soft p-6 border border-border space-y-4">
-          <div className="flex items-center gap-2 border-b border-border pb-3">
-            <span className="material-symbols-outlined text-brand-500">tune</span>
-            <h3 className="font-bold text-base">Módulos Avançados do Lucas</h3>
+          <div className="flex items-center justify-between border-b border-border pb-3">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-brand-500">radar</span>
+              <h3 className="font-bold text-base">Prospecção 24/7</h3>
+            </div>
+            {prospector?.totalLeads !== undefined && (
+              <span className="text-[11px] text-text-muted">
+                {prospector.totalLeads} lead(s) · {prospector.draftedOutreach ?? 0} rascunho(s)
+              </span>
+            )}
           </div>
 
-          <div className="space-y-3">
-            {Object.entries(modules).map(([key, val]) => (
-              <div key={key} className="flex items-center justify-between p-2 rounded-lg hover:bg-bg-alt transition-colors">
-                <span className="text-xs font-semibold capitalize text-text-main">
-                  {key.replace(/([A-Z])/g, " $1")}
-                </span>
+          {!prospector ? (
+            <p className="text-xs text-text-muted">Carregando…</p>
+          ) : (
+            <div className="space-y-3">
+              {/* Motor: gate real no início do runCycle */}
+              <div className="flex items-center justify-between p-2 rounded-lg hover:bg-bg-alt transition-colors">
+                <div>
+                  <span className="text-xs font-semibold text-text-main">Motor automático</span>
+                  <p className="text-[11px] text-text-subtle">
+                    Busca sozinho a cada {prospector.settings?.interval_min ?? 15} min
+                    {prospector.running ? " · rodando" : " · parado"}
+                  </p>
+                </div>
                 <input
                   type="checkbox"
-                  checked={val}
-                  onChange={() => handleToggleModule(key)}
+                  checked={!!prospector.settings?.enabled}
+                  onChange={() => saveProspectorSetting({ enabled: !prospector.settings?.enabled })}
                   className="h-4 w-4 rounded accent-brand-500 cursor-pointer"
                 />
               </div>
-            ))}
-          </div>
+
+              {/* Disparo automático: manda mensagem REAL. Aviso à vista, não escondido. */}
+              <div className="flex items-center justify-between p-2 rounded-lg hover:bg-bg-alt transition-colors">
+                <div>
+                  <span className="text-xs font-semibold text-text-main">Disparo automático — WhatsApp</span>
+                  <p className="text-[11px] text-danger">
+                    Envia mensagem real sem revisão. Requer WhatsApp pareado.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={!!prospector.settings?.auto_send_wa}
+                  onChange={() =>
+                    saveProspectorSetting(
+                      { auto_send_wa: !prospector.settings?.auto_send_wa },
+                      prospector.settings?.auto_send_wa
+                        ? null
+                        : "Ligar o disparo automático no WhatsApp?\n\nO agente vai enviar mensagem para as empresas SEM você revisar. Disparo em massa para quem não te procurou é o padrão que faz o WhatsApp banir número — e é o mesmo número dos seus CTAs.\n\nRecomendado: manter desligado e enviar pela lista de rascunhos."
+                    )
+                  }
+                  className="h-4 w-4 rounded accent-brand-500 cursor-pointer"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-2 rounded-lg hover:bg-bg-alt transition-colors">
+                <div>
+                  <span className="text-xs font-semibold text-text-main">Disparo automático — Instagram</span>
+                  <p className="text-[11px] text-danger">
+                    Depende da extensão do Chrome aberta e logada; entrega não é confirmada.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={!!prospector.settings?.auto_send_ig}
+                  onChange={() =>
+                    saveProspectorSetting(
+                      { auto_send_ig: !prospector.settings?.auto_send_ig },
+                      prospector.settings?.auto_send_ig
+                        ? null
+                        : "Ligar o disparo automático no Instagram?\n\nO envio passa pela extensão do Chrome: se ela não estiver aberta e logada, a mensagem fica na fila e NÃO é entregue (fica marcada como 'enfileirada', nunca 'enviada').\n\nO Instagram também não permite iniciar conversa por API oficial."
+                    )
+                  }
+                  className="h-4 w-4 rounded accent-brand-500 cursor-pointer"
+                />
+              </div>
+
+              {/* Rodar agora: mesma ação disponível no webchat, aqui fora dele */}
+              <button
+                onClick={runProspectorNow}
+                disabled={prospectorBusy}
+                className="w-full mt-1 rounded-lg bg-brand-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+              >
+                {prospectorBusy ? "Rodando…" : "Rodar um ciclo agora"}
+              </button>
+
+              {prospectorMsg && (
+                <p className="text-[11px] text-text-muted whitespace-pre-wrap border-t border-border pt-2">
+                  {prospectorMsg}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

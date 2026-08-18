@@ -628,7 +628,10 @@ app.post("/api/prospector/run", async (req, res) => {
         await bot.telegram.sendMessage(tgChatId, msg, { parse_mode: "Markdown" }).catch(() => {});
       }
     });
-    res.json({ ok: true, result });
+    // ok reflete o RESULTADO, nao so o HTTP: o ciclo pode falhar por erro
+    // tecnico (schema, gravacao) e devolver 200. Front que olhasse apenas o ok
+    // externo mostraria sucesso numa rodada que nao gravou nada.
+    res.json({ ok: result?.ok !== false, result });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
