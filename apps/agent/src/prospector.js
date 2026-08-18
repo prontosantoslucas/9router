@@ -101,6 +101,10 @@ try { db.exec("ALTER TABLE prospector_leads ADD COLUMN matched_product_id TEXT D
 // syncPendingLeads sabe o que falta enviar, e o que torna o envio idempotente
 // com o ciclo reencontrando os mesmos estabelecimentos a cada 15 min.
 try { db.exec("ALTER TABLE prospector_leads ADD COLUMN notion_page_id TEXT"); } catch {}
+// Toque 2 da sequencia: revelado apenas depois da empresa responder ao toque 1.
+// Guardado na mesma linha do rascunho para a listagem mostrar os dois passos
+// juntos, na ordem em que serao enviados.
+try { db.exec("ALTER TABLE prospector_outreach ADD COLUMN followup_message TEXT"); } catch {}
 // Dados estruturados de contato/identificação. Lead sem nenhum canal não é mais
 // gravado (ver a regra no runCycle), então estas colunas são o que torna a base
 // utilizável em vez de uma lista de nomes.
@@ -385,99 +389,216 @@ function dorDoNicho(category) {
   return hit ? hit.dor : "mensagem de paciente fora do horário comercial que fica sem resposta e vira agendamento perdido";
 }
 
-async function generateOutreachMessage(lead, channel = "whatsapp") {
-  const settings = getSettings();
+// A abordagem é uma SEQUÊNCIA de dois toques, não uma mensagem só.
+//
+// Toque 1 (abertura): fala com a EMPRESA, não com uma pessoa imaginária.
+// Menciona que existe um problema recorrente nas clínicas da região SEM dizer
+// qual, e pergunta se aquela clínica também enfrenta. Cria lacuna de curiosidade
+// e pede um micro-compromisso barato: responder "sim, acontece aqui".
+//
+// Toque 2 (dor): só depois da resposta. Aí nomeia a dor e faz a pergunta aberta.
+// Entregar a dor no toque 1 desperdiça o gancho — a pessoa lê tudo e não precisa
+// responder nada.
+//
+// Exceção deliberada à regra de "nunca pergunta de sim/não": no toque 1 ela é o
+// objetivo. Pergunta fácil gera resposta; a pergunta ABERTA fica no toque 2,
+// quando já existe conversa.
+//
+// A saudação fica como token e é resolvida na HORA DE LISTAR, não aqui: rascunho
+// gerado de manhã e enviado à tarde diria "Bom dia" às 15h — é o tipo de detalhe
+// que denuncia automação.
+// Pluraliza o segmento para caber em "nas ___ de São Paulo".
+//
+// Um "+s" ingênuo produz "hospitals veterinários" e "clínicas de estéticas".
+// Regras aplicadas: pluraliza o núcleo e os adjetivos até encontrar preposição
+// (de/da/do/em), porque o que vem depois dela é complemento e fica no singular.
+// Terminações irregulares tratadas: -al/-el/-ol/-ul viram -ais/-eis/-ois/-uis,
+// -m vira -ns, -r/-z ganham -es, -ão vira -ões.
+const PREPOSICOES = new Set(["de", "da", "do", "das", "dos", "em", "na", "no", "para", "e", "com"]);
+
+function pluralizarPalavra(w) {
+  const lower = w.toLowerCase();
+  if (lower.endsWith("s")) return lower;
+  if (/[aeiou]l$/.test(lower)) return lower.slice(0, -1) + "is";        // hospital -> hospitais
+  if (lower.endsWith("m")) return lower.slice(0, -1) + "ns";            // comum -> comuns
+  if (/[rz]$/.test(lower)) return lower + "es";                          // doutor -> doutores
+  if (lower.endsWith("ão")) return lower.slice(0, -2) + "ões";          // reabilitação -> reabilitações
+  return lower + "s";
+}
+
+function pluralizarSegmento(categoria) {
+  const palavras = String(categoria || "").trim().split(/\s+/).filter(Boolean);
+  if (palavras.length === 0) return "clínicas";
+  const out = [];
+  let paramos = false;
+  for (const w of palavras) {
+    const lower = w.toLowerCase();
+    if (PREPOSICOES.has(lower)) paramos = true;
+    out.push(paramos ? lower : pluralizarPalavra(w));
+  }
+  return out.join(" ");
+}
+
+const SAUDACAO_TOKEN = "{{SAUDACAO}}";
+
+function saudacaoAgora(date = new Date()) {
+  // Horário de São Paulo, independente do fuso do servidor.
+  const h = Number(
+    new Intl.DateTimeFormat("pt-BR", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }).format(date)
+  );
+  if (h >= 5 && h < 12) return "Bom dia";
+  if (h >= 12 && h < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+function aplicarSaudacao(texto, date = new Date()) {
+  const saudacao = saudacaoAgora(date);
+  let out = String(texto || "").split(SAUDACAO_TOKEN).join(saudacao);
+  // O modelo costuma escrever o token colado na frase seguinte, produzindo
+  // "Bom dia Identifiquei um problema" — sem pontuacao a frase fica emendada
+  // e denuncia template. Insere a pontuacao quando falta.
+  const emendado = new RegExp("(" + saudacao + ")\\s+(?=[A-Za-zÀ-ÿ])");
+  out = out.replace(emendado, "$1! ");
+  return out;
+}
+
+// ---------- TOQUE 1: abertura ----------
+async function generateOpener(lead, channel = "whatsapp") {
   const lim = CHANNEL_LIMITS[channel] || CHANNEL_LIMITS.whatsapp;
-  const dor = dorDoNicho(lead.category);
+  const regiao = String(lead.city || "").split(",")[0].trim();
+  const segmento = pluralizarSegmento(lead.category);
+  // 0.85 e nao 0.7: com pouco espaco o modelo comprime e sai telegrama
+  // (\"Identificado problema recorrente em clinicas odontologicas Sao Paulo\"),
+  // sem preposicao nem virgula — exatamente o oposto de humanizado.
+  const maxAbertura = Math.max(240, Math.round(lim.maxChars * 0.85));
 
-  // Único material de pesquisa real que temos. Se for pobre, o prompt manda
-  // NÃO inventar em vez de encher de elogio genérico.
-  const pesquisa = String(lead.description || "").replace(/\s+/g, " ").trim().slice(0, 400);
-
-  const prompt = `Escreva a PRIMEIRA mensagem de abordagem fria para o estabelecimento abaixo. Canal: ${channel.toUpperCase()}.
-
-DADOS REAIS (é só isso que sabemos — não invente nada além):
-- Nome: ${lead.name}
-- Segmento: ${lead.category}
-- Cidade: ${lead.city}
-${lead.contact_person ? `- Responsável: ${lead.contact_person}` : ""}
-${pesquisa ? `- O que apareceu na busca sobre eles: "${pesquisa}"` : "- Não temos informação específica sobre eles além do nome e segmento."}
-
-DOR que queremos tocar (use como base, com as palavras dela):
-${dor}
-
-ESTRUTURA OBRIGATÓRIA (${lim.linhas}, no máximo ${lim.maxChars} caracteres):
-1. Uma frase curta que mostre que a mensagem é pra ELES especificamente — use o nome e, se houver algo concreto na busca acima, cite. Se não houver, seja direto sem elogiar.
-2. A dor, em UMA frase, como quem já viu isso acontecer. Não afirme que aconteceu com eles — pergunte ou coloque como algo comum no segmento.
-3. UMA pergunta aberta sobre essa dor. Pergunta que só se responde com uma frase, nunca com "sim" ou "não".
-
-PROIBIDO (cada item abaixo derruba a resposta):
-- Citar funcionalidade, tecnologia, "IA", "automação", "integração", "Google Calendar" ou nome de produto. O primeiro contato NÃO fala de produto.
-- Pedir reunião, call, demonstração, "5 minutos" ou qualquer horário. O objetivo é resposta, não agenda.
-- Elogio genérico: "trabalho de excelência", "parabéns pelo conteúdo", "acompanho vocês", "referência na região".
-- Afirmar que viu o Instagram, o site ou um post específico se isso não está nos dados acima.
-- Assinatura, "Atenciosamente", nome de equipe. É ${channel === "instagram" ? "DM" : "WhatsApp"}, não e-mail.
-- Mais de 1 emoji. Preferível nenhum.
-- Link de qualquer tipo.
-
-Responda APENAS com o texto da mensagem, sem aspas e sem explicação.`;
+  const prompt = [
+    `Escreva a PRIMEIRA mensagem de uma abordagem comercial fria. Canal: ${channel.toUpperCase()}.`,
+    "",
+    "DADOS REAIS:",
+    `- Empresa: ${lead.name}`,
+    `- Segmento: ${segmento}`,
+    `- Região: ${regiao || "não informada"}`,
+    "",
+    "OBJETIVO DESTA MENSAGEM: conseguir uma RESPOSTA curta. Nada mais.",
+    "",
+    `ESTRUTURA OBRIGATÓRIA (no máximo ${maxAbertura} caracteres):`,
+    `1. Comece exatamente com ${SAUDACAO_TOKEN} — o sistema troca pela saudação correta na hora do envio.`,
+    `2. Diga que está entrando em contato porque identificou um problema recorrente nas ${segmento} de ${regiao || "sua região"}.`,
+    `3. Pergunte se a ${lead.name} também enfrenta esse problema.`,
+    "",
+    "REGRAS:",
+    "- Fale com a EMPRESA, não com uma pessoa. Refira-se a ela pelo nome. Nada de tratar como indivíduo, nada de 'equipe', nada de 'amigo'.",
+    "- NÃO revele qual é o problema. A curiosidade é o que faz responder.",
+    "- NÃO cite produto, tecnologia, IA, funcionalidade nem nome de solução.",
+    "- NÃO peça reunião, call, demonstração nem horário.",
+    "- NÃO elogie a empresa.",
+    "- Sem assinatura, sem despedida formal, sem emoji.",
+    "- Tom de gente escrevendo, não de mala direta. Direto e educado.",
+    "- Frases COMPLETAS, com preposições e pontuação natural. Nunca abrevie como telegrama: escreva \"nas clínicas de São Paulo\", não \"clínicas São Paulo\".",
+    "- Comece a segunda frase em primeira pessoa (identifiquei/notei), não em voz passiva.",
+    "",
+    "Responda APENAS com o texto da mensagem.",
+  ].join("\n");
 
   try {
     const res = await proxy.complete([
       {
         role: "system",
-        content: "Você é SDR de pré-vendas B2B. Sua única meta no primeiro contato é gerar RESPOSTA, tocando numa dor real do prospect. Você nunca fala de produto, nunca pede reunião e nunca usa elogio genérico no primeiro toque.",
+        content:
+          "Você é SDR de pré-vendas B2B. No primeiro toque você só quer uma resposta: apresenta que existe um problema recorrente no segmento e pergunta se a empresa também sofre com ele, sem revelar qual é o problema e sem falar de produto.",
       },
       { role: "user", content: prompt },
-    ], { timeoutMs: 10000, maxRetries: 1 });
+    ], { timeoutMs: 10000, maxRetries: 1, caveman: false });
 
-    let txt = res.content.trim().replace(/^["'`]|["'`]$/g, "");
-    // Corta assinatura que o modelo às vezes acrescenta mesmo proibido.
+    let txt = res.content.trim().replace(/^["'`]+|["'`]+$/g, "");
     txt = txt.replace(/\n+(atenciosamente|abra[cç]os|att\.?|equipe .*)$/i, "").trim();
+    // Garante o token: sem ele a saudação nunca é aplicada na listagem.
+    if (!txt.includes(SAUDACAO_TOKEN)) txt = `${SAUDACAO_TOKEN}! ${txt}`;
     return txt;
   } catch (err) {
-    console.warn("[Prospector Zenda] Fallback de abordagem:", err.message);
-    return fallbackOutreach(lead, channel, dor);
+    console.warn("[Prospector Zenda] Fallback de abertura:", err.message);
+    return fallbackOpener(lead, channel);
   }
 }
 
-// O fallback é usado sempre que a geração falha — e falhou por dias quando a
-// cota do Gemini esgotou. Então ele precisa seguir os MESMOS princípios, não
-// ser um despejo de funcionalidades como era antes.
-function fallbackOutreach(lead, channel, dor) {
-  const primeiroNome = String(lead.name || "").split(/[-–|,]/)[0].trim();
-  const cidade = String(lead.city || "").split(",")[0].trim();
+// ---------- TOQUE 2: a dor, após a resposta ----------
+async function generateFollowup(lead, channel = "whatsapp") {
   const lim = CHANNEL_LIMITS[channel] || CHANNEL_LIMITS.whatsapp;
+  const dor = dorDoNicho(lead.category);
 
-  // "É da X?" em vez de "Falo com a X?": funciona para nome masculino e
-  // feminino ("a Centro Veterinário" saía errado) e soa como mensagem de
-  // pessoa, não de script.
-  const abertura = channel === "instagram"
-    ? `Oi! Vocês são de ${cidade || "aí"}, certo?`
-    : `Oi! É da ${primeiroNome || "clínica"}?`;
+  const prompt = [
+    "Escreva a SEGUNDA mensagem da abordagem. A empresa JÁ RESPONDEU à primeira, na qual você disse ter identificado um problema recorrente no segmento sem revelar qual.",
+    "",
+    `Empresa: ${lead.name} (${lead.category}, ${lead.city})`,
+    `Canal: ${channel.toUpperCase()}`,
+    "",
+    "O PROBLEMA a revelar agora:",
+    dor,
+    "",
+    `ESTRUTURA (${lim.linhas}, máximo ${lim.maxChars} caracteres):`,
+    "1. Revele o problema em uma frase, como algo que você vê no segmento — não como acusação à empresa.",
+    "2. Termine com UMA pergunta ABERTA sobre como eles lidam com isso hoje. Exige uma frase de resposta, nunca sim ou não.",
+    "",
+    "REGRAS:",
+    "- NÃO cite produto, tecnologia, IA, funcionalidade nem solução. Ainda não é hora.",
+    "- NÃO peça reunião nem demonstração.",
+    "- NÃO repita saudação: a conversa já começou.",
+    "- Sem assinatura e sem emoji.",
+    "",
+    "Responda APENAS com o texto.",
+  ].join("\n");
 
-  const meio = channel === "instagram"
-    ? `Vejo muito isso em ${String(lead.category || "clínica").toLowerCase()}: ${dor}.`
-    : `Pergunto porque vejo isso acontecer muito no segmento: ${dor}.`;
+  try {
+    const res = await proxy.complete([
+      {
+        role: "system",
+        content:
+          "Você é SDR de pré-vendas B2B. A empresa respondeu ao seu primeiro contato. Agora você revela o problema e pergunta como eles lidam com isso, sem falar de produto e sem pedir reunião.",
+      },
+      { role: "user", content: prompt },
+    ], { timeoutMs: 10000, maxRetries: 1, caveman: false });
 
-  const pergunta = channel === "instagram"
-    ? "Como vocês lidam com as mensagens que chegam fora do horário?"
-    : "Como vocês resolvem isso hoje — sobra pra alguém responder depois, ou fica pra outro dia?";
+    const txt = res.content.trim().replace(/^["'`]+|["'`]+$/g, "");
+    return txt.replace(/\n+(atenciosamente|abra[cç]os|att\.?|equipe .*)$/i, "").trim();
+  } catch (err) {
+    console.warn("[Prospector Zenda] Fallback de follow-up:", err.message);
+    return fallbackFollowup(lead, channel, dor);
+  }
+}
 
-  let msg = `${abertura}\n\n${meio}\n\n${pergunta}`;
+// Compat: quem chamava generateOutreachMessage recebe a ABERTURA (toque 1).
+async function generateOutreachMessage(lead, channel = "whatsapp") {
+  return generateOpener(lead, channel);
+}
 
-  // Respeita o limite do canal. Se estourar, encurta a DOR (a parte elástica),
-  // nunca a pergunta — é ela que gera a resposta.
+// ---------- Fallbacks (usados quando o LLM falha) ----------
+function fallbackOpener(lead, channel = "whatsapp") {
+  const regiao = String(lead.city || "").split(",")[0].trim();
+  const segmento = pluralizarSegmento(lead.category);
+  const nome = String(lead.name || "").split(/[-–|,]/)[0].trim();
+  const onde = regiao ? `de ${regiao}` : "da região";
+  return [
+    `${SAUDACAO_TOKEN}! Estou entrando em contato porque identifiquei um problema que se repete nas ${segmento} ${onde}.`,
+    `Antes de explicar: a ${nome} também passa por isso?`,
+  ].join("\n\n");
+}
+
+function fallbackFollowup(lead, channel = "whatsapp", dor = null) {
+  const d = dor || dorDoNicho(lead.category);
+  const lim = CHANNEL_LIMITS[channel] || CHANNEL_LIMITS.whatsapp;
+  const pergunta = "Como vocês lidam com isso hoje?";
+  let msg = `É o seguinte: ${d}.` + "\n\n" + pergunta;
   if (msg.length > lim.maxChars) {
-    const espaco = lim.maxChars - (abertura.length + pergunta.length + 8);
-    const dorCurta = dor.length > espaco ? dor.slice(0, Math.max(40, espaco - 1)).replace(/[\s,;]+\S*$/, "") + "…" : dor;
-    const meioCurto = channel === "instagram"
-      ? `Vejo muito isso no segmento: ${dorCurta}.`
-      : `Pergunto porque vejo muito isso: ${dorCurta}.`;
-    msg = `${abertura}\n\n${meioCurto}\n\n${pergunta}`;
+    const espaco = lim.maxChars - (pergunta.length + 20);
+    const curta = d.length > espaco
+      ? d.slice(0, Math.max(40, espaco)).replace(/[\s,;]+\S*$/, "") + "…"
+      : d;
+    msg = `É o seguinte: ${curta}.` + "\n\n" + pergunta;
   }
   return msg;
 }
+
 
 async function sendWhatsAppOutreach(phone, message) {
   if (!phone) return { ok: false, error: "Telefone ausente" };
@@ -928,18 +1049,24 @@ async function runCycle(onNotify) {
   // 2. Geração de Abordagens de Venda com IA para os Novos Clientes
   for (const lead of discoveredLeads) {
     try {
-      const waDraft = await generateOutreachMessage(lead, "whatsapp");
-      const igDraft = await generateOutreachMessage(lead, "instagram");
+      // Gera a sequência inteira: abertura (toque 1) e a dor (toque 2), que só
+      // é enviada depois de a empresa responder. Guardar os dois juntos evita
+      // depender de uma segunda chamada de LLM no momento em que o lead responde
+      // — que é justamente quando não se pode travar esperando.
+      const waDraft = await generateOpener(lead, "whatsapp");
+      const igDraft = await generateOpener(lead, "instagram");
+      const waFollow = await generateFollowup(lead, "whatsapp");
+      const igFollow = await generateFollowup(lead, "instagram");
 
       const waOutreachId = db.prepare(`
-        INSERT INTO prospector_outreach (lead_id, channel, message, status)
-        VALUES (?, 'whatsapp', ?, 'draft')
-      `).run(lead.id, waDraft).lastInsertRowid;
+        INSERT INTO prospector_outreach (lead_id, channel, message, followup_message, status)
+        VALUES (?, 'whatsapp', ?, ?, 'draft')
+      `).run(lead.id, waDraft, waFollow).lastInsertRowid;
 
       const igOutreachId = db.prepare(`
-        INSERT INTO prospector_outreach (lead_id, channel, message, status)
-        VALUES (?, 'instagram', ?, 'draft')
-      `).run(lead.id, igDraft).lastInsertRowid;
+        INSERT INTO prospector_outreach (lead_id, channel, message, followup_message, status)
+        VALUES (?, 'instagram', ?, ?, 'draft')
+      `).run(lead.id, igDraft, igFollow).lastInsertRowid;
 
       // Disparo automático WhatsApp se habilitado
       if (settings.auto_send_wa && lead.phone) {
@@ -1178,9 +1305,13 @@ async function regenerateDrafts({ limit = 30 } = {}) {
   const falhas = [];
   for (const row of alvo) {
     try {
-      const msg = await generateOutreachMessage(row, row.channel);
+      // Regera a SEQUENCIA inteira: abertura e o toque 2. Regerar so a abertura
+      // deixaria um follow-up antigo (com texto de produto) esperando para ser
+      // enviado logo depois do texto novo.
+      const msg = await generateOpener(row, row.channel);
       if (!msg || msg.length < 20) { falhas.push(`${row.name}: texto vazio`); continue; }
-      db.prepare('UPDATE prospector_outreach SET message = ? WHERE id = ?').run(msg, row.outreach_id);
+      const follow = await generateFollowup(row, row.channel);
+      db.prepare('UPDATE prospector_outreach SET message = ?, followup_message = ? WHERE id = ?').run(msg, follow, row.outreach_id);
       regerados++;
     } catch (err) {
       falhas.push(`${row.name}: ${err.message}`);
@@ -1231,6 +1362,10 @@ module.exports = {
   getStats,
   listLeads,
   generateOutreachMessage,
+  generateOpener,
+  generateFollowup,
+  aplicarSaudacao,
+  saudacaoAgora,
   sendWhatsAppOutreach,
   sendInstagramOutreach,
   upsertLead,

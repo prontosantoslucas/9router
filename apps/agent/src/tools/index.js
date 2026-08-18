@@ -1196,10 +1196,14 @@ const PROSPECTOR_TOOLS = {
     run: async (args = {}) => {
       const db = require("../db");
       const limit = Math.min(Math.max(Number(args.limit) || 5, 1), 15);
+      const { aplicarSaudacao } = require("../prospector");
       const full = args.full !== false;
+      // Saudação resolvida AGORA, não quando o rascunho foi gerado: texto criado
+      // de manhã e enviado à tarde diria "Bom dia" às 15h.
+      const aplicar = (t) => aplicarSaudacao(String(t || "").trim());
 
       const rows = db.prepare(
-        `SELECT l.name, l.city, l.phone, l.email, l.cnpj, o.id AS outreach_id, o.message
+        `SELECT l.name, l.city, l.phone, l.email, l.cnpj, o.id AS outreach_id, o.message, o.followup_message
          FROM prospector_outreach o
          JOIN prospector_leads l ON l.id = o.lead_id
          WHERE o.channel = 'whatsapp' AND o.status = 'draft'
@@ -1223,7 +1227,7 @@ const PROSPECTOR_TOOLS = {
         "",
       ];
       rows.forEach((r, i) => {
-        const msg = String(r.message || "").trim();
+        const msg = aplicar(r.message);
         const fone = String(r.phone).replace(/\D/g, "");
         out.push((i + 1) + ") " + r.name + (r.city ? " - " + r.city : "") + "  [id " + r.outreach_id + "]");
         const extras = [];
@@ -1232,8 +1236,15 @@ const PROSPECTOR_TOOLS = {
         if (extras.length) out.push("   " + extras.join(" | "));
         // wa.me aceita ?text= pre-preenchido — diferente do Instagram, que nao
         // permite. Um toque abre a conversa com o texto pronto.
-        out.push("   https://wa.me/" + fone + "?text=" + encodeURIComponent(msg));
-        out.push("   Texto: " + (full ? msg : msg.slice(0, 160) + (msg.length > 160 ? "..." : "")));
+        out.push("   1) ABERTURA — toque no link, ela vai preenchida:");
+        out.push("      https://wa.me/" + fone + "?text=" + encodeURIComponent(msg));
+        out.push("      " + (full ? msg.replace(/\n+/g, " / ") : msg.slice(0, 160)));
+        if (r.followup_message) {
+          // Só depois de a empresa responder. Mostrar junto evita ter que voltar
+          // aqui no meio da conversa para descobrir o que dizer em seguida.
+          out.push("   2) DEPOIS QUE RESPONDEREM — envie esta:");
+          out.push("      " + aplicar(r.followup_message).replace(/\n+/g, " / "));
+        }
         out.push("");
       });
       out.push("Depois de enviar: marcar whatsapp enviado <id> (ou o telefone).");
@@ -1284,11 +1295,12 @@ const PROSPECTOR_TOOLS = {
     },
     run: async (args = {}) => {
       const db = require("../db");
+      const { aplicarSaudacao } = require("../prospector");
       const limit = Math.min(Math.max(Number(args.limit) || 5, 1), 15);
 
       // Só rascunho de Instagram, de lead que tem handle e ainda nao foi tratado.
       const rows = db.prepare(
-        `SELECT l.name, l.city, l.instagram_handle, l.category, o.id AS outreach_id, o.message
+        `SELECT l.name, l.city, l.instagram_handle, l.category, o.id AS outreach_id, o.message, o.followup_message
          FROM prospector_outreach o
          JOIN prospector_leads l ON l.id = o.lead_id
          WHERE o.channel = 'instagram' AND o.status = 'draft'
@@ -1307,7 +1319,12 @@ const PROSPECTOR_TOOLS = {
         const handle = String(r.instagram_handle).replace(/^@/, "");
         out.push((i + 1) + ") " + r.name + (r.city ? " - " + r.city : ""));
         out.push("   https://ig.me/m/" + handle);
-        out.push("   Mensagem: " + String(r.message || "").replace(/\s+/g, " ").trim());
+        out.push("   1) ABERTURA (copie e envie):");
+        out.push("      " + aplicarSaudacao(String(r.message || "").trim()).replace(/\s+/g, " "));
+        if (r.followup_message) {
+        out.push("   2) DEPOIS QUE RESPONDEREM:");
+        out.push("      " + String(r.followup_message).replace(/\s+/g, " "));
+        }
         out.push("");
       });
       out.push("Depois de enviar, diga: marcar instagram enviado <numero da lista>");

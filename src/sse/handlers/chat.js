@@ -252,7 +252,12 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       headroomEnabled: !!chatSettings.headroomEnabled,
       headroomUrl: chatSettings.headroomUrl || DEFAULT_HEADROOM_URL,
       headroomCompressUserMessages: !!chatSettings.headroomCompressUserMessages,
-      cavemanEnabled: !!chatSettings.cavemanEnabled,
+      // Opt-out por requisicao. O CAVEMAN comprime a resposta (derruba artigo e
+      // preposicao) para economizar token, o que arruina texto destinado a um
+      // ser humano ler — copy de venda saia telegrafica ("Lead ve story, pede
+      // preco, some se resposta demora"). Quem gera texto para pessoa manda
+      // caveman:false e recebe prosa normal.
+      cavemanEnabled: body?.caveman === false ? false : !!chatSettings.cavemanEnabled,
       cavemanLevel: chatSettings.cavemanLevel || "full",
       ponytailEnabled: !!chatSettings.ponytailEnabled,
       ponytailLevel: chatSettings.ponytailLevel || "full",

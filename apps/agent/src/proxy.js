@@ -160,6 +160,9 @@ async function complete(messages, opts = {}) {
           const body = { model, messages, stream: false };
           if (opts.tools) body.tools = opts.tools;
           if (opts.tool_choice) body.tool_choice = opts.tool_choice;
+          // Desliga a compressao CAVEMAN do gateway quando o texto e para
+          // pessoa ler (copy de abordagem), nao para consumo de maquina.
+          if (opts.caveman === false) body.caveman = false;
 
           const res = await fetch(url, {
             method: "POST",
