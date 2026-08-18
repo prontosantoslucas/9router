@@ -26,12 +26,30 @@ const SEEDABLE_PROVIDERS = {
 //   - gh/*     → GitHub Copilot not licensed (403)
 //   - gc/*     → gemini-cli account 404
 //   - gemini/* → model removed 404
-//   - kr/*     → Kiro monthly quota exhausted (402)
-// Re-add these tiers once their connections come back online.
+//
+// RE-ADDED 2026-08-18: kr/* (Kiro). Foi excluído em 16/07 por cota mensal
+// esgotada (402), e a cota virou no mês seguinte — mas a lista é fixa no
+// código, então a exclusão sobreviveu à causa. Teste real contra este gateway
+// em 2026-08-17 achou os 34 modelos Kiro respondendo com cota, enquanto TODOS
+// os provedores que sobraram nesta lista falhavam (ag 429 em todos, cc 401,
+// cl 402, groq 404, nvidia 410, kimchi 402). Resultado: o combo "auto" tinha
+// 30 modelos e nenhum utilizável, e qualquer cliente que pedisse "auto" — o
+// Coder, entre eles — recebia 503 "All 30 models failed".
+// Kiro vem primeiro por ser o único verificado com cota, e é onde o Claude
+// (melhor para geração de código) está vivo nesta conta.
 //
 // Fallback tries top-down; each entry is skipped when out of quota / banned by
 // the combo cooldown map in open-sse/services/combo.js.
 const MODEL_RANKING = [
+  // Tier 0 — Kiro: verificado com cota em 2026-08-17 (34/34 modelos).
+  // sonnet-4.5 lidera por equilíbrio entre qualidade de código e consumo;
+  // haiku é o barato logo atrás; opus fica para quando os dois falharem,
+  // porque queima a cota mensal muito mais rápido.
+  "kr/claude-sonnet-4.5",
+  "kr/claude-haiku-4.5",
+  "kr/claude-sonnet-5",
+  "kr/claude-opus-4.5",
+
   // Tier 1 — Active, verified ultra-fast & high-performance models
   "gemini/gemini-3-flash-preview",
   "gemini/gemini-3.1-flash-lite-preview",

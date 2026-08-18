@@ -26,7 +26,50 @@ export default function CoderPageClient() {
 let msgSeq = 0;
 const nextId = () => `m${Date.now()}_${msgSeq++}`;
 
+const MODELO_PADRAO = "auto";
+const CHAVE_MODELO = "coder_modelo";
+
+// O Coder sempre pediu "auto" e não expunha escolha nenhuma. Quando a lista do
+// combo "auto" envelhece (provedor sem credencial, cota virada), a geração morre
+// com 503 e não havia como contornar pela interface — o Coder inteiro ficava
+// inutilizável. As opções vêm do próprio combo "auto", que é a lista curada do
+// roteador, então o seletor nunca oferece modelo que o gateway não conhece.
+function useModelos() {
+  const [modelos, setModelos] = useState([]);
+  const [modelo, setModelo] = useState(MODELO_PADRAO);
+
+  useEffect(() => {
+    let vivo = true;
+    fetch("/api/combos")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!vivo) return;
+        const auto = d?.combos?.find((c) => c.name === "auto");
+        const lista = Array.isArray(auto?.models) ? auto.models : [];
+        setModelos(lista);
+
+        // A escolha salva só é restaurada se ainda existir na lista curada:
+        // modelo tirado do ranking (provedor perdeu credencial) não deve voltar
+        // a ser usado só porque sobrou no localStorage. Ler aqui, e não num
+        // efeito próprio, também evita ler localStorage durante o SSR.
+        let salvo = null;
+        try { salvo = localStorage.getItem(CHAVE_MODELO); } catch {}
+        if (salvo && (salvo === MODELO_PADRAO || lista.includes(salvo))) setModelo(salvo);
+      })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+
+  const escolher = (m) => {
+    setModelo(m);
+    try { localStorage.setItem(CHAVE_MODELO, m); } catch {}
+  };
+
+  return { modelos, modelo, escolher };
+}
+
 function CoderShell() {
+  const { modelos, modelo, escolher } = useModelos();
   const { showToast } = useToast();
   const { uploadFile, isUploading } = useFileUpload();
 
@@ -91,6 +134,8 @@ function CoderShell() {
       const { message } = await processOpenClaudePrompt({
         prompt,
         currentFiles: coderFiles,
+        // O parâmetro sempre existiu no motor; faltava a interface passá-lo.
+        model: modelo,
         onStreamMessage: (msg) => setStatusText(msg),
         onTerminalLog: (log) => setCoderLogs((prev) => [...prev, log]),
         onUpdateFiles: (newFiles) => setCoderFiles(newFiles),
@@ -224,7 +269,20 @@ function CoderShell() {
                 <span className="material-symbols-outlined text-sm">auto_fix_high</span>
                 <span>Melhorar meu prompt</span>
               </button>
-              <span className="font-mono text-[10px] text-text-muted">Coder Mode</span>
+
+              {/* Escolha do modelo: a saída quando "auto" está com problema. */}
+              <select
+                value={modelo}
+                onChange={(e) => escolher(e.target.value)}
+                disabled={isGenerating}
+                title="Modelo usado para gerar. 'Automático' tenta os provedores em ordem; escolha um direto se o automático falhar."
+                className="max-w-[190px] truncate rounded-md border border-border bg-surface px-2 py-1 font-mono text-[10px] text-text-muted disabled:opacity-50"
+              >
+                <option value={MODELO_PADRAO}>Automático (fallback)</option>
+                {modelos.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
             </div>
 
             {isUploading && (

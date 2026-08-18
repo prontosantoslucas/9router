@@ -8,7 +8,7 @@ import {
 } from "../services/auth.js";
 import { cacheClaudeHeaders } from "open-sse/utils/claudeHeaderCache.js";
 import { getSettings } from "@/lib/localDb";
-import { getModelInfo, getComboModels } from "../services/model.js";
+import { getModelInfo, getComboModels, resolveAutoModel } from "../services/model.js";
 import { handleChatCore } from "open-sse/handlers/chatCore.js";
 import { DEFAULT_HEADROOM_URL } from "@/lib/headroom/detect";
 import { getTransform as getPxpipeTransform } from "@/lib/pxpipe/loader.js";
@@ -124,7 +124,7 @@ export async function handleChat(request, clientRawRequest = null) {
 
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
     log.info("CHAT", `Combo "${modelStr}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
-    return handleComboChat({
+    const comboRes = await handleComboChat({
       body,
       models: comboModels,
       handleSingleModel: (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
@@ -133,10 +133,57 @@ export async function handleChat(request, clientRawRequest = null) {
       comboStrategy,
       comboStickyLimit
     });
+    return await recuperarComboSemCredencial(comboRes, {
+      body, comboModels, clientRawRequest, request, apiKey, comboName: modelStr,
+    });
   }
 
   // Single model request
   return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey);
+}
+
+/**
+ * Última tentativa quando um combo esgota por FALTA DE CREDENCIAL.
+ *
+ * O combo "auto" é semeado a partir de uma lista fixa no código
+ * (src/lib/db/seedProviders.js) e reescrito a cada boot. Quando essa lista
+ * envelhece — provedor perdeu credencial, cota mudou — o combo passa a ter
+ * dezenas de modelos e nenhum utilizável, e o cliente recebe 503 mesmo havendo
+ * credencial válida cadastrada em outro provedor. Foi o que deixou o Coder
+ * inteiro fora do ar: ele pede "auto" e recebia
+ * `All 30 models in combo "auto" failed`.
+ *
+ * A resolução dinâmica olha as conexões realmente ativas, então acha o que a
+ * lista fixa não sabia. Só roda em 503 por credencial (não em 429/quota, onde
+ * insistir não ajuda) e só se o alvo ainda não tiver sido tentado no combo.
+ */
+async function recuperarComboSemCredencial(res, { body, comboModels, clientRawRequest, request, apiKey, comboName }) {
+  if (!res || res.status !== 503) return res;
+
+  let msg = "";
+  try {
+    // clone() para não consumir o corpo que seria devolvido ao cliente.
+    msg = await res.clone().text();
+  } catch {
+    return res;
+  }
+  if (!/no\s+(active\s+)?credentials/i.test(msg)) return res;
+
+  let alvo = null;
+  try {
+    alvo = await resolveAutoModel();
+  } catch (err) {
+    log.warn("CHAT", `Resolução dinâmica falhou após combo esgotado: ${err.message}`);
+    return res;
+  }
+  if (!alvo?.provider || !alvo?.model) return res;
+
+  const id = `${alvo.provider}/${alvo.model}`;
+  // Repetir um modelo que o combo já tentou daria exatamente o mesmo erro.
+  if (comboModels.some((m) => m === id || m === alvo.model)) return res;
+
+  log.warn("CHAT", `Combo "${comboName}" esgotado por falta de credencial — tentando ${id} via resolução dinâmica`);
+  return handleSingleModelChat(body, id, clientRawRequest, request, apiKey);
 }
 
 /**
@@ -177,7 +224,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
 
       const comboStickyLimit = chatSettings.comboStickyRoundRobinLimit;
       log.info("CHAT", `Combo "${modelStr}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
-      return handleComboChat({
+      const comboRes = await handleComboChat({
         body,
         models: comboModels,
         handleSingleModel: (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
@@ -185,6 +232,11 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         comboName: modelStr,
         comboStrategy,
         comboStickyLimit
+      });
+      // Mesmo resgate do call site principal: um combo alcancado por alias
+      // (ex.: gpt-5-codex -> auto) sofre do mesmo problema de lista fixa.
+      return await recuperarComboSemCredencial(comboRes, {
+        body, comboModels, clientRawRequest, request, apiKey, comboName: modelStr,
       });
     }
     log.warn("CHAT", "Invalid model format", { model: modelStr });

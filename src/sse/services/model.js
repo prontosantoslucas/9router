@@ -35,7 +35,11 @@ export async function resolveModelAlias(alias) {
  * Resolve "auto" model alias to a real model.
  * Priority: AUTO_MODEL env → MODEL_RANKING env → active providerConnections → providerNodes with defaultModel → first registry entry
  */
-async function resolveAutoModel() {
+// Exportada para o handler poder recorrer a ela quando um combo de lista fixa
+// (o "auto" semeado) esgota por falta de credencial: a resolução dinâmica olha
+// as conexões REALMENTE ativas, então acha provedor que a lista fixa não sabia
+// que existia.
+export async function resolveAutoModel() {
   // 1. Explicit AUTO_MODEL env var (e.g., "openai/gpt-4o" or "kr/auto-thinking")
   const envModel = process.env.AUTO_MODEL;
   if (envModel) {
