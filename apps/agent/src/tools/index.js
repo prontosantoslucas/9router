@@ -152,7 +152,11 @@ const TOOLS = {
       if (/^\/?prospector\s+run/i.test(cmd)) {
         const prospector = require("../prospector");
         const res = await prospector.runCycle();
-        return `✅ Ciclo de prospecção executado: ${res.discovered} clientes minerados, ${res.outreached} abordagens enviadas.`;
+        // Mesma regra da tool prospector_run: falha técnica não pode virar ✅,
+        // e enfileirado na extensão não conta como enviado.
+        if (res.ok === false) return `❌ O ciclo NÃO concluiu. ${res.error || res.reason || "falha desconhecida"}`;
+        const extra = res.queued ? ` (+${res.queued} enfileirada(s) na extensão, entrega não confirmada)` : "";
+        return `✅ Ciclo executado: ${res.discovered} clientes minerados, ${res.outreached} confirmada(s) pelo canal${extra}.`;
       }
       if (/^\/?prospector\s+status/i.test(cmd)) {
         const prospector = require("../prospector");
@@ -1106,7 +1110,12 @@ const PROSPECTOR_TOOLS = {
         return `❌ O ciclo NÃO concluiu. ${res.error || res.reason || "falha desconhecida"}`;
       }
 
-      const parts = [`✅ Ciclo concluído: ${res.discovered} novos clientes minerados, ${res.outreached} mensagens despachadas.`];
+      const parts = [`✅ Ciclo concluído: ${res.discovered} novos clientes minerados, ${res.outreached} mensagem(ns) confirmada(s) pelo canal.`];
+      if (res.queued) {
+        // Separado de `outreached` de propósito: enfileirado na extensão não é
+        // entregue. Relatar os dois juntos escondia envios que nunca saíram.
+        parts.push(`📥 ${res.queued} enfileirada(s) na extensão do Chrome — entrega NÃO confirmada. Se a extensão não estiver rodando e logada, essas mensagens não saem.`);
+      }
       if (res.notion) {
         parts.push(res.notion.ok
           ? `📓 Notion: ${res.notion.synced} lead(s) sincronizados.`

@@ -37,7 +37,9 @@ db.exec(`
     instagram_handle TEXT,
     website_url TEXT,
     source TEXT NOT NULL DEFAULT 'web', -- web | maps | instagram | linkedin
-    status TEXT NOT NULL DEFAULT 'discovered', -- discovered | drafted | sent | replied | scheduled | closed | rejected
+    status TEXT NOT NULL DEFAULT 'discovered', -- discovered | drafted | queued | sent | replied | scheduled | closed | rejected
+    -- 'queued' = enfileirado na extensão (Instagram); entrega NÃO confirmada.
+    -- 'sent' só é usado quando o canal confirmou o envio.
     created_at INTEGER NOT NULL DEFAULT (unixepoch()),
     updated_at INTEGER NOT NULL DEFAULT (unixepoch())
   );
@@ -47,7 +49,7 @@ db.exec(`
     lead_id TEXT NOT NULL,
     channel TEXT NOT NULL, -- whatsapp | instagram | linkedin
     message TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'draft', -- draft | pending | sent | delivered | failed
+    status TEXT NOT NULL DEFAULT 'draft', -- draft | queued | pending | sent | delivered | failed
     sent_at INTEGER,
     response_text TEXT,
     error TEXT,
@@ -392,6 +394,14 @@ async function sendWhatsAppOutreach(phone, message) {
   try {
     const evo = require("./channels/evolution/evolutionApi");
     const result = await evo.sendTextMessage(phone, message);
+
+    // Não basta "não lançou". O cliente nativo (usado quando não há
+    // EVOLUTION_API_URL) devolve { ok:false, error } quando o WhatsApp não
+    // está pareado — e o código antigo embrulhava isso em { ok:true },
+    // marcando o lead como enviado sem nada ter saído.
+    if (result && result.ok === false) {
+      return { ok: false, error: result.error || "canal recusou o envio" };
+    }
     return { ok: true, result };
   } catch (err) {
     console.error("[Prospector Zenda] Erro ao enviar WhatsApp:", err.message);
@@ -618,6 +628,7 @@ async function runCycle(onNotify) {
 
   let discoveredCount = 0;
   let outreachedCount = 0;
+  let queuedCount = 0;   // enfileirados na extensão — entrega NÃO confirmada
   const discoveredLeads = [];
   const cycleErrors = [];
 
@@ -708,10 +719,18 @@ async function runCycle(onNotify) {
       // Disparo automático Instagram se habilitado
       if (settings.auto_send_ig && lead.instagram_handle) {
         const igRes = await sendInstagramOutreach(lead.instagram_handle, igDraft);
+        // Instagram passa pela extensão do Chrome via enqueueNow, que só
+        // ENFILEIRA — retorna na hora, sem esperar ninguém pegar o job. Se a
+        // extensão não estiver rodando, o job expira no cleanup e nada é
+        // entregue. Por isso o status aqui é 'queued', não 'sent': marcar
+        // 'sent' produzia relatório de abordagens entregues sem nenhuma
+        // mensagem ter saído, e sem como saber quais falharam.
         if (igRes.ok) {
-          outreachedCount++;
-          db.prepare("UPDATE prospector_outreach SET status = 'sent', sent_at = unixepoch() WHERE id = ?").run(igOutreachId);
-          db.prepare("UPDATE prospector_leads SET status = 'sent', updated_at = unixepoch() WHERE id = ?").run(lead.id);
+          db.prepare("UPDATE prospector_outreach SET status = 'queued' WHERE id = ?").run(igOutreachId);
+          db.prepare("UPDATE prospector_leads SET status = 'queued', updated_at = unixepoch() WHERE id = ?").run(lead.id);
+          queuedCount++;
+        } else {
+          db.prepare("UPDATE prospector_outreach SET status = 'failed', error = ? WHERE id = ?").run(igRes.error || "falha ao enfileirar", igOutreachId);
         }
       }
 
@@ -784,6 +803,7 @@ async function runCycle(onNotify) {
     ok: true,
     discovered: discoveredCount,
     outreached: outreachedCount,
+    queued: queuedCount,
     notion: notionSync,
     leads: discoveredLeads.map(l => ({ id: l.id, name: l.name, category: l.category, city: l.city, phone: l.phone, instagram: l.instagram_handle }))
   };

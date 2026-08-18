@@ -29,7 +29,18 @@ async function sendTextMessage(to, text) {
       }),
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => null);
+
+    // Antes era `return data` sem olhar o status: 401 (apikey errada), 404
+    // (instância inexistente) e 400 voltavam como resposta NORMAL, sem
+    // exceção. Quem chamava concluía que enviou. No prospector isso marcava
+    // o lead como 'sent' sem uma única mensagem entregue.
+    if (!res.ok) {
+      const detail = data?.message || data?.error || `HTTP ${res.status}`;
+      const err = new Error(`Evolution recusou o envio (${res.status}): ${typeof detail === "string" ? detail : JSON.stringify(detail).slice(0, 200)}`);
+      err.status = res.status;
+      throw err;
+    }
     return data;
   } catch (err) {
     console.error("[EvolutionAPI] Erro ao enviar mensagem WhatsApp:", err.message);
