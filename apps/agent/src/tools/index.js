@@ -1370,6 +1370,172 @@ const PROSPECTOR_TOOLS = {
       return "Marcado como enviado. Se responderem, me avise para registrar o retorno.";
     },
   },
+  ingles_exercicio: {
+    name: "ingles_exercicio",
+    desc: "Monta o exercicio de ingles do dia: revisao das palavras vencidas (repeticao espacada) + texto curto com ~98% de palavras conhecidas + pergunta de entendimento + producao. Use quando o usuario pedir aula/pratica de ingles.",
+    args: {
+      type: "object",
+      properties: {
+        dominio: { type: "string", description: "dev | vendas | clinica. Se omitido, alterna sozinho." },
+        novas: { type: "number", description: "Quantas palavras novas (default 2). Acima de 3 quebra a regra dos 98%." },
+      },
+      required: [],
+    },
+    run: async (args = {}) => {
+      const en = require("../autonomous/english");
+      const ex = await en.exercicioDoDia({
+        dominio: args.dominio || null,
+        novas: Math.min(Math.max(Number(args.novas) || 2, 1), 3),
+      });
+      const st = en.stats();
+      const out = [];
+      if (!ex.ok) {
+        out.push("Nao consegui gerar o texto novo (" + ex.error + ").");
+        if (ex.due.length) {
+          out.push("Mas a revisao nao depende disso. Palavras vencidas hoje:");
+          for (const d of ex.due) out.push("- " + d.palavra + (d.contexto ? " — no contexto: " + d.contexto : ""));
+          out.push("Tente lembrar o significado antes de olhar. Depois me diga se acertou.");
+        }
+        return out.join("\n");
+      }
+      out.push(ex.texto);
+      out.push("");
+      out.push("Vocabulario: " + st.total + " palavra(s), " + st.consolidadas + " consolidada(s), " + st.due + " para revisar hoje.");
+      if (ex.due.length) out.push("Reciclei em contexto novo: " + ex.due.map((d) => d.palavra).join(", ") + ". Me diga se lembrou de cada uma.");
+      return out.join("\n");
+    },
+  },
+  ingles_revisar: {
+    name: "ingles_revisar",
+    desc: "Registra se o usuario lembrou ou nao de uma palavra, e reagenda pela repeticao espacada. Acertou avanca o intervalo (1, 3, 7, 16, 35, 90 dias); errou volta ao inicio.",
+    args: {
+      type: "object",
+      properties: {
+        palavra: { type: "string", description: "A palavra revisada" },
+        acertou: { type: "boolean", description: "true se lembrou o significado" },
+      },
+      required: ["palavra", "acertou"],
+    },
+    run: async (args = {}) => {
+      const en = require("../autonomous/english");
+      const db = require("../db");
+      const p = String(args.palavra || "").trim().toLowerCase();
+      const row = db.prepare("SELECT id FROM english_vocab WHERE palavra = ?").get(p);
+      if (!row) return 'Nao tenho "' + p + '" no vocabulario. Use ingles_nova_palavra para cadastrar.';
+      const r = en.review(row.id, !!args.acertou);
+      return r.acertou
+        ? 'Boa. "' + r.palavra + '" volta em ' + r.voltaEm + " dia(s)."
+        : '"' + r.palavra + '" voltou para o inicio: revisao amanha. Errar e parte do processo — e a dificuldade de lembrar que fixa.';
+    },
+  },
+  ingles_nova_palavra: {
+    name: "ingles_nova_palavra",
+    desc: "Cadastra palavra nova no vocabulario, SEMPRE com a frase onde ela apareceu. O contexto e obrigatorio na pratica: palavra isolada nao cola.",
+    args: {
+      type: "object",
+      properties: {
+        palavra: { type: "string" },
+        significado: { type: "string", description: "Em portugues" },
+        contexto: { type: "string", description: "A frase em ingles onde a palavra apareceu" },
+        dominio: { type: "string", description: "dev | vendas | clinica | geral" },
+      },
+      required: ["palavra", "significado"],
+    },
+    run: async (args = {}) => {
+      const en = require("../autonomous/english");
+      const r = en.addWord({
+        palavra: args.palavra,
+        significado: args.significado,
+        contexto: args.contexto || null,
+        dominio: args.dominio || "geral",
+      });
+      if (!r.novo) return '"' + args.palavra + '" ja estava no vocabulario. Encontro numero ' + r.encounters + " — reencontrar em contexto diferente e o que consolida.";
+      const aviso = args.contexto ? "" : " (sem contexto: cadastre a frase onde ela apareceu, isolada ela nao cola)";
+      return 'Cadastrada: "' + args.palavra + '". Primeira revisao amanha.' + aviso;
+    },
+  },
+  ingles_corrigir: {
+    name: "ingles_corrigir",
+    desc: "Corrige uma frase que o usuario escreveu em ingles, por REFORMULACAO (recast): devolve como um nativo diria, em vez de marcar erro.",
+    args: {
+      type: "object",
+      properties: { frase: { type: "string", description: "A frase em ingles escrita pelo usuario" } },
+      required: ["frase"],
+    },
+    run: async (args = {}) => {
+      const en = require("../autonomous/english");
+      const r = await en.corrigir(args.frase);
+      return r.ok ? r.resposta : "Nao consegui corrigir agora: " + r.error;
+    },
+  },
+  estudos_hoje: {
+    name: "estudos_hoje",
+    desc: "Mostra onde o usuario esta no roadmap de 12 meses: mes atual, modulo, itens pendentes, fase do ingles e quanto ele estudou na semana contra a meta de 1h30 tecnico + 30min ingles por dia.",
+    args: { type: "object", properties: {} },
+    run: async () => {
+      const rm = require("../autonomous/roadmap");
+      const p = rm.progresso();
+      if (!p.inicio) return "O roadmap esta cadastrado, mas falta a data de inicio. Diga quando voce comecou (ou vai comecar) que eu registro.";
+      const out = [
+        "Mes " + p.mes + " de 12 — modulo: " + p.modulo.nome,
+        "Criterio para fechar o modulo: " + p.modulo.criterio,
+        "Ingles nesta fase (" + p.faseIngles.meses + "): " + p.faseIngles.foco,
+        "",
+        "Itens do modulo: " + (p.itens.doModulo?.f || 0) + "/" + (p.itens.doModulo?.t || 0) + " · geral " + p.itens.feitos + "/" + p.itens.total,
+        "Semana: " + p.semana.minTecnico + "min tecnico (" + p.semana.pctTecnico + "% da meta) e " + p.semana.minIngles + "min ingles (" + p.semana.pctIngles + "%), em " + p.semana.diasRegistrados + " dia(s) registrado(s).",
+      ];
+      const pend = rm.itens(p.modulo.id, { pendentes: true });
+      if (pend.length) {
+        out.push("");
+        out.push("Pendentes deste modulo:");
+        for (const i of pend.slice(0, 6)) {
+          out.push("- [" + i.tipo + "] " + i.titulo + (i.url ? " — [abrir](" + i.url + ")" : ""));
+        }
+      }
+      if (p.semana.pctTecnico < 60 || p.semana.pctIngles < 60) {
+        out.push("");
+        out.push("Lembrete que voce mesmo escreveu: " + rm.verdadeDoDia());
+      }
+      return out.join("\n");
+    },
+  },
+  estudos_registrar: {
+    name: "estudos_registrar",
+    desc: "Registra minutos estudados hoje (tecnico e/ou ingles) e/ou marca item do roadmap como concluido. Sem registro nao ha como dizer se as 2h/dia estao acontecendo.",
+    args: {
+      type: "object",
+      properties: {
+        min_tecnico: { type: "number", description: "Minutos de estudo tecnico" },
+        min_ingles: { type: "number", description: "Minutos de ingles" },
+        item_id: { type: "number", description: "Id de item do roadmap para marcar como concluido" },
+        nota: { type: "string" },
+        inicio: { type: "string", description: "Define a data de inicio do roadmap, formato AAAA-MM-DD" },
+      },
+      required: [],
+    },
+    run: async (args = {}) => {
+      const rm = require("../autonomous/roadmap");
+      const out = [];
+      if (args.inicio) {
+        rm.setInicio(String(args.inicio).trim());
+        out.push("Inicio do roadmap definido em " + args.inicio + " — voce esta no mes " + rm.mesAtual() + ".");
+      }
+      if (args.min_tecnico || args.min_ingles) {
+        const h = rm.registrarHoras({
+          minTecnico: Number(args.min_tecnico) || 0,
+          minIngles: Number(args.min_ingles) || 0,
+          nota: args.nota || null,
+        });
+        out.push("Hoje: " + h.min_tecnico + "min tecnico + " + h.min_ingles + "min ingles.");
+      }
+      if (args.item_id) {
+        out.push(rm.concluirItem(Number(args.item_id), args.nota || null)
+          ? "Item " + args.item_id + " marcado como concluido."
+          : "Nao achei o item " + args.item_id + ".");
+      }
+      return out.length ? out.join("\n") : "Nada para registrar. Informe minutos, item_id ou a data de inicio.";
+    },
+  },
   whatsapp_session_backup: {
     name: "whatsapp_session_backup",
     desc: "Exporta a sessao do WhatsApp cifrada, como texto, para o usuario guardar FORA do Railway. E o unico jeito de reconectar sem escanear QR se o volume for recriado. O texto sozinho nao serve sem o segredo do servidor.",
