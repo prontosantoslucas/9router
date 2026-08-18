@@ -109,7 +109,7 @@ export function MessageBubble({ message, onSaveNotion, onRetry }) {
                 <span title="Tokens de Saída (Completion)">📤 {message.telemetry.completionTokens}t</span>
               )}
               {message.telemetry.estimatedCost != null && (
-                <span className="text-emerald-500 font-semibold" title="Custo Estimado">
+                <span className="text-brand-500 font-semibold" title="Custo Estimado">
                   ${message.telemetry.estimatedCost}
                 </span>
               )}

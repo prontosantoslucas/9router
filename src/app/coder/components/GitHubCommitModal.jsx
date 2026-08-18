@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import PropTypes from "prop-types";
@@ -104,7 +104,7 @@ export default function GitHubCommitModal({ isOpen, onClose, files }) {
         {/* Form */}
         <div className="p-5 space-y-4 text-xs font-sans">
           {isConnected && (
-            <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center gap-2 font-medium">
+            <div className="p-3 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-500 flex items-center gap-2 font-medium">
               <span className="material-symbols-outlined text-[18px]">check_circle</span>
               <span>Conexão salva no SQLite. Permanece até você alterar.</span>
             </div>
@@ -168,7 +168,7 @@ export default function GitHubCommitModal({ isOpen, onClose, files }) {
             <button
               onClick={handleConnect}
               disabled={loading}
-              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-soft disabled:opacity-50"
+              className="px-4 py-2 rounded-lg bg-surface-2 hover:bg-surface-3 text-text-main border border-border text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-soft disabled:opacity-50"
             >
               <span className="material-symbols-outlined text-[16px]">{isConnected ? "check_circle" : "link"}</span>
               <span>{isConnected ? "Conectado" : "Conectar"}</span>

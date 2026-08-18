@@ -1679,6 +1679,24 @@ Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encod
 
 ---
 
+### Capítulo 80: Correção Definitiva da Engine de Preview do Coder (Babel Standalone) e Eliminação Total de Classes Esmeralda
+
+* **Por que foi feita essa alteração (Causa Raiz Detalhada)**:
+  1. **Falha Crítica no Preview do Coder (`TypeError: esbuild.initialize is not a function`)**:
+     - O [previewBuilder.js](file:///c:/Users/user/Documents/GitHub/9router/src/lib/coder/previewBuilder.js) carregava `esbuild-wasm` dinamicamente via `esm.sh` dentro do iframe sandbox (`about:srcdoc`). Devido a mudanças nos rollups de exportação ESM e políticas de carregamento de binários `.wasm` na web, a chamada `esbuild.initialize()` falhava com erro de tipagem, impedindo a compilação e execução de qualquer código gerado pelo Coder.
+  2. **Persistência de Cores Verdes (Classes `emerald`) na Interface do Coder**:
+     - Vários componentes do Coder ([CoderWorkspace.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/chat/components/CoderWorkspace.jsx), [TerminalPanel.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/coder/components/TerminalPanel.jsx), [SupabaseModal.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/coder/components/SupabaseModal.jsx), [GitHubCommitModal.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/coder/components/GitHubCommitModal.jsx)) utilizavam classes hardcoded de Tailwind (`bg-emerald-500`, `text-emerald-600`), mantendo botões e badges verdes na tela mesmo após a atualização do tema global.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Reescrita da Engine de Preview com Babel Standalone + Virtual File System**:
+     - No [previewBuilder.js](file:///c:/Users/user/Documents/GitHub/9router/src/lib/coder/previewBuilder.js), removemos a dependência do `esbuild-wasm` e implementamos a compilação no navegador utilizando `@babel/standalone` com presets de `react` (JSX automático) e `typescript`.
+     - O resolvedor de VFS (Virtual File System) agora transpila os arquivos locais em memória, reescreve as importações relativas (`./components/Header`, `../utils`) para Blob URLs e utiliza `importmap` nativo com `esm.sh` para resolver pacotes externos (`react`, `react-dom`, `lucide-react`, etc.) sem necessidade de download de binários WASM.
+  2. **Substituição de Classes de Cores para a Paleta Flame/Brand**:
+     - No [CoderWorkspace.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/chat/components/CoderWorkspace.jsx), o botão *Deploy 1-Clique* e o badge do *Supabase* foram migrados para `bg-brand-500` e `border-brand-500/30`.
+     - No [TerminalPanel.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/coder/components/TerminalPanel.jsx), [SupabaseModal.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/coder/components/SupabaseModal.jsx) e [GitHubCommitModal.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/coder/components/GitHubCommitModal.jsx), todos os ícones, textos e botões foram unificados para a nova identidade visual.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 

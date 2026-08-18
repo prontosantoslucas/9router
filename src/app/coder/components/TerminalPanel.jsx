@@ -50,10 +50,10 @@ export default function TerminalPanel({ logs, isCollapsed, onToggleCollapse }) {
             logs.map((log, index) => (
               <div key={index} className="flex items-start gap-2 leading-relaxed">
                 {log.type === "command" && (
-                  <span className="text-emerald-500 font-bold">➜</span>
+                  <span className="text-brand-500 font-bold">➜</span>
                 )}
                 {log.type === "success" && (
-                  <span className="text-success font-bold">✓</span>
+                  <span className="text-brand-500 font-bold">✓</span>
                 )}
                 {log.type === "error" && (
                   <span className="text-danger font-bold">✗</span>
@@ -86,8 +86,8 @@ TerminalPanel.propTypes = {
 
 function getLogTextColor(type) {
   switch (type) {
-    case "command": return "text-emerald-600 dark:text-emerald-400 font-semibold";
-    case "success": return "text-success";
+    case "command": return "text-brand-500 font-semibold";
+    case "success": return "text-brand-500";
     case "error": return "text-danger";
     case "info": return "text-text-main";
     default: return "text-text-muted";

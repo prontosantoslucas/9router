@@ -65,7 +65,7 @@ export default function SupabaseModal({ isOpen, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-bg-alt/50">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-md bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold text-sm">
+            <div className="w-7 h-7 rounded-md bg-brand-500/15 border border-brand-500/30 flex items-center justify-center text-brand-500 font-bold text-sm">
               ⚡
             </div>
             <h2 className="font-bold text-base text-text-main">Conectar Supabase (OAuth)</h2>
@@ -78,7 +78,7 @@ export default function SupabaseModal({ isOpen, onClose }) {
         {/* Content */}
         <div className="p-5 space-y-4 text-xs font-sans">
           {isConnected && (
-            <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-between font-medium">
+            <div className="p-3 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-500 flex items-center justify-between font-medium">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[18px]">check_circle</span>
                 <span>Conectado ao Supabase (Persistido no SQLite DB)</span>
@@ -123,7 +123,7 @@ export default function SupabaseModal({ isOpen, onClose }) {
           <button
             onClick={handleSaveAndConnect}
             disabled={loading}
-            className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-soft disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-soft disabled:opacity-50"
           >
             <span className="material-symbols-outlined text-[16px]">bolt</span>
             <span>{loading ? "Conectando..." : "Salvar & Login OAuth"}</span>

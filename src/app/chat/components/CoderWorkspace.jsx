@@ -197,7 +197,7 @@ export function CoderWorkspace({
             onClick={() => setIsSupabaseOpen(true)}
             className={`flex items-center gap-1 px-2.5 py-1 rounded-md border text-xs font-semibold transition-all ${
               supabaseConnected
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                ? "bg-brand-500/10 border-brand-500/30 text-brand-500 font-bold"
                 : "bg-surface border-border text-text-muted hover:text-text-main"
             }`}
             title="Supabase OAuth"
@@ -226,7 +226,7 @@ export function CoderWorkspace({
               }
               alert(`🚀 Deploy 1-Clique do projeto '${projectName || "Projeto-9router"}'\n\nManifestos de Vercel e Railway configurados com sucesso!\nFaça o commit no GitHub para acionar o autodeploy ou baixe o ZIP.`);
             }}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-xs transition-all shadow-soft"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-brand-500 hover:bg-brand-600 text-white font-semibold text-xs transition-all shadow-soft"
             title="Deploy em 1-Clique"
           >
             <span className="material-symbols-outlined text-[15px]">rocket_launch</span>
