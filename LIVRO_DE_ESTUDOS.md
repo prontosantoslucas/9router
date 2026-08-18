@@ -1697,6 +1697,22 @@ Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encod
 
 ---
 
+### Capítulo 81: Reconstrução Completa da Barra Lateral (Padrão Linear/Supabase) e Forçamento do Watch Path do Railway
+
+* **Por que foi feita essa alteração (Causa Raiz & Refinamento de UI)**:
+  1. **Poluição de Menus Aninhados em Duas Colunas**: A arquitetura anterior de 2 colunas fragmentava a navegação e criava inconsistências em telas compactas. Foi necessária a reconstrução com um design unificado, minimalista e premium (estilo Linear/Supabase).
+  2. **Bloqueio de Deploys pelo Watch Path do Railway**: O Railway havia pulado (*SKIPPED: No changes to watched files*) as alterações anteriores porque o serviço `9router-agent` só monitorava arquivos dentro de `apps/agent/**`. A inclusão de alterações na pasta monitorada destravou o pipeline de build imediato.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Reconstrução do [Sidebar.js](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/Sidebar.js) do Zero**:
+     - **Modo Expandido (`w-64`)**: Navegação estruturada em 6 seções limpas com cabeçalhos com acordeão suave, destaques ativos em `border-brand-500/30` e `bg-brand-500/15`, badges informativos (*Live*, *IDE*) e rodapé com acesso remoto, alternador de tema e perfil.
+     - **Modo Slim/Minimizado (`w-[68px]`)**: Trilho ultrafino com ícones centralizados, ponto luminoso de status e menus suspensos flutuantes (*flyouts popovers*) no hover para acesso imediato a qualquer submenu sem precisar expandir a barra.
+     - Botão de colapso rápido integrado no topo (`left_panel_close` / `right_panel_open`) com persistência no `localStorage`.
+  2. **Atualização do `apps/agent/package.json`**:
+     - Incrementada a versão do agente para disparar o gatilho de *watched files* no Railway e compilar a imagem Docker com a nova interface.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 
