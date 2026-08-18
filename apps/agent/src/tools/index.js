@@ -1237,7 +1237,7 @@ const PROSPECTOR_TOOLS = {
         // wa.me aceita ?text= pre-preenchido — diferente do Instagram, que nao
         // permite. Um toque abre a conversa com o texto pronto.
         out.push("   1) ABERTURA — toque no link, ela vai preenchida:");
-        out.push("      https://wa.me/" + fone + "?text=" + encodeURIComponent(msg));
+        out.push("  [Abrir conversa com a mensagem pronta](https://wa.me/" + fone + "?text=" + encodeURIComponent(msg) + ")");
         out.push("      " + (full ? msg.replace(/\n+/g, " / ") : msg.slice(0, 160)));
         if (r.followup_message) {
           // Só depois de a empresa responder. Mostrar junto evita ter que voltar
@@ -1318,7 +1318,7 @@ const PROSPECTOR_TOOLS = {
       rows.forEach((r, i) => {
         const handle = String(r.instagram_handle).replace(/^@/, "");
         out.push((i + 1) + ") " + r.name + (r.city ? " - " + r.city : ""));
-        out.push("   https://ig.me/m/" + handle);
+        out.push("  [Abrir a conversa no Instagram](https://ig.me/m/" + handle + ")");
         out.push("   1) ABERTURA (copie e envie):");
         out.push("      " + aplicarSaudacao(String(r.message || "").trim()).replace(/\s+/g, " "));
         if (r.followup_message) {
