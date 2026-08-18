@@ -237,6 +237,69 @@ app.post("/api/modules", (req, res) => {
   }
 });
 
+// ── Rascunhos de abordagem e despacho com ritmo controlado ──
+app.get("/api/prospector/drafts", (req, res) => {
+  try {
+    const d = require("./prospectorDispatcher");
+    res.json({
+      rascunhos: d.listarRascunhos({
+        status: req.query.status || "draft",
+        channel: req.query.channel || null,
+        limit: Number(req.query.limit) || 50,
+      }),
+      status: d.status(),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Envio manual: uma pessoa decidiu, então a janela de horário é dispensada —
+// mas o teto diário NÃO, porque é ele que protege o número.
+app.post("/api/prospector/drafts/:id/send", async (req, res) => {
+  try {
+    const r = await require("./prospectorDispatcher").enviarUm(req.params.id, { manual: true });
+    if (!r.ok) return res.status(409).json(r);
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/prospector/drafts/:id/approve", (req, res) => {
+  try {
+    const ok = require("./prospectorDispatcher").aprovar(req.params.id);
+    res.json({ ok, ...(ok ? {} : { error: "rascunho não estava em 'draft'" }) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/prospector/drafts/:id/discard", (req, res) => {
+  try {
+    const ok = require("./prospectorDispatcher").descartar(req.params.id);
+    res.json({ ok, ...(ok ? {} : { error: "rascunho não pode ser descartado neste status" }) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/prospector/dispatcher", (req, res) => {
+  try {
+    res.json(require("./prospectorDispatcher").status());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/prospector/dispatcher", (req, res) => {
+  try {
+    res.json({ ok: true, config: require("./prospectorDispatcher").atualizarConfig(req.body || {}) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Conversas dos canais (painel lateral do chat) ──
 // Lista conversas DIRETAS por padrão. Grupos só com ?grupos=1, porque o pedido
 // é conversar com pessoas — grupo no meio da lista de prospecção é ruído e o
@@ -1386,6 +1449,14 @@ async function start() {
     console.warn("[dailyInsights] falha ao iniciar:", err.message);
   }
 
+  // Despachante de abordagens: envia os rascunhos aprovados um por vez,
+  // respeitando intervalo, teto diario e janela de horario. Antes o auto-envio
+  // disparava em rajada dentro do laco do prospector, o que queima o numero.
+  try {
+    require("./prospectorDispatcher").start();
+  } catch (err) {
+    console.warn("[dispatcher] falha ao iniciar:", err.message);
+  }
   // Mentor: devocional às 7h e fechamento do dia às 22h BRT. O módulo existia
   // com todas as peças mas não era agendado por ninguém — os toques nunca
   // aconteciam. Entrega via proactiveNotifier → push dedicado no celular.

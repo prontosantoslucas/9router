@@ -1068,34 +1068,21 @@ async function runCycle(onNotify) {
         VALUES (?, 'instagram', ?, ?, 'draft')
       `).run(lead.id, igDraft, igFollow).lastInsertRowid;
 
-      // Disparo automático WhatsApp se habilitado
+      // Auto-envio agora APENAS ENFILEIRA. Antes disparava aqui dentro, uma
+      // mensagem atrás da outra, sem intervalo e sem teto diário — que é
+      // exatamente o padrão que faz o WhatsApp banir número pessoal. Quem envia
+      // é prospectorDispatcher, uma mensagem por vez, respeitando intervalo,
+      // teto diário e janela de horário.
       if (settings.auto_send_wa && lead.phone) {
-        const sendRes = await sendWhatsAppOutreach(lead.phone, waDraft);
-        if (sendRes.ok) {
-          outreachedCount++;
-          db.prepare("UPDATE prospector_outreach SET status = 'sent', sent_at = unixepoch() WHERE id = ?").run(waOutreachId);
-          db.prepare("UPDATE prospector_leads SET status = 'sent', updated_at = unixepoch() WHERE id = ?").run(lead.id);
-        } else {
-          db.prepare("UPDATE prospector_outreach SET status = 'failed', error = ? WHERE id = ?").run(sendRes.error, waOutreachId);
-        }
+        db.prepare("UPDATE prospector_outreach SET status = 'queued' WHERE id = ?").run(waOutreachId);
+        db.prepare("UPDATE prospector_leads SET status = 'queued', updated_at = unixepoch() WHERE id = ?").run(lead.id);
+        queuedCount++;
       }
 
-      // Disparo automático Instagram se habilitado
       if (settings.auto_send_ig && lead.instagram_handle) {
-        const igRes = await sendInstagramOutreach(lead.instagram_handle, igDraft);
-        // Instagram passa pela extensão do Chrome via enqueueNow, que só
-        // ENFILEIRA — retorna na hora, sem esperar ninguém pegar o job. Se a
-        // extensão não estiver rodando, o job expira no cleanup e nada é
-        // entregue. Por isso o status aqui é 'queued', não 'sent': marcar
-        // 'sent' produzia relatório de abordagens entregues sem nenhuma
-        // mensagem ter saído, e sem como saber quais falharam.
-        if (igRes.ok) {
-          db.prepare("UPDATE prospector_outreach SET status = 'queued' WHERE id = ?").run(igOutreachId);
-          db.prepare("UPDATE prospector_leads SET status = 'queued', updated_at = unixepoch() WHERE id = ?").run(lead.id);
-          queuedCount++;
-        } else {
-          db.prepare("UPDATE prospector_outreach SET status = 'failed', error = ? WHERE id = ?").run(igRes.error || "falha ao enfileirar", igOutreachId);
-        }
+        db.prepare("UPDATE prospector_outreach SET status = 'queued' WHERE id = ?").run(igOutreachId);
+        db.prepare("UPDATE prospector_leads SET status = 'queued', updated_at = unixepoch() WHERE id = ?").run(lead.id);
+        queuedCount++;
       }
 
       if (!settings.auto_send_wa && !settings.auto_send_ig) {
@@ -1166,8 +1153,15 @@ async function runCycle(onNotify) {
   return {
     ok: true,
     discovered: discoveredCount,
+    // A rodada não envia mais nada: ela descobre, redige e ENFILEIRA. Quem
+    // envia é o prospectorDispatcher, em ritmo controlado. Por isso
+    // "outreached" agora é sempre 0 nesta resposta — o número que diz algo é
+    // quanto entrou na fila, e o aviso abaixo evita ler o 0 como falha.
     outreached: outreachedCount,
     queued: queuedCount,
+    aviso_envio: queuedCount > 0
+      ? `${queuedCount} mensagem(ns) na fila — o despachante envia respeitando intervalo, teto diario e janela de horario`
+      : null,
     rejected,
     rejectedSamples: rejectedSamples.slice(0, 5),
     notion: notionSync,

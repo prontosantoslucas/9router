@@ -16,6 +16,7 @@
 // ────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { RascunhosAba } from "./RascunhosAba";
 
 const INTERVALO_MS = 15000;
 
@@ -29,6 +30,7 @@ function horaCurta(iso) {
 const ICONE_CANAL = { whatsapp: "chat", telegram: "send" };
 
 export function ConversasPanel({ aberto, onFechar, onPedirAoAgente }) {
+  const [aba, setAba] = useState("conversas");
   const [conversas, setConversas] = useState([]);
   const [selecionada, setSelecionada] = useState(null);
   const [mensagens, setMensagens] = useState([]);
@@ -48,7 +50,7 @@ export function ConversasPanel({ aberto, onFechar, onPedirAoAgente }) {
   // Lista: recarrega em intervalo enquanto o painel está aberto. Fechado não
   // consulta — polling invisível só gasta bateria no celular.
   useEffect(() => {
-    if (!aberto) return;
+    if (!aberto || aba !== "conversas") return;
     let vivo = true;
     const carregar = () => {
       buscarConversas()
@@ -58,7 +60,7 @@ export function ConversasPanel({ aberto, onFechar, onPedirAoAgente }) {
     carregar();
     const t = setInterval(carregar, INTERVALO_MS);
     return () => { vivo = false; clearInterval(t); };
-  }, [aberto, buscarConversas]);
+  }, [aberto, aba, buscarConversas]);
 
   const abrirConversa = useCallback(async (c) => {
     setSelecionada(c);
@@ -120,9 +122,9 @@ export function ConversasPanel({ aberto, onFechar, onPedirAoAgente }) {
         <div className="flex min-w-0 items-center gap-2">
           <span className="material-symbols-outlined text-base text-brand-500">forum</span>
           <h3 className="truncate text-sm font-bold">
-            {selecionada ? selecionada.nome : "Conversas"}
+            {selecionada ? selecionada.nome : aba === "rascunhos" ? "Rascunhos" : "Conversas"}
           </h3>
-          {!selecionada && totalNaoLidas > 0 && (
+          {!selecionada && aba === "conversas" && totalNaoLidas > 0 && (
             <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] font-bold text-white">
               {totalNaoLidas}
             </span>
@@ -150,8 +152,31 @@ export function ConversasPanel({ aberto, onFechar, onPedirAoAgente }) {
         </div>
       </header>
 
-      {/* ── Lista de conversas ── */}
-      {!selecionada ? (
+      {/* Abas: conversas e rascunhos de abordagem. */}
+      <div className="flex shrink-0 border-b border-border">
+        {[
+          ["conversas", "Conversas"],
+          ["rascunhos", "Rascunhos"],
+        ].map(([v, l]) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => { setAba(v); setSelecionada(null); }}
+            className={`flex-1 px-3 py-2 text-[11px] font-bold transition-colors ${
+              aba === v
+                ? "border-b-2 border-brand-500 text-text-main"
+                : "text-text-muted hover:text-text-main"
+            }`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Rascunhos de abordagem ── */}
+      {aba === "rascunhos" ? (
+        <RascunhosAba />
+      ) : !selecionada ? (
         <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto">
           <p className="border-b border-border/60 px-3 py-2 text-[10px] uppercase tracking-wide text-text-muted">
             Somente conversas diretas — grupos ficam de fora
