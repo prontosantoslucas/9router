@@ -20,6 +20,8 @@ const NOTION_API = "https://api.notion.com/v1";
 // — o banco é dele, pode ter sido criado à mão com tipos diferentes.
 const LEAD_PROPS = [
   { name: "Telefone",  kind: "phone_number", from: (l) => l.phone },
+  { name: "Email",     kind: "email",        from: (l) => l.email },
+  { name: "CNPJ",      kind: "rich_text",    from: (l) => l.cnpj },
   { name: "Instagram", kind: "url",          from: (l) => (l.instagram_handle ? `https://instagram.com/${String(l.instagram_handle).replace(/^@/, "")}` : null) },
   { name: "Site",      kind: "url",          from: (l) => l.website_url },
   { name: "Cidade",    kind: "select",       from: (l) => l.city },
@@ -33,6 +35,8 @@ const LEAD_PROPS = [
 // completar um banco existente que o usuário indicou.
 const LEAD_SCHEMA = {
   Telefone:  { phone_number: {} },
+  Email:     { email: {} },
+  CNPJ:      { rich_text: {} },
   Instagram: { url: {} },
   Site:      { url: {} },
   Cidade:    { select: {} },
@@ -172,6 +176,8 @@ async function createLeadsDatabase(parentPageId, title = "Leads Zenda") {
     properties: {
       Nome: { title: {} },
       Telefone: { phone_number: {} },
+      Email: { email: {} },
+      CNPJ: { rich_text: {} },
       Instagram: { url: {} },
       Site: { url: {} },
       Cidade: { select: {} },

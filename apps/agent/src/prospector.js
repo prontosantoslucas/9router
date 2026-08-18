@@ -35,6 +35,8 @@ db.exec(`
     contact_person TEXT,
     phone TEXT,
     instagram_handle TEXT,
+    email TEXT,
+    cnpj TEXT,
     website_url TEXT,
     source TEXT NOT NULL DEFAULT 'web', -- web | maps | instagram | linkedin
     status TEXT NOT NULL DEFAULT 'discovered', -- discovered | drafted | queued | sent | replied | scheduled | closed | rejected
@@ -99,6 +101,11 @@ try { db.exec("ALTER TABLE prospector_leads ADD COLUMN matched_product_id TEXT D
 // syncPendingLeads sabe o que falta enviar, e o que torna o envio idempotente
 // com o ciclo reencontrando os mesmos estabelecimentos a cada 15 min.
 try { db.exec("ALTER TABLE prospector_leads ADD COLUMN notion_page_id TEXT"); } catch {}
+// Dados estruturados de contato/identificação. Lead sem nenhum canal não é mais
+// gravado (ver a regra no runCycle), então estas colunas são o que torna a base
+// utilizável em vez de uma lista de nomes.
+try { db.exec("ALTER TABLE prospector_leads ADD COLUMN email TEXT"); } catch {}
+try { db.exec("ALTER TABLE prospector_leads ADD COLUMN cnpj TEXT"); } catch {}
 
 // Seed de produtos padrão no portfólio
 try {
@@ -484,6 +491,8 @@ function upsertLead(leadData) {
     ["contact_person", leadData.contact_person || null],
     ["phone", leadData.phone || null],
     ["instagram_handle", leadData.instagram_handle || null],
+    ["email", leadData.email || null],
+    ["cnpj", leadData.cnpj || null],
     ["website_url", leadData.website_url || null],
     ["source", leadData.source || "web"],
     ["status", "discovered"],
@@ -526,6 +535,89 @@ const IG_BLACKLIST = new Set([
   "username", "seu_instagram", "perfil", "exemplo", "yourusername",
   "gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "icloud.com"
 ]);
+
+// E-mails que aparecem em rodapé de template/plataforma e não são da clínica.
+const EMAIL_BLACKLIST_RE = /@(example|exemplo|dominio|seudominio|email|test|sentry|wixpress|godaddy|wordpress|squarespace|shopify)\.|noreply|no-reply|sac@|@sentry\./i;
+
+// Valida os dígitos verificadores do CNPJ. Sem isso, qualquer sequência de 14
+// dígitos (telefone concatenado, id de sessão, código de rastreio) entraria
+// como CNPJ e sujaria a base com dado que parece estruturado e não é.
+function isValidCnpj(d) {
+  if (!/^\d{14}$/.test(d) || /^(\d){13}$/.test(d)) return false;
+  const calc = (len) => {
+    let sum = 0;
+    let pos = len - 7;
+    for (let i = 0; i < len; i++) {
+      sum += Number(d[i]) * pos--;
+      if (pos < 2) pos = 9;
+    }
+    const r = sum % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  return calc(12) === Number(d[12]) && calc(13) === Number(d[13]);
+}
+
+// Páginas de agregador/diretório/SEO: aparecem em massa na busca e NÃO são
+// estabelecimentos. Foram elas que produziram leads como "Agende suas
+// consultas online", "Melhores Clínicas de Estética em São Paulo" e
+// "Clinica Odontologica Rio De Janeiro" — títulos de página, não empresas.
+const AGGREGATOR_DOMAINS = [
+  "doctoralia", "boaconsulta", "docplanner", "guiadeconsultorios", "clinicas.com",
+  "telemedicina", "consultaremedios", "minhavida", "tuasaude", "yelp", "tripadvisor",
+  "reclameaqui", "solutudo", "apontador", "telelistas", "guiamais", "encontreseudentista",
+  "quandoagendar", "agendarconsulta", "zenklub", "vittude", "gympass", "wellhub",
+  "hospitaisbrasil", "catalogo", "guiaodonto", "achecomercio", "hagah",
+];
+const AGGREGATOR_TITLE_RE = /^(os |as )?\d*\s*(melhores|principais|top)\b|\b(lista|guia|ranking|diret[oó]rio|cat[aá]logo|compare|encontre|agende suas|agendamento online|marque sua|onde encontrar|classificados|comparar|ache|busque)\b|\b(pre[cç]os?|quanto custa|vale a pena|passo a passo)\b/i;
+
+// Um título é página de categoria quando, tirando as palavras da própria
+// consulta (categoria + cidade) e o preenchimento genérico, NÃO SOBRA nada que
+// funcione como nome próprio.
+//
+// Trocado de heurística por contagem de palavras: "Prórir Clínica
+// Odontológica" e "Clínica Estética&Luxo" tinham poucas palavras e eram
+// rejeitados como se fossem categoria, mesmo tendo nome real. O que distingue
+// não é o tamanho, é a sobra.
+const FILLER_WORDS = new Set([
+  "em", "de", "do", "da", "dos", "das", "no", "na", "e", "o", "a", "os", "as",
+  "para", "por", "com", "sp", "rj", "mg", "pr", "sc", "rs", "brasil", "br",
+  "melhor", "melhores", "online", "atendimento", "especializada", "especializado",
+  "centro", "consultorio", "consultorios", "clinica", "clinicas", "dr", "dra",
+]);
+
+function deaccent(str) {
+  return String(str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+// singulariza de forma tosca só pra comparação (clinicas -> clinica)
+function stem(w) {
+  return w.endsWith("s") && w.length > 4 ? w.slice(0, -1) : w;
+}
+
+function tokens(str) {
+  return deaccent(str)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(stem);
+}
+
+function looksLikeAggregator({ title, url, category, city }) {
+  const t = String(title || "").trim();
+  const u = String(url || "").toLowerCase();
+
+  if (AGGREGATOR_DOMAINS.some((d) => u.includes(d))) return "domínio de agregador";
+  if (AGGREGATOR_TITLE_RE.test(deaccent(t))) return "título de diretório/SEO";
+
+  // Remove do título tudo que veio da consulta e o preenchimento genérico.
+  const consulta = new Set([...tokens(category), ...tokens(city)]);
+  const sobra = tokens(t).filter((w) => !consulta.has(w) && !FILLER_WORDS.has(w) && w.length >= 3);
+
+  if (sobra.length === 0) {
+    return "título é a própria categoria, sem nome do estabelecimento";
+  }
+  return null;
+}
 
 function extractContactsFromText(text) {
   const source = String(text || "");
@@ -572,7 +664,32 @@ function extractContactsFromText(text) {
     }
   }
 
-  return { phone, instagram };
+  // 4. E-mail. Descarta os genéricos de plataforma/exemplo, que aparecem em
+  // rodapé de template e não são contato da clínica.
+  let email = null;
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  for (const m of source.matchAll(emailRegex)) {
+    const cand = m[0].toLowerCase();
+    if (EMAIL_BLACKLIST_RE.test(cand)) continue;
+    if (/\.(png|jpg|jpeg|gif|svg|webp|css|js)$/.test(cand)) continue;
+    email = cand;
+    break;
+  }
+
+  // 5. CNPJ: 00.000.000/0000-00 ou 14 dígitos seguidos. Valida os dígitos
+  // verificadores — número de 14 dígitos aparece em telefone concatenado,
+  // código de rastreio e id de sessão, e aceitar sem validar sujaria a base.
+  let cnpj = null;
+  const cnpjRegex = /(\d{2}[.\s]?\d{3}[.\s]?\d{3}[\/\s]?\d{4}[-\s]?\d{2})/g;
+  for (const m of source.matchAll(cnpjRegex)) {
+    const digits = m[1].replace(/\D/g, "");
+    if (digits.length === 14 && isValidCnpj(digits)) {
+      cnpj = `${digits.slice(0,2)}.${digits.slice(2,5)}.${digits.slice(5,8)}/${digits.slice(8,12)}-${digits.slice(12)}`;
+      break;
+    }
+  }
+
+  return { phone, instagram, email, cnpj };
 }
 
 // Raspagem do site do estabelecimento caso não tenha contato direto no snippet do buscador
@@ -631,6 +748,8 @@ async function runCycle(onNotify) {
   let queuedCount = 0;   // enfileirados na extensão — entrega NÃO confirmada
   const discoveredLeads = [];
   const cycleErrors = [];
+  const rejected = { aggregator: 0, noContact: 0 };
+  const rejectedSamples = [];
 
   const categories = settings.target_keywords.split(",").map(s => s.trim()).filter(Boolean);
   const cities = settings.target_location.split(",").map(s => s.trim()).filter(Boolean);
@@ -643,14 +762,35 @@ async function runCycle(onNotify) {
         const results = await webSearch.searchWeb(query, 5);
 
         for (const r of results) {
+          // Descarta agregador/diretório ANTES de gastar raspagem e LLM neles.
+          const aggReason = looksLikeAggregator({ title: r.title, url: r.url, category: cat, city });
+          if (aggReason) {
+            rejected.aggregator++;
+            rejectedSamples.push(`${String(r.title).slice(0, 45)} (${aggReason})`);
+            continue;
+          }
+
           const combined = `${r.title} ${r.snippet || ''} ${r.url || ''}`;
           let contacts = extractContactsFromText(combined);
 
-          // Se não encontrou telefone no snippet e tem website próprio, raspa o site do estabelecimento
-          if (!contacts.phone && r.url && !r.url.includes("instagram.com")) {
+          // Raspa o site sempre que faltar QUALQUER dado de contato — antes só
+          // raspava quando faltava telefone, então lead com telefone no snippet
+          // nunca ganhava e-mail nem CNPJ, e o cadastro ficava pobre.
+          const faltaDado = !contacts.phone || !contacts.email || !contacts.cnpj || !contacts.instagram;
+          if (faltaDado && r.url && !r.url.includes("instagram.com")) {
             const siteContacts = await scrapeLeadWebsite(r.url);
-            if (siteContacts.phone) contacts.phone = siteContacts.phone;
-            if (siteContacts.instagram && !contacts.instagram) contacts.instagram = siteContacts.instagram;
+            for (const k of ["phone", "instagram", "email", "cnpj"]) {
+              if (!contacts[k] && siteContacts[k]) contacts[k] = siteContacts[k];
+            }
+          }
+
+          // REGRA DE OURO: lead sem canal de contato não serve. Telefone,
+          // Instagram ou e-mail — pelo menos um. Antes gravava qualquer
+          // resultado, e 59 de 63 leads ficavam impossíveis de abordar.
+          if (!contacts.phone && !contacts.instagram && !contacts.email) {
+            rejected.noContact++;
+            rejectedSamples.push(`${String(r.title).slice(0, 45)} (sem telefone, Instagram ou e-mail)`);
+            continue;
           }
 
           // Limpa o nome da empresa removendo títulos e caracteres extras
@@ -667,6 +807,8 @@ async function runCycle(onNotify) {
             description: r.snippet || "",
             phone: contacts.phone,
             instagram_handle: contacts.instagram,
+            email: contacts.email,
+            cnpj: contacts.cnpj,
             website_url: r.url,
             source: "web"
           });
@@ -804,6 +946,8 @@ async function runCycle(onNotify) {
     discovered: discoveredCount,
     outreached: outreachedCount,
     queued: queuedCount,
+    rejected,
+    rejectedSamples: rejectedSamples.slice(0, 5),
     notion: notionSync,
     leads: discoveredLeads.map(l => ({ id: l.id, name: l.name, category: l.category, city: l.city, phone: l.phone, instagram: l.instagram_handle }))
   };

@@ -1121,10 +1121,98 @@ const PROSPECTOR_TOOLS = {
           ? `📓 Notion: ${res.notion.synced} lead(s) sincronizados.`
           : `📓 Notion: falhou — ${res.notion.error || `${res.notion.failed} erro(s)`}`);
       }
+      // Descarte precisa ser VISÍVEL. Sem isso, "5 novos leads" esconde que 40
+      // resultados foram jogados fora, e não se sabe se o filtro está calibrado
+      // ou se a busca está trazendo lixo.
+      if (res.rejected && (res.rejected.aggregator || res.rejected.noContact)) {
+        parts.push("🚫 Descartados: " + res.rejected.noContact + " sem contato (telefone/Instagram/e-mail) e " + res.rejected.aggregator + " páginas de diretório/agregador.");
+        if (res.rejectedSamples && res.rejectedSamples.length) {
+          parts.push("   Exemplos: " + res.rejectedSamples.slice(0, 3).join(" · "));
+        }
+      }
       if (res.discovered === 0) {
         parts.push("Obs: 0 NOVOS não significa 0 leads — os já conhecidos não são recontados. Use prospector_status para o total.");
       }
       return parts.join("\n");
+    },
+  },
+  instagram_outreach_list: {
+    name: "instagram_outreach_list",
+    desc: "Lista as abordagens de Instagram pendentes prontas para envio MANUAL pelo celular: nome do lead, link ig.me que abre a conversa e o texto para colar. Use quando o usuario quiser prospectar pelo Instagram sem PC ligado.",
+    args: {
+      type: "object",
+      properties: { limit: { type: "number", description: "Quantos leads listar (default 5)" } },
+      required: [],
+    },
+    run: async (args = {}) => {
+      const db = require("../db");
+      const limit = Math.min(Math.max(Number(args.limit) || 5, 1), 15);
+
+      // Só rascunho de Instagram, de lead que tem handle e ainda nao foi tratado.
+      const rows = db.prepare(
+        `SELECT l.name, l.city, l.instagram_handle, l.category, o.id AS outreach_id, o.message
+         FROM prospector_outreach o
+         JOIN prospector_leads l ON l.id = o.lead_id
+         WHERE o.channel = 'instagram' AND o.status = 'draft'
+           AND l.instagram_handle IS NOT NULL AND l.instagram_handle != ''
+         ORDER BY l.created_at DESC LIMIT ?`
+      ).all(limit);
+
+      if (rows.length === 0) return "Nenhuma abordagem de Instagram pendente. Rode prospector_run para minerar leads com @.";
+
+      const out = [
+        "ABORDAGENS DE INSTAGRAM - " + rows.length + " pendente(s)",
+        "Toque no link para abrir a conversa, cole o texto e envie. Sai da SUA conta, do seu celular.",
+        "",
+      ];
+      rows.forEach((r, i) => {
+        const handle = String(r.instagram_handle).replace(/^@/, "");
+        out.push((i + 1) + ") " + r.name + (r.city ? " - " + r.city : ""));
+        out.push("   https://ig.me/m/" + handle);
+        out.push("   Mensagem: " + String(r.message || "").replace(/\s+/g, " ").trim());
+        out.push("");
+      });
+      out.push("Depois de enviar, diga: marcar instagram enviado <numero da lista>");
+      // O Instagram nao aceita mensagem pre-preenchida por URL — o link abre a
+      // conversa, o texto precisa ser colado. Dizer isso evita a expectativa de
+      // que o link ja leva a mensagem pronta.
+      out.push("Obs: o Instagram nao permite pre-preencher a mensagem pelo link; o texto acima e para copiar.");
+      return out.join("\n");
+    },
+  },
+  instagram_outreach_mark_sent: {
+    name: "instagram_outreach_mark_sent",
+    desc: "Marca uma abordagem de Instagram como enviada, depois que o usuario mandou manualmente pelo celular. Aceita o @ do lead ou o id do rascunho.",
+    args: {
+      type: "object",
+      properties: {
+        handle: { type: "string", description: "@ do Instagram do lead" },
+        outreach_id: { type: "number", description: "Id do rascunho, se souber" },
+      },
+      required: [],
+    },
+    run: async (args = {}) => {
+      const db = require("../db");
+      let row;
+      if (args.outreach_id) {
+        row = db.prepare("SELECT id, lead_id FROM prospector_outreach WHERE id = ? AND channel = 'instagram'").get(Number(args.outreach_id));
+      } else if (args.handle) {
+        const h = String(args.handle).replace(/^@/, "").trim();
+        // Normaliza os DOIS lados: o handle e gravado as vezes com @ e as vezes
+        // sem (depende de onde foi extraido), e comparar cru nao encontrava.
+        row = db.prepare(
+          `SELECT o.id, o.lead_id FROM prospector_outreach o JOIN prospector_leads l ON l.id = o.lead_id
+           WHERE o.channel = 'instagram' AND o.status = 'draft'
+             AND REPLACE(LOWER(l.instagram_handle), '@', '') = LOWER(?) LIMIT 1`
+        ).get(h);
+      }
+      if (!row) return "Nao achei esse rascunho de Instagram pendente. Rode instagram_outreach_list para ver os disponiveis.";
+
+      // 'sent' aqui e legitimo: foi o proprio usuario que enviou e confirmou,
+      // diferente do envio automatico pela extensao, que fica em 'queued'.
+      db.prepare("UPDATE prospector_outreach SET status = 'sent', sent_at = unixepoch() WHERE id = ?").run(row.id);
+      db.prepare("UPDATE prospector_leads SET status = 'sent', updated_at = unixepoch() WHERE id = ?").run(row.lead_id);
+      return "Marcado como enviado. Se responderem, me avise para registrar o retorno.";
     },
   },
   whatsapp_session_backup: {
