@@ -12,7 +12,6 @@ import { useChatSession } from "./hooks/useChatSession";
 import { useFileUpload } from "./hooks/useFileUpload";
 import { useNotionSave } from "./hooks/useNotionSave";
 
-import { ChannelInbox } from "./components/ChannelInbox";
 import { ConversasPanel } from "./components/ConversasPanel";
 import { VoiceSelectorModal } from "@/shared/components/VoiceSelectorModal";
 import { getSelectedVoice } from "@/shared/constants/edgeTtsVoices";
@@ -278,8 +277,6 @@ function ChatShell() {
         </div>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <ChannelInbox onSelectPrompt={(prompt) => handleSend(prompt)} />
-
           {/* Abre a aba lateral de conversas diretas (WhatsApp/Telegram). */}
           <button
             type="button"

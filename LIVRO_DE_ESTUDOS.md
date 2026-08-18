@@ -1713,6 +1713,20 @@ Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encod
 
 ---
 
+### Capítulo 82: Remoção do Botão e Notificações de Canais Mockados no Chat (ChannelInbox)
+
+* **Por que foi feita essa alteração (Causa Raiz & Limpeza de Interface)**:
+  1. **Poluição Visual com Mensagens Exemplo**: No topo direito do chat, o botão "Canais (20)" abria uma lista suspensa de notificações simuladas (*Inbox de Mensagens* com contatos falsos e anúncios de exemplo). O usuário solicitou a remoção total desse componente por não ter utilidade prática e gerar poluição no cabeçalho do chat.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Remoção no [ChatPageClient.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/chat/ChatPageClient.jsx)**:
+     - Removido o import do `ChannelInbox` e a tag `<ChannelInbox ... />` do cabeçalho do chat.
+     - O topo do chat agora mantém apenas o badge limpo do **Lucas**, o botão de abertura de conversas reais e o botão de limpar histórico.
+  2. **Gatilho de Atualização do Railway**:
+     - Incrementada a versão no [apps/agent/package.json](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/package.json) para disparar a compilação automática no Railway.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 
