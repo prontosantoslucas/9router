@@ -612,6 +612,8 @@ const VALID_DDDS = new Set([
   "91", "92", "93", "94", "95", "96", "97", "98", "99",
 ]);
 
+const DOMAIN_TLDS = /\.(com|br|io|net|org|co|app|dev|me|info|biz|gov|edu|tv|cc|ly|xyz|online|site|store|shop|blog)$/;
+
 const IG_BLACKLIST = new Set([
   "p", "reel", "reels", "explore", "stories", "direct", "accounts", "login",
   "share", "terms", "privacy", "about", "cookies", "settings", "home",
@@ -626,7 +628,7 @@ const EMAIL_BLACKLIST_RE = /@(example|exemplo|dominio|seudominio|email|test|sent
 // dígitos (telefone concatenado, id de sessão, código de rastreio) entraria
 // como CNPJ e sujaria a base com dado que parece estruturado e não é.
 function isValidCnpj(d) {
-  if (!/^\d{14}$/.test(d) || /^(\d){13}$/.test(d)) return false;
+  if (!/^\d{14}$/.test(d) || /^(\d)\1{13}$/.test(d)) return false;
   const calc = (len) => {
     let sum = 0;
     let pos = len - 7;
@@ -738,13 +740,23 @@ function extractContactsFromText(text) {
   }
 
   // 3. Instagram: @handle ou instagram.com/handle
+  // Varre um texto SEM os e-mails: o @ de um e-mail casava como handle e
+  // trazia o dominio (noreply@sentry.io virava handle 'sentry.io'). Foi
+  // assim que '@popular' entrou na base como se fosse perfil de clinica.
+  const semEmails = source.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, " ");
   const igRegex = /(?:instagram\.com\/|@)([a-zA-Z0-9._]{3,30})/gi;
-  for (const m of source.matchAll(igRegex)) {
-    const handle = m[1].toLowerCase().replace(/^@/, "").replace(/\/$/, "");
-    if (!IG_BLACKLIST.has(handle) && !handle.endsWith(".com") && !handle.endsWith(".br")) {
-      instagram = handle;
-      break;
-    }
+  for (const m of semEmails.matchAll(igRegex)) {
+    // Pontuacao de fim de frase entrava no handle e quebrava o link ig.me
+    // ('sorrisovivo.' em vez de 'sorrisovivo').
+    const handle = m[1].toLowerCase().replace(/^[@._]+|[._\/]+$/g, "");
+    if (handle.length < 3) continue;
+    // Rejeita dominio por TLD conhecido, nao por sufixo generico: handle de
+    // clinica brasileira usa sigla de estado no fim (clinicasorriso.sp), e um
+    // filtro de 2+ letras descartava esses junto com .io/.com.
+    if (DOMAIN_TLDS.test(handle)) continue;
+    if (IG_BLACKLIST.has(handle)) continue;
+    instagram = handle;
+    break;
   }
 
   // 4. E-mail. Descarta os genéricos de plataforma/exemplo, que aparecem em
