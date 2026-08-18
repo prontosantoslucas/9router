@@ -1136,6 +1136,52 @@ const PROSPECTOR_TOOLS = {
       return parts.join("\n");
     },
   },
+  prospector_purge_sem_contato: {
+    name: "prospector_purge_sem_contato",
+    desc: "Remove da base os leads sem NENHUM canal de contato (sem telefone, sem Instagram e sem e-mail) — esses nunca serao abordaveis. Por padrao apenas SIMULA e mostra o que seria removido; passe confirmar=true para apagar de verdade.",
+    args: {
+      type: "object",
+      properties: { confirmar: { type: "boolean", description: "true apaga de verdade. Sem isso, so simula." } },
+      required: [],
+    },
+    run: async (args = {}) => {
+      const prospector = require("../prospector");
+      // Simula por padrao: apagar lead e irreversivel, e o usuario precisa ver
+      // o numero antes de autorizar.
+      if (!args.confirmar) {
+        const r = prospector.purgeLeadsWithoutContact({ dryRun: true });
+        const out = [
+          "SIMULACAO — nada foi apagado:",
+          "Base atual: " + r.total + " lead(s)",
+          "Seriam removidos: " + r.removeriam + " (sem telefone, Instagram nem e-mail)",
+          "Permaneceriam: " + r.ficam,
+        ];
+        if (r.exemplos.length) out.push("Exemplos: " + r.exemplos.join(" · "));
+        out.push("Para apagar de verdade, confirme a limpeza.");
+        return out.join("\n");
+      }
+      const r = prospector.purgeLeadsWithoutContact();
+      return "Limpeza concluida: " + r.removidos + " lead(s) sem contato removidos e " + r.abordagens + " rascunho(s) descartados. Base: " + r.antes + " para " + r.depois + ".";
+    },
+  },
+  prospector_regerar_rascunhos: {
+    name: "prospector_regerar_rascunhos",
+    desc: "Regera as abordagens em rascunho com o texto atual (dor antes de produto, pergunta aberta). Os rascunhos antigos sairam do prompt que falava de produto e pedia demonstracao. Nao altera abordagem ja enviada.",
+    args: {
+      type: "object",
+      properties: { limit: { type: "number", description: "Quantos regerar (default 30, max 200)" } },
+      required: [],
+    },
+    run: async (args = {}) => {
+      const prospector = require("../prospector");
+      const r = await prospector.regenerateDrafts({ limit: args.limit || 30 });
+      if (r.candidatos === 0) return "Nao ha rascunho pendente para regerar.";
+      const out = [r.regerados + " de " + r.candidatos + " rascunho(s) regerados com o texto novo."];
+      if (r.falhas) out.push(r.falhas + " falha(s): " + r.detalhes.join(" | "));
+      out.push("Veja o resultado com whatsapp_outreach_list ou instagram_outreach_list.");
+      return out.join("\n");
+    },
+  },
   whatsapp_outreach_list: {
     name: "whatsapp_outreach_list",
     desc: "Mostra os rascunhos de WhatsApp pendentes por completo, para revisao antes do envio, com link wa.me que abre a conversa JA COM A MENSAGEM PREENCHIDA. Use quando o usuario pedir para ver/revisar os rascunhos ou quiser enviar manualmente pelo celular.",

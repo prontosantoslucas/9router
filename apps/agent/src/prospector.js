@@ -1122,6 +1122,75 @@ function resetProspection({ includeResearch = false } = {}) {
   return { leads, outreach, research };
 }
 
+// Remove leads sem NENHUM canal de contato (telefone, Instagram ou e-mail).
+//
+// A regra de qualificacao impede que entrem daqui pra frente, mas nao removeu
+// os que ja estavam: a base tinha ~59 de 63 impossiveis de abordar, inflando
+// contagem e sujando a tabela do Notion.
+//
+// Por seguranca: NUNCA remove lead que tenha qualquer contato, e NUNCA remove
+// lead cuja abordagem ja foi enviada (status sent/queued) — mesmo sem contato
+// registrado, ali houve interacao real que nao se joga fora.
+function purgeLeadsWithoutContact({ dryRun = false } = {}) {
+  const cond = `(phone IS NULL OR phone = '')
+      AND (instagram_handle IS NULL OR instagram_handle = '')
+      AND (email IS NULL OR email = '')
+      AND id NOT IN (SELECT DISTINCT lead_id FROM prospector_outreach WHERE status IN ('sent','queued'))`;
+
+  const antes = db.prepare('SELECT COUNT(*) n FROM prospector_leads').get().n;
+  const alvo = db.prepare(`SELECT id, name FROM prospector_leads WHERE ${cond}`).all();
+  const comContato = antes - alvo.length;
+
+  if (dryRun) {
+    return { dryRun: true, total: antes, removeriam: alvo.length, ficam: comContato, exemplos: alvo.slice(0, 5).map((l) => l.name) };
+  }
+
+  let abordagens = 0;
+  const tx = db.transaction(() => {
+    for (const l of alvo) {
+      abordagens += db.prepare('DELETE FROM prospector_outreach WHERE lead_id = ?').run(l.id).changes;
+      db.prepare('DELETE FROM prospector_leads WHERE id = ?').run(l.id);
+    }
+  });
+  tx();
+
+  const depois = db.prepare('SELECT COUNT(*) n FROM prospector_leads').get().n;
+  console.log(`[Prospector] Limpeza: ${alvo.length} lead(s) sem contato removidos (${abordagens} rascunho[s]). Base: ${antes} -> ${depois}.`);
+  return { removidos: alvo.length, abordagens, antes, depois, exemplos: alvo.slice(0, 5).map((l) => l.name) };
+}
+
+// Regera as abordagens ainda em rascunho com o prompt atual.
+//
+// Os rascunhos antigos sairam do prompt que despejava funcionalidade e pedia
+// demonstracao de 5 minutos. Reaproveita-los seria enviar justamente o texto
+// que motivou a reescrita.
+//
+// So toca status 'draft': o que ja foi enviado fica como registro historico.
+async function regenerateDrafts({ limit = 30 } = {}) {
+  const alvo = db.prepare(`
+    SELECT o.id AS outreach_id, o.channel, l.*
+    FROM prospector_outreach o JOIN prospector_leads l ON l.id = o.lead_id
+    WHERE o.status = 'draft'
+    ORDER BY l.created_at DESC LIMIT ?
+  `).all(Math.min(Math.max(Number(limit) || 30, 1), 200));
+
+  let regerados = 0;
+  const falhas = [];
+  for (const row of alvo) {
+    try {
+      const msg = await generateOutreachMessage(row, row.channel);
+      if (!msg || msg.length < 20) { falhas.push(`${row.name}: texto vazio`); continue; }
+      db.prepare('UPDATE prospector_outreach SET message = ? WHERE id = ?').run(msg, row.outreach_id);
+      regerados++;
+    } catch (err) {
+      falhas.push(`${row.name}: ${err.message}`);
+    }
+  }
+
+  console.log(`[Prospector] ${regerados} rascunho(s) regerados, ${falhas.length} falha(s).`);
+  return { regerados, falhas: falhas.length, detalhes: falhas.slice(0, 3), candidatos: alvo.length };
+}
+
 function getStats() {
   const totalLeads = db.prepare("SELECT COUNT(*) as n FROM prospector_leads").get().n;
   const sentOutreach = db.prepare("SELECT COUNT(*) as n FROM prospector_outreach WHERE status = 'sent'").get().n;
@@ -1155,6 +1224,8 @@ module.exports = {
   runCycle,
   runCycleNow,
   resetProspection,
+  purgeLeadsWithoutContact,
+  regenerateDrafts,
   getSettings,
   updateSettings,
   getStats,
