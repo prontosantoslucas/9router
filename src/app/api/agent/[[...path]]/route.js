@@ -110,6 +110,15 @@ const ALLOWED_PATHS = [
   "/api/rag/",
   "/api/agent/extension/",
   "/api/extension/",
+  // Painel de habitos, humor, metas e aprendizado. Fica atras da autenticacao
+  // do dashboard (nunca em PUBLIC_WEBHOOK_PATHS): sao dados pessoais.
+  // startsWith ja cobre as sub-rotas (/api/habitos/:id/checkin).
+  "/api/agent/painel",
+  "/api/painel",
+  "/api/agent/habitos",
+  "/api/habitos",
+  "/api/agent/humor",
+  "/api/humor",
 ];
 
 function isPathAllowed(targetPath) {

@@ -385,6 +385,24 @@ async function composeNoite() {
     }
   }
 
+  // Hábitos sem resposta hoje. É este pedido que alimenta o rastreador — um
+  // painel de hábitos que ninguém preenche não mede nada, e às 22h o dia já
+  // aconteceu, então a resposta é sobre fato e não sobre intenção.
+  try {
+    const habits = require("./habits");
+    const pend = habits.pendentesHoje();
+    if (pend.length) {
+      partes.push("", `Faltou marcar hoje: ${pend.map((h) => h.nome).join(", ")}. Fez ou não fez?`);
+    }
+    const emRisco = habits.resumo({ dias: 7 })
+      .filter((h) => h.tipo === "diario" && h.streak >= 3 && h.hoje === "sem_registro");
+    for (const h of emRisco) {
+      partes.push(`"${h.nome}" está em ${h.streak} dias seguidos — hoje ainda está em aberto.`);
+    }
+  } catch (err) {
+    console.warn(`[mentor] hábitos indisponíveis no toque da noite: ${err.message}`);
+  }
+
   const m = metricasSemana();
   const c = comparativoSemana();
   const rev = ["", "Como está a semana:"];

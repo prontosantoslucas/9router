@@ -33,6 +33,10 @@ function hojeBRT() {
 // registro. Uma série que só traz os dias respondidos esconde justamente o
 // dado mais importante — quantos dias ficaram sem resposta.
 function mapaHumor(dias = 30) {
+  // Carregar o modulo dono garante o schema: mentor.js cria mentor_mood no
+  // require. Sem isso o painel quebra com "no such table" quando e aberto
+  // antes de o mentor ter sido carregado por outro caminho.
+  require("./mentor");
   const habits = require("./habits");
   const linhas = db.prepare(
     "SELECT ymd, score, nota FROM mentor_mood WHERE ymd >= ? ORDER BY ymd ASC"
@@ -73,6 +77,7 @@ function mapaHumor(dias = 30) {
 }
 
 function metas() {
+  require("./mentor"); // dono de mentor_compromisso
   const abertos = db.prepare(
     "SELECT id, texto, prazo, criado_em FROM mentor_compromisso WHERE status = 'aberto' ORDER BY (prazo IS NULL), prazo ASC"
   ).all();
@@ -95,6 +100,7 @@ function metas() {
 }
 
 function aprendizado() {
+  require("./mentor"); // dono de mentor_curriculum e mentor_log
   const en = require("./english");
   const rm = require("./roadmap");
 

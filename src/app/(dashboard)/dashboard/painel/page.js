@@ -81,21 +81,32 @@ export default function PainelPage() {
   const [tipoNovo, setTipoNovo] = useState("diario");
   const [metaNova, setMetaNova] = useState(3);
 
-  const carregar = useCallback(async () => {
-    try {
-      const res = await fetch("/api/agent/painel?dias=30");
-      if (!res.ok) throw new Error(`o agente respondeu ${res.status}`);
-      setDados(await res.json());
-      setErro(null);
-    } catch (e) {
-      // Mostra o motivo: "não carregou" sem causa não permite agir.
-      setErro(e.message);
-    } finally {
-      setCarregando(false);
-    }
+  // A busca é separada da escrita no estado para que o carregamento inicial
+  // possa cancelar: sem isso, sair da página antes da resposta chegar dispara
+  // setState em componente desmontado.
+  const buscar = useCallback(async () => {
+    const res = await fetch("/api/agent/painel?dias=30");
+    if (!res.ok) throw new Error(`o agente respondeu ${res.status}`);
+    return res.json();
   }, []);
 
-  useEffect(() => { carregar(); }, [carregar]);
+  const carregar = useCallback(
+    () => buscar()
+      // Mostra o motivo: "não carregou" sem causa não permite agir.
+      .then((j) => { setDados(j); setErro(null); })
+      .catch((e) => setErro(e.message))
+      .finally(() => setCarregando(false)),
+    [buscar],
+  );
+
+  useEffect(() => {
+    let vivo = true;
+    buscar()
+      .then((j) => { if (vivo) { setDados(j); setErro(null); } })
+      .catch((e) => { if (vivo) setErro(e.message); })
+      .finally(() => { if (vivo) setCarregando(false); });
+    return () => { vivo = false; };
+  }, [buscar]);
 
   async function acao(fn, chave) {
     setSalvando(chave);
