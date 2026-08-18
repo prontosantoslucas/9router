@@ -1665,6 +1665,20 @@ Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encod
 
 ---
 
+### Capítulo 79: Simplificação de Nomenclatura do Agente ("Lucas") e Limpeza do Rodapé da Sidebar
+
+* **Por que foi feita essa alteração (Causa Raiz & Ajuste Semântico)**:
+  1. **Redundância e Ruído Textual**: O módulo principal no topo da barra lateral continha o rótulo longo "Agente Lucas". O usuário solicitou que fosse exibido apenas **"Lucas"**, tornando a tipografia mais concisa e direta.
+  2. **Placeholder Redundante de "Agentes de IA (em breve)"**: No rodapé da barra lateral havia sido herdado um botão de exemplo "agentes de IA (em breve)" da referência Olist. Como a plataforma já possui o Agente Lucas autônomo totalmente funcional no topo e as skills configuradas em *Ferramentas*, a presença de um item "em breve" era incoerente e desnecessária.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Renomeação do Módulo em [Sidebar.js](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/Sidebar.js)**:
+     - No array `MODULES`, alterado `label: "agente lucas"` para `label: "Lucas"`.
+  2. **Remoção do Link Redundante**:
+     - No rodapé da primeira coluna do [Sidebar.js](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/Sidebar.js), removido o elemento `<Link href="/dashboard/skills">` com o texto "agentes de IA (em breve)", deixando apenas os links essenciais (*configurações*, *acesso remoto* e controles de tema/perfil).
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 

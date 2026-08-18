@@ -25,7 +25,7 @@ const COMBINED_WEB_ITEM = {
 const MODULES = [
   {
     id: "lucas",
-    label: "agente lucas",
+    label: "Lucas",
     shortLabel: "Lucas",
     icon: "smart_toy",
     badge: "IA",
@@ -421,20 +421,6 @@ export default function Sidebar({ onClose }) {
                     <span className="material-symbols-outlined text-[15px]">computer</span>
                     <span className="text-[12px]">acesso remoto</span>
                   </button>
-
-                  <Link
-                    href="/dashboard/skills"
-                    onClick={onClose}
-                    className="flex items-center justify-between px-2 py-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[15px] text-brand-500">auto_awesome</span>
-                      <span className="text-[12px]">agentes de IA</span>
-                    </div>
-                    <span className="text-[9px] px-1 py-0.2 rounded bg-brand-500/10 text-brand-500 font-semibold">
-                      em breve
-                    </span>
-                  </Link>
                 </div>
 
                 <div className="flex items-center justify-between px-2 pt-2 border-t border-border/40">
