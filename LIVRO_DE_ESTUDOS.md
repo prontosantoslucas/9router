@@ -1648,6 +1648,23 @@ Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encod
 
 ---
 
+### Capítulo 78: Reformulação Completa da Paleta Visual (Remoção do Verde e Adoção de Cyber Flame / Ember & Obsidian)
+
+* **Por que foi feita essa alteração (Causa Raiz & Requisitos Estéticos)**:
+  1. **Superação do Estilo Verde Padrão**: O verde tradicional (#10a37f / estilo OpenAI inicial) tornou-se comum e genérico. O objetivo foi criar uma identidade visual com personalidade forte, sofisticada, de alto impacto ("fora do comum") e ultra-moderna.
+  2. **Contraste e Elegância Dark Mode**: A combinação de preto carvão fosco (#0e0e11) e cinzas grafite (#141418 / #1e1e24) com acentos em vermelho puxando para o laranja neon flame (#ff4d28 / #ff4520) entrega o padrão visual adotado pelas ferramentas de desenvolvimento mais premiadas do mercado (Linear, Raycast, Vercel, Cursor).
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Reescrita dos Tokens no [globals.css](file:///c:/Users/user/Documents/GitHub/9router/src/app/globals.css)**:
+     - `--color-brand-500` redefinido para `#ff4d28` / `#ff4520` (Cyber Flame / Warm Ember), com escala completa de 50 a 900.
+     - `--color-primary`, `--color-accent` e `--color-success` atualizados para harmonizar com a paleta flame.
+     - Superfícies escuras migradas para tons neutros profundos (Sidebar `#09090c`, Background `#0e0e11`, Surface `#141418`, Surface-2 `#1e1e24`, Border `#22222a`).
+     - Superfícies claras atualizadas para branco puro e cinza minimalista de alto contraste (#fafafa, #f4f4f7, #ffffff).
+  2. **Harmonização de Componentes**:
+     - No [Sidebar.js](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/Sidebar.js) e [AgentBadge.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/primitives/AgentBadge.jsx), todos os gradientes, badges de status e pontos luminosos ativos utilizam os tokens `brand-500` e `brand-600` no tom flame/ember.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 

@@ -220,7 +220,7 @@ export default function Sidebar({ onClose }) {
     <>
       <aside
         className={cn(
-          "flex h-full min-h-full border-r border-border/80 bg-[#161616] dark:bg-[#121212] select-none text-text-main transition-all duration-300 ease-in-out relative z-30",
+          "flex h-full min-h-full border-r border-border/80 bg-sidebar select-none text-text-main transition-all duration-300 ease-in-out relative z-30",
           isCollapsed ? "w-[70px]" : "w-auto"
         )}
       >
@@ -229,7 +229,7 @@ export default function Sidebar({ onClose }) {
         {/* ========================================================================= */}
         <div
           className={cn(
-            "flex flex-col shrink-0 py-4 bg-[#161616] dark:bg-[#121212] justify-between transition-all duration-300",
+            "flex flex-col shrink-0 py-4 bg-sidebar justify-between transition-all duration-300",
             isCollapsed
               ? "w-[70px] px-2 items-center"
               : "w-48 sm:w-52 pl-3.5 pr-2 border-r border-border/40"
@@ -488,7 +488,7 @@ export default function Sidebar({ onClose }) {
         {/* 2️⃣ COLUNA DIREITA: DRAWER DE SUBMENUS (ESTILO OLIST)                       */}
         {/* ========================================================================= */}
         {!isCollapsed && (
-          <div className="flex flex-col w-56 sm:w-60 bg-surface dark:bg-[#1a1a1a] py-4 px-3.5 border-r border-border/60 transition-all duration-200 animate-in fade-in slide-in-from-left-2 overflow-y-auto custom-scrollbar">
+          <div className="flex flex-col w-56 sm:w-60 bg-surface py-4 px-3.5 border-r border-border/60 transition-all duration-200 animate-in fade-in slide-in-from-left-2 overflow-y-auto custom-scrollbar">
             {/* Header do Submenu com Título da Categoria */}
             <div className="px-2 pb-3 mb-2 border-b border-border/50">
               <h2 className="text-sm font-display font-bold text-text-main capitalize tracking-tight">

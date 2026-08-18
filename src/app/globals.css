@@ -6,52 +6,50 @@
 .fonts-loaded .material-symbols-outlined { visibility: visible; }
 
 :root {
-  /* Paleta grayscale estilo ChatGPT — brand vira o verde-cinza OpenAI
-     (#10a37f) só onde há AÇÃO (botões primários, links); superfícies
-     ficam neutras. */
-  --color-brand-50: #f0f9f6;
-  --color-brand-100: #d9f0e5;
-  --color-brand-200: #b3e1cc;
-  --color-brand-300: #7dcaa8;
-  --color-brand-400: #3fb387;
-  --color-brand-500: #10a37f;
-  --color-brand-600: #0d8a6a;
-  --color-brand-700: #0b6f56;
-  --color-brand-800: #085744;
-  --color-brand-900: #063f31;
+  /* Paleta moderna Cyber Flame / Ember — vermelho puxando para laranja neon */
+  --color-brand-50: #fff5f2;
+  --color-brand-100: #ffe8e2;
+  --color-brand-200: #ffd0c5;
+  --color-brand-300: #ffa894;
+  --color-brand-400: #ff7354;
+  --color-brand-500: #ff4520;
+  --color-brand-600: #eb340f;
+  --color-brand-700: #c42609;
+  --color-brand-800: #9e210c;
+  --color-brand-900: #802010;
 
   --color-primary: var(--color-brand-500);
   --color-primary-hover: var(--color-brand-600);
 
-  /* Superfícies — light "ChatGPT-like": branco puro + cinza levemente frio */
-  --color-bg: #ffffff;
-  --color-bg-alt: #f9f9f9;
+  /* Superfícies — light: branco puro + cinza claro minimalista */
+  --color-bg: #fafafa;
+  --color-bg-alt: #f4f4f7;
   --color-surface: #ffffff;
-  --color-surface-2: #f7f7f8;
-  --color-surface-3: #ececec;
-  --color-sidebar: #f9f9f9;
+  --color-surface-2: #f2f2f6;
+  --color-surface-3: #e5e5ed;
+  --color-sidebar: #f8f8fb;
 
-  --color-border: #e5e5e5;
-  --color-border-subtle: #ececec;
+  --color-border: #e2e2ea;
+  --color-border-subtle: #ececf2;
 
-  --color-text: #0d0d0d;
-  --color-text-main: #0d0d0d;
-  --color-text-muted: #5d5d5d;
-  --color-text-subtle: #8e8ea0;
+  --color-text: #111116;
+  --color-text-main: #111116;
+  --color-text-muted: #646473;
+  --color-text-subtle: #8c8c9e;
 
   --color-danger: #ef4444;
-  --color-success: #10a37f;
-  --color-warning: #d97706;
-  --color-info: #2563eb;
+  --color-success: #ff4520;
+  --color-warning: #f59e0b;
+  --color-info: #3b82f6;
 
   --color-accent: var(--color-brand-500);
-  --color-accent-secondary: #6e6e80;
+  --color-accent-secondary: #717182;
 
-  --color-chat-user-bg: #f4f4f4;
-  --color-chat-user-text: #0d0d0d;
+  --color-chat-user-bg: #f0f0f5;
+  --color-chat-user-text: #111116;
   --color-chat-assistant-bg: transparent;
-  --color-chat-code-bg: #0d0d0d;
-  --color-drop-overlay: rgba(16, 163, 127, 0.12);
+  --color-chat-code-bg: #111116;
+  --color-drop-overlay: rgba(255, 69, 32, 0.12);
 
   --radius-brand: 8px;
   --radius-brand-lg: 12px;
@@ -62,64 +60,63 @@
   --shadow-elev:
     0 1px 2px rgba(0,0,0,0.04),
     0 8px 24px -6px rgba(0,0,0,0.08);
-  --shadow-focus: 0 0 0 3px rgba(16, 163, 127, 0.18);
+  --shadow-focus: 0 0 0 3px rgba(255, 69, 32, 0.18);
 
   color-scheme: light;
 }
 
 .dark {
-  /* Paleta dark estilo ChatGPT — cinza-quase-preto liso, sem laranja.
-     Main chat: #212121. Sidebar: #171717. User bubble: #2f2f2f. */
-  --color-brand-50: #f0f9f6;
-  --color-brand-100: #d9f0e5;
-  --color-brand-200: #b3e1cc;
-  --color-brand-300: #7dcaa8;
-  --color-brand-400: #3fb387;
-  --color-brand-500: #19c37d;
-  --color-brand-600: #10a37f;
-  --color-brand-700: #0d8a6a;
-  --color-brand-800: #085744;
-  --color-brand-900: #063f31;
+  /* Paleta dark estilo Linear/Raycast/Obsidian — preto fosco e cinza escuro com acentos flame/ember */
+  --color-brand-50: #fff5f2;
+  --color-brand-100: #ffe8e2;
+  --color-brand-200: #ffd0c5;
+  --color-brand-300: #ffa894;
+  --color-brand-400: #ff7354;
+  --color-brand-500: #ff4d28;
+  --color-brand-600: #ff3b14;
+  --color-brand-700: #d92d09;
+  --color-brand-800: #b32508;
+  --color-brand-900: #8c1e08;
 
-  --color-primary: #10a37f;
-  --color-primary-hover: #0d8a6a;
+  --color-primary: #ff4d28;
+  --color-primary-hover: #ff3b14;
 
-  --color-bg: #212121;         /* main chat */
-  --color-bg-alt: #2f2f2f;
-  --color-surface: #212121;
-  --color-surface-2: #2f2f2f;   /* user bubble, dropdowns */
-  --color-surface-3: #3d3d3d;
-  --color-sidebar: #171717;    /* sidebar mais escura */
+  --color-bg: #0e0e11;         /* main chat preto carvão fosco */
+  --color-bg-alt: #17171d;
+  --color-surface: #141418;     /* superfícies modernas */
+  --color-surface-2: #1e1e24;   /* cards, user bubble, dropdowns */
+  --color-surface-3: #2a2a33;   /* elevação e hover */
+  --color-sidebar: #09090c;    /* sidebar preta pura */
 
-  --color-border: #2f2f2f;
-  --color-border-subtle: #262626;
+  --color-border: #22222a;
+  --color-border-subtle: #191921;
 
-  --color-text: #ececec;
-  --color-text-main: #ececec;
-  --color-text-muted: #b4b4b4;
-  --color-text-subtle: #8e8e8e;
+  --color-text: #f4f4f7;
+  --color-text-main: #f4f4f7;
+  --color-text-muted: #9da0ad;
+  --color-text-subtle: #6c6f7e;
 
   --color-danger: #ef4444;
-  --color-success: #10a37f;
-  --color-warning: #d97706;
-  --color-info: #7dd3fc;
+  --color-success: #ff4d28;
+  --color-warning: #f59e0b;
+  --color-info: #38bdf8;
 
-  --color-accent: #10a37f;
+  --color-accent: #ff4d28;
   --color-accent-secondary: #8e8ea0;
 
-  --color-chat-user-bg: #2f2f2f;
-  --color-chat-user-text: #ececec;
+  --color-chat-user-bg: #1e1e24;
+  --color-chat-user-text: #f4f4f7;
   --color-chat-assistant-bg: transparent;
-  --color-chat-code-bg: #0d0d0d;
-  --color-drop-overlay: rgba(16, 163, 127, 0.15);
+  --color-chat-code-bg: #09090c;
+  --color-drop-overlay: rgba(255, 77, 40, 0.15);
 
-  --shadow-soft: 0 1px 2px 0 rgba(0,0,0,0.4);
-  --shadow-warm: 0 1px 3px 0 rgba(0,0,0,0.4);
-  --shadow-elevated: 0 4px 16px -2px rgba(0,0,0,0.5);
+  --shadow-soft: 0 1px 2px 0 rgba(0,0,0,0.5);
+  --shadow-warm: 0 1px 3px 0 rgba(0,0,0,0.5);
+  --shadow-elevated: 0 4px 16px -2px rgba(0,0,0,0.6);
   --shadow-elev:
-    0 1px 2px rgba(0,0,0,0.4),
-    0 8px 24px -6px rgba(0,0,0,0.5);
-  --shadow-focus: 0 0 0 3px rgba(16, 163, 127, 0.25);
+    0 1px 2px rgba(0,0,0,0.5),
+    0 8px 24px -6px rgba(0,0,0,0.6);
+  --shadow-focus: 0 0 0 3px rgba(255, 77, 40, 0.25);
 
   color-scheme: dark;
 }
