@@ -150,6 +150,19 @@ function CoderShell() {
         {/* ── ESQUERDA: chat com histórico ── */}
         <aside className="flex min-h-0 w-full shrink-0 flex-col border-b border-border bg-surface md:h-full md:w-[380px] md:border-b-0 md:border-r dark:bg-surface-2">
           <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("open-sidebar-menu"));
+                }
+              }}
+              className="lg:hidden flex items-center justify-center size-8 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors -ml-2 mr-1"
+              aria-label="Abrir menu lateral"
+              title="Abrir menu"
+            >
+              <span className="material-symbols-outlined text-[20px]">menu</span>
+            </button>
             <span className="material-symbols-outlined text-base text-brand-500">code</span>
             <h2 className="truncate text-sm font-bold">Coder — {coderProjectName}</h2>
           </header>

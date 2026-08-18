@@ -21,18 +21,18 @@ const COMBINED_WEB_ITEM = {
   href: "/dashboard/media-providers/web",
 };
 
-// 🏛️ Estrutura de Módulos (Estilo ERP Olist / Double-Column Sidebar)
+// 🏛️ Estrutura de Módulos (Estilo ERP Olist / Double-Column & Minimizable)
 const MODULES = [
   {
     id: "lucas",
     label: "agente lucas",
     shortLabel: "Lucas",
     icon: "smart_toy",
+    badge: "IA",
     items: [
       { href: "/chat", label: "Chat do Lucas", icon: "forum", desc: "Atendimento autônomo e memória" },
       { href: "/coder", label: "Coder do Lucas", icon: "code", desc: "IDE inteligente do Agente" },
       { href: "/dashboard", label: "Painel do Lucas", icon: "dashboard_customize", desc: "Status, métricas e canais" },
-      { href: "/dashboard/painel", label: "Hábitos & Progresso", icon: "psychology", desc: "Hábitos, humor, metas e estudos" },
     ],
   },
   {
@@ -100,15 +100,19 @@ export default function Sidebar({ onClose }) {
   const pathname = usePathname();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [activeFlyout, setActiveFlyout] = useState(null);
 
   // Determina qual módulo está ativo a partir da rota atual
   const initialActiveModule = useMemo(() => {
     for (const mod of MODULES) {
-      if (mod.items.some((item) => {
-        if (item.href === "/dashboard") return pathname === "/dashboard";
-        if (item.href === "/") return pathname === "/";
-        return pathname.startsWith(item.href);
-      })) {
+      if (
+        mod.items.some((item) => {
+          if (item.href === "/dashboard") return pathname === "/dashboard";
+          if (item.href === "/") return pathname === "/";
+          return pathname.startsWith(item.href);
+        })
+      ) {
         return mod.id;
       }
     }
@@ -119,7 +123,6 @@ export default function Sidebar({ onClose }) {
   }, [pathname]);
 
   const [selectedModuleId, setSelectedModuleId] = useState(initialActiveModule);
-  const [isSubmenuOpen, setIsSubmenuOpen] = useState(true);
   const [mediaOpen, setMediaOpen] = useState(false);
 
   // Modals & Updater states
@@ -135,9 +138,9 @@ export default function Sidebar({ onClose }) {
   useEffect(() => {
     setMounted(true);
     try {
-      const savedSubmenu = localStorage.getItem("9router_sidebar_submenu_open");
-      if (savedSubmenu !== null) {
-        setIsSubmenuOpen(savedSubmenu === "true");
+      const savedCollapsed = localStorage.getItem("9router_sidebar_collapsed");
+      if (savedCollapsed !== null) {
+        setIsCollapsed(savedCollapsed === "true");
       }
     } catch {}
   }, []);
@@ -167,11 +170,11 @@ export default function Sidebar({ onClose }) {
       .catch(() => {});
   }, []);
 
-  const toggleSubmenu = () => {
-    const next = !isSubmenuOpen;
-    setIsSubmenuOpen(next);
+  const toggleCollapse = () => {
+    const next = !isCollapsed;
+    setIsCollapsed(next);
     try {
-      localStorage.setItem("9router_sidebar_submenu_open", String(next));
+      localStorage.setItem("9router_sidebar_collapsed", String(next));
     } catch {}
   };
 
@@ -215,56 +218,153 @@ export default function Sidebar({ onClose }) {
 
   return (
     <>
-      <aside className="flex h-full min-h-full border-r border-border/80 bg-[#161616] dark:bg-[#121212] select-none text-text-main">
+      <aside
+        className={cn(
+          "flex h-full min-h-full border-r border-border/80 bg-[#161616] dark:bg-[#121212] select-none text-text-main transition-all duration-300 ease-in-out relative z-30",
+          isCollapsed ? "w-[70px]" : "w-auto"
+        )}
+      >
         {/* ========================================================================= */}
-        {/* 1️⃣ COLUNA ESQUERDA: RAIL DE MÓDULOS (ESTILO OLIST)                       */}
+        {/* 1️⃣ COLUNA ESQUERDA: RAIL DE MÓDULOS (ESTILO OLIST / OU MODO ÍCONES)       */}
         {/* ========================================================================= */}
-        <div className="flex flex-col w-48 sm:w-52 shrink-0 py-4 pl-3.5 pr-2 bg-[#161616] dark:bg-[#121212] justify-between border-r border-border/40">
-          <div>
-            {/* Top Logo + Hamburger Toggle */}
-            <div className="flex items-center justify-between gap-2 px-1 mb-5">
-              <Link href="/dashboard" className="flex items-center gap-2 group min-w-0">
-                <div className="flex items-center justify-center size-8 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 text-white shadow-md shadow-brand-500/25 group-hover:scale-105 transition-transform">
-                  <span className="material-symbols-outlined text-[18px]">hub</span>
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-sm font-display font-extrabold tracking-tight text-white truncate">
-                    {APP_CONFIG.name}
+        <div
+          className={cn(
+            "flex flex-col shrink-0 py-4 bg-[#161616] dark:bg-[#121212] justify-between transition-all duration-300",
+            isCollapsed
+              ? "w-[70px] px-2 items-center"
+              : "w-48 sm:w-52 pl-3.5 pr-2 border-r border-border/40"
+          )}
+        >
+          <div className="w-full">
+            {/* Top Logo + Toggle Minimize/Expand Button */}
+            {!isCollapsed ? (
+              <div className="flex items-center justify-between gap-2 px-1 mb-5">
+                <Link href="/dashboard" className="flex items-center gap-2 group min-w-0">
+                  <div className="flex items-center justify-center size-8 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 text-white shadow-md shadow-brand-500/25 group-hover:scale-105 transition-transform">
+                    <span className="material-symbols-outlined text-[18px]">hub</span>
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-display font-extrabold tracking-tight text-white truncate">
+                      {APP_CONFIG.name}
+                    </span>
+                    <span className="text-[10px] text-text-muted font-medium">v{APP_CONFIG.version}</span>
+                  </div>
+                </Link>
+
+                {/* Botão Minimizar Completo (Recolhe para Apenas Ícones) */}
+                <button
+                  type="button"
+                  onClick={toggleCollapse}
+                  className="flex items-center justify-center size-8 rounded-full border border-border/60 bg-surface text-text-muted hover:text-brand-500 hover:border-brand-500/40 hover:bg-surface-2 transition-all shadow-sm"
+                  title="Minimizar menu lateral (somente ícones)"
+                >
+                  <span className="material-symbols-outlined text-[18px]">left_panel_close</span>
+                </button>
+              </div>
+            ) : (
+              /* Top no Modo Minimizado (Apenas Ícone com Botão de Expandir) */
+              <div className="flex flex-col items-center mb-5 gap-2">
+                <button
+                  type="button"
+                  onClick={toggleCollapse}
+                  className="flex items-center justify-center size-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 text-white shadow-md shadow-brand-500/20 hover:scale-105 transition-all group"
+                  title="Expandir menu lateral"
+                >
+                  <span className="material-symbols-outlined text-[20px] group-hover:rotate-180 transition-transform duration-300">
+                    right_panel_open
                   </span>
-                  <span className="text-[10px] text-text-muted font-medium">v{APP_CONFIG.version}</span>
-                </div>
-              </Link>
+                </button>
+              </div>
+            )}
 
-              {/* Botão Hambúrguer Redondo (Toggle Submenu Drawer) */}
-              <button
-                type="button"
-                onClick={toggleSubmenu}
-                className={cn(
-                  "flex items-center justify-center size-8 rounded-full border border-border/60 transition-all shadow-sm",
-                  isSubmenuOpen
-                    ? "bg-surface-2 text-brand-500 border-brand-500/40"
-                    : "bg-surface text-text-muted hover:text-text-main hover:bg-surface-2"
-                )}
-                title={isSubmenuOpen ? "Recolher submenus" : "Expandir submenus"}
-              >
-                <span className="material-symbols-outlined text-[18px]">
-                  {isSubmenuOpen ? "menu_open" : "menu"}
-                </span>
-              </button>
-            </div>
-
-            {/* Lista Principal de Módulos (Estilo Abas Arredondadas Olist) */}
-            <nav className="space-y-1">
+            {/* Lista de Módulos (Modo Completo vs Modo Ícones) */}
+            <nav className={cn("space-y-1 w-full", isCollapsed && "flex flex-col items-center")}>
               {MODULES.map((mod) => {
                 const isSelected = selectedModuleId === mod.id;
+
+                if (isCollapsed) {
+                  // Renderização no Modo Minimizado (Ícone Centrado + Flyout Popover no Hover)
+                  return (
+                    <div
+                      key={mod.id}
+                      className="relative my-0.5"
+                      onMouseEnter={() => setActiveFlyout(mod.id)}
+                      onMouseLeave={() => setActiveFlyout(null)}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedModuleId(mod.id);
+                          toggleCollapse();
+                        }}
+                        className={cn(
+                          "flex items-center justify-center size-11 rounded-xl transition-all relative group",
+                          isSelected
+                            ? "bg-brand-500/15 text-brand-500 font-bold shadow-sm"
+                            : "text-text-muted hover:text-text-main hover:bg-surface-2"
+                        )}
+                        title={mod.label}
+                      >
+                        {isSelected && (
+                          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-brand-500 rounded-r" />
+                        )}
+                        <span className="material-symbols-outlined text-[20px] group-hover:scale-110 transition-transform">
+                          {mod.icon}
+                        </span>
+                      </button>
+
+                      {/* Popover Flutuante no Hover do Modo Minimizado */}
+                      {activeFlyout === mod.id && (
+                        <div className="absolute left-[62px] top-0 z-50 w-52 p-2 bg-surface border border-border/80 rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+                          <div className="px-2.5 py-1.5 mb-1 border-b border-border/60 flex items-center justify-between">
+                            <span className="text-xs font-bold text-brand-500 uppercase tracking-wider">
+                              {mod.label}
+                            </span>
+                            {mod.badge && (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-brand-500/10 text-brand-500 font-semibold">
+                                {mod.badge}
+                              </span>
+                            )}
+                          </div>
+                          <div className="space-y-0.5">
+                            {mod.items.map((subItem) => {
+                              const subActive = isItemActive(subItem.href);
+                              return (
+                                <Link
+                                  key={subItem.href}
+                                  href={subItem.href}
+                                  onClick={() => {
+                                    setActiveFlyout(null);
+                                    if (onClose) onClose();
+                                  }}
+                                  className={cn(
+                                    "flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-xs transition-all",
+                                    subActive
+                                      ? "bg-brand-500/15 text-brand-500 font-bold"
+                                      : "text-text-muted hover:text-text-main hover:bg-surface-2"
+                                  )}
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">
+                                    {subItem.icon}
+                                  </span>
+                                  <span className="truncate">{subItem.label}</span>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Renderização no Modo Expandido (Estilo Abas Arredondadas Olist)
                 return (
                   <button
                     key={mod.id}
                     type="button"
                     onClick={() => {
                       setSelectedModuleId(mod.id);
-                      if (!isSubmenuOpen) setIsSubmenuOpen(true);
-                      // Se for Agente Lucas ou rota direta, navega se já estiver selecionado
                       if (mod.id === "lucas" && isSelected) {
                         router.push("/chat");
                         if (onClose) onClose();
@@ -299,75 +399,95 @@ export default function Sidebar({ onClose }) {
             </nav>
           </div>
 
-          {/* Rodapé da Coluna Esquerda: Links Rápidos + Ícones de Ação */}
-          <div className="pt-4 border-t border-border/40 space-y-3">
-            {/* Links Secundários */}
-            <div className="space-y-0.5 px-1 text-xs">
-              <Link
-                href="/dashboard/profile"
-                onClick={onClose}
-                className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors"
-              >
-                <span className="material-symbols-outlined text-[15px]">settings</span>
-                <span className="text-[12px]">configurações</span>
-              </Link>
+          {/* Rodapé da Coluna Esquerda */}
+          <div className={cn("pt-4 border-t border-border/40 w-full space-y-3", isCollapsed && "items-center flex flex-col")}>
+            {!isCollapsed ? (
+              <>
+                <div className="space-y-0.5 px-1 text-xs">
+                  <Link
+                    href="/dashboard/profile"
+                    onClick={onClose}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">settings</span>
+                    <span className="text-[12px]">configurações</span>
+                  </Link>
 
-              <button
-                type="button"
-                onClick={() => setShowRemoteModal(true)}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors text-left"
-              >
-                <span className="material-symbols-outlined text-[15px]">computer</span>
-                <span className="text-[12px]">acesso remoto</span>
-              </button>
-
-              <Link
-                href="/dashboard/skills"
-                onClick={onClose}
-                className="flex items-center justify-between px-2 py-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[15px] text-brand-500">auto_awesome</span>
-                  <span className="text-[12px]">agentes de IA</span>
-                </div>
-                <span className="text-[9px] px-1 py-0.2 rounded bg-brand-500/10 text-brand-500 font-semibold">
-                  em breve
-                </span>
-              </Link>
-            </div>
-
-            {/* Quick Actions no Rodapé (Theme, Update, User) */}
-            <div className="flex items-center justify-between px-2 pt-2 border-t border-border/40">
-              <div className="flex items-center gap-1.5">
-                <ThemeToggle />
-                {updateInfo && (
                   <button
                     type="button"
-                    onClick={() => setShowUpdateModal(true)}
-                    className="flex items-center justify-center size-7 rounded-full bg-brand-500/15 text-brand-500 hover:scale-105 transition-all"
-                    title={`Atualização disponível: v${updateInfo.latestVersion}`}
+                    onClick={() => setShowRemoteModal(true)}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors text-left"
                   >
-                    <span className="material-symbols-outlined text-[14px]">system_update</span>
+                    <span className="material-symbols-outlined text-[15px]">computer</span>
+                    <span className="text-[12px]">acesso remoto</span>
                   </button>
-                )}
-              </div>
 
-              {/* User Avatar Mini */}
-              <Link
-                href="/dashboard/profile"
-                className="flex items-center justify-center size-7 rounded-full bg-brand-500/20 text-brand-500 font-bold text-xs border border-brand-500/30 hover:scale-105 transition-all"
-                title="Perfil do Usuário"
-              >
-                L
-              </Link>
-            </div>
+                  <Link
+                    href="/dashboard/skills"
+                    onClick={onClose}
+                    className="flex items-center justify-between px-2 py-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[15px] text-brand-500">auto_awesome</span>
+                      <span className="text-[12px]">agentes de IA</span>
+                    </div>
+                    <span className="text-[9px] px-1 py-0.2 rounded bg-brand-500/10 text-brand-500 font-semibold">
+                      em breve
+                    </span>
+                  </Link>
+                </div>
+
+                <div className="flex items-center justify-between px-2 pt-2 border-t border-border/40">
+                  <div className="flex items-center gap-1.5">
+                    <ThemeToggle />
+                    {updateInfo && (
+                      <button
+                        type="button"
+                        onClick={() => setShowUpdateModal(true)}
+                        className="flex items-center justify-center size-7 rounded-full bg-brand-500/15 text-brand-500 hover:scale-105 transition-all"
+                        title={`Atualização: v${updateInfo.latestVersion}`}
+                      >
+                        <span className="material-symbols-outlined text-[14px]">system_update</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <Link
+                    href="/dashboard/profile"
+                    className="flex items-center justify-center size-7 rounded-full bg-brand-500/20 text-brand-500 font-bold text-xs border border-brand-500/30 hover:scale-105 transition-all"
+                    title="Perfil do Usuário"
+                  >
+                    L
+                  </Link>
+                </div>
+              </>
+            ) : (
+              /* Rodapé Modo Minimizado */
+              <div className="flex flex-col items-center gap-2">
+                <Link
+                  href="/dashboard/profile"
+                  className="flex items-center justify-center size-9 rounded-xl text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors"
+                  title="Configurações"
+                >
+                  <span className="material-symbols-outlined text-[18px]">settings</span>
+                </Link>
+                <ThemeToggle />
+                <Link
+                  href="/dashboard/profile"
+                  className="flex items-center justify-center size-8 rounded-full bg-brand-500/20 text-brand-500 font-bold text-xs border border-brand-500/30 hover:scale-105 transition-all mt-1"
+                  title="Perfil"
+                >
+                  L
+                </Link>
+              </div>
+            )}
           </div>
         </div>
 
         {/* ========================================================================= */}
         {/* 2️⃣ COLUNA DIREITA: DRAWER DE SUBMENUS (ESTILO OLIST)                       */}
         {/* ========================================================================= */}
-        {isSubmenuOpen && (
+        {!isCollapsed && (
           <div className="flex flex-col w-56 sm:w-60 bg-surface dark:bg-[#1a1a1a] py-4 px-3.5 border-r border-border/60 transition-all duration-200 animate-in fade-in slide-in-from-left-2 overflow-y-auto custom-scrollbar">
             {/* Header do Submenu com Título da Categoria */}
             <div className="px-2 pb-3 mb-2 border-b border-border/50">

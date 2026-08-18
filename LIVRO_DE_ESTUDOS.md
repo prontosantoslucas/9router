@@ -1628,6 +1628,26 @@ Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encod
 
 ---
 
+### Capítulo 77: Remoção do Botão Voltar, Chat em Tela Cheia Nativa e Minimização Total da Sidebar em Trilho
+
+* **Por que foi feita essa alteração (Causa Raiz & Requisitos do Usuário)**:
+  1. **Poluição Visual e Cabeçalho Duplo**: O botão "Voltar" no cabeçalho superior do desktop era desnecessário e ocupava espaço vertical no chat e no coder, criando um topo com dois cabeçalhos empilhados.
+  2. **Chat em Tela Cheia e Mobile Limpo**: No mobile e no desktop, o chat do Agente Lucas precisava abrir em 100% da altura e largura da tela, com apenas o botão de abrir menu lateral no canto superior esquerdo no mobile.
+  3. **Comportamento Incompleto do Botão Minimizar**: O botão de minimizar anterior apenas ocultava o drawer da segunda coluna de submenus, mantendo a primeira coluna larga (~200px), em vez de recolher a barra lateral inteira em um trilho compacto de ícones (`w-[70px]`).
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Remoção do Cabeçalho Global no Chat e Botão Voltar**:
+     - No [DashboardLayout.js](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/layouts/DashboardLayout.js), adicionada verificação `isFullScreenView` para rotas como `/chat` e `/coder`, impedindo a renderização do `<Header />` global duplicado e permitindo que o chat ocupe 100% da área útil.
+     - No [Header.js](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/Header.js), removido o botão "Voltar" de todas as rotas do painel.
+  2. **Integração de Menu Mobile Nativo no Chat**:
+     - Em [ChatPageClient.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/chat/ChatPageClient.jsx) e [CoderPageClient.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/coder/CoderPageClient.jsx), adicionado o botão hambúrguer mobile (`lg:hidden`) integrado diretamente no cabeçalho nativo do chat disparando o evento `open-sidebar-menu`.
+  3. **Minimização Total da Barra Lateral em Trilho (`w-[70px]`)**:
+     - No [Sidebar.js](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/Sidebar.js), o botão de minimizar agora recolhe a barra lateral inteira para um trilho compacto de 70px (`isCollapsed = true`).
+     - No modo minimizado, exibe os ícones centralizados com indicador luminoso na rota ativa e menus flutuantes (*flyouts popovers*) ao passar o mouse sobre cada módulo para acesso instantâneo aos sub-itens.
+     - O estado é persistido em `localStorage` (`9router_sidebar_collapsed`).
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 

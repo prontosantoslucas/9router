@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useNotificationStore } from "@/store/notificationStore";
 import Sidebar from "../Sidebar";
@@ -37,6 +37,17 @@ export default function DashboardLayout({ children }) {
   const notifications = useNotificationStore((state) => state.notifications);
   const removeNotification = useNotificationStore((state) => state.removeNotification);
 
+  // Telas cheias que gerenciam seu próprio cabeçalho nativo (sem barra superior duplicada)
+  const isFullScreenView = ["/dashboard/basic-chat", "/chat", "/coder"].some((p) =>
+    pathname.startsWith(p)
+  );
+
+  useEffect(() => {
+    const handleOpen = () => setSidebarOpen(true);
+    window.addEventListener("open-sidebar-menu", handleOpen);
+    return () => window.removeEventListener("open-sidebar-menu", handleOpen);
+  }, []);
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-bg">
       <div className="fixed top-4 right-4 z-[80] flex w-[min(92vw,380px)] flex-col gap-2">
@@ -68,16 +79,17 @@ export default function DashboardLayout({ children }) {
           );
         })}
       </div>
+
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/20 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden animate-in fade-in"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar - Desktop */}
-      <div className="hidden lg:flex">
+      <div className="hidden lg:flex shrink-0">
         <Sidebar />
       </div>
 
@@ -94,9 +106,18 @@ export default function DashboardLayout({ children }) {
       <main className="flex flex-col flex-1 h-full min-w-0 relative transition-colors duration-300 isolate">
         {/* Faint grid background */}
         <div className="landing-grid absolute inset-0 pointer-events-none -z-10" aria-hidden="true" />
-        <Header key={pathname} onMenuClick={() => setSidebarOpen(true)} />
-        <div className={`flex-1 overflow-y-auto custom-scrollbar ${["/dashboard/basic-chat", "/chat", "/coder"].some((p) => pathname.startsWith(p)) ? "" : "p-6 lg:p-10"} ${["/dashboard/basic-chat", "/chat", "/coder"].some((p) => pathname.startsWith(p)) ? "flex flex-col overflow-hidden" : ""}`}>
-          <div className={`${["/dashboard/basic-chat", "/chat", "/coder"].some((p) => pathname.startsWith(p)) ? "flex-1 w-full h-full flex flex-col" : "max-w-7xl mx-auto"}`}>{children}</div>
+        
+        {/* Renderiza Header global somente em páginas que não são chat/coder de tela cheia */}
+        {!isFullScreenView && <Header key={pathname} onMenuClick={() => setSidebarOpen(true)} />}
+
+        <div
+          className={`flex-1 overflow-y-auto custom-scrollbar ${
+            isFullScreenView ? "flex flex-col overflow-hidden p-0" : "p-6 lg:p-10"
+          }`}
+        >
+          <div className={isFullScreenView ? "flex-1 w-full h-full flex flex-col" : "max-w-7xl mx-auto"}>
+            {children}
+          </div>
         </div>
       </main>
     </div>

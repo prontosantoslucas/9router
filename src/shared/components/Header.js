@@ -242,7 +242,7 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
 
   return (
     <header className="shrink-0 flex items-center justify-between gap-3 px-4 lg:px-6 py-2.5 border-b border-border/80 bg-surface/70 backdrop-blur-xl z-20">
-      {/* Mobile menu button & Back Button */}
+      {/* Mobile menu button */}
       <div className="flex items-center gap-2 shrink-0">
         {showMenuButton && (
           <button
@@ -251,25 +251,6 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
             aria-label="Abrir menu"
           >
             <span className="material-symbols-outlined text-[20px]">menu</span>
-          </button>
-        )}
-        {canGoBack && (
-          <button
-            type="button"
-            onClick={() => {
-              if (window.history.length > 1) {
-                router.back();
-              } else {
-                router.push("/dashboard");
-              }
-            }}
-            className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/80 bg-surface-2/80 hover:bg-surface-3 hover:border-brand-500/40 text-text-muted hover:text-brand-500 text-xs font-semibold transition-all active:scale-95 shadow-sm"
-            title="Voltar para a página anterior"
-          >
-            <span className="material-symbols-outlined text-[16px] text-brand-500 group-hover:-translate-x-0.5 transition-transform duration-150">
-              arrow_back
-            </span>
-            <span className="hidden sm:inline">Voltar</span>
           </button>
         )}
       </div>
