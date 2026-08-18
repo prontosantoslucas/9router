@@ -1557,5 +1557,77 @@ Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encod
 
 ---
 
+### Capítulo 74: Correção de Conectividade do Provedor MaxRouter no OpenCode (Erro "Not Found: Application not found")
+
+* **Por que deu esse problema (Causa Raiz Detalhada)**:
+  1. **Endpoint Descontinuado no Railway**: No arquivo de configuração global do OpenCode (`C:\Users\user\.config\opencode\opencode.json`), o provedor `maxrouter` estava configurado com o `baseURL` apontando para `https://maxrouter-prod.up.railway.app/v1`.
+  2. Como o serviço/domínio `maxrouter-prod` foi desativado no Railway e unificado em `https://maxrouter.up.railway.app/v1`, qualquer requisição enviada pelo OpenCode recebia `HTTP 404 {"status":"error","code":404,"message":"Application not found"}` diretamente da infraestrutura do Railway.
+  3. No chat do OpenCode, a interface exibia em vermelho o erro: `Not Found: Application not found`.
+  4. Além disso, o catálogo de modelos cadastrado em `opencode.json` continha entradas que não mapeavam para modelos reais no backend (ex: `free-forever` que não é ID de modelo no gateway).
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Atualização do `baseURL` no OpenCode**:
+     - No arquivo `C:\Users\user\.config\opencode\opencode.json`, alteramos `provider.maxrouter.options.baseURL` de `https://maxrouter-prod.up.railway.app/v1` para `https://maxrouter.up.railway.app/v1`.
+  2. **Configuração e Validação dos Modelos Ativos**:
+     - Atualizamos a lista de modelos (`provider.maxrouter.models`) com os modelos validados e disponíveis no gateway:
+       - `auto`: Modo de fallback inteligente gerenciado pelo 9Router / MaxRouter.
+       - `MaxRouter-Ranking`: Alias para o modelo auto com ranking prioritário.
+       - `kr/claude-sonnet-4.5`: Claude 3.7 / 4.5 Sonnet via Kiro.
+       - `kr/glm-5`: GLM-5 via Kiro.
+       - `kr/deepseek-3.2`: DeepSeek V3 / 3.2 via Kiro.
+       - `kr/qwen3-coder-next`: Qwen3 Coder Next via Kiro.
+       - `nvidia/minimaxai/minimax-m3`: MiniMax M3 via NVIDIA.
+  3. **Verificação de Saúde via API**:
+     - Testamos as rotas `/v1/models` e `/v1/chat/completions` com a API Key configurada (`sk-ea45f906b3056e8c-1bpca8-c2a94ffa`), validando que as respostas de streaming (`SSE`) e respostas pontuais retornam `HTTP 200` com sucesso imediato.
+
+---
+
+### Capítulo 75: Reestruturação da Sidebar Lateral (Retrátil, Submenus Agrupados e Agente Lucas no Topo)
+
+* **Por que deu esse problema (Causa Raiz & Motivação Técnica)**:
+  1. **Lista Longa e Desorganizada**: A barra lateral original listava mais de 15 rotas em um fluxo vertical plano sem agrupamento semântico, gerando poluição visual, rolagem desnecessária e dificuldade de localização de ferramentas.
+  2. **Posicionamento Subótimo do Agente**: O bloco do Agente Lucas (*Chat do Lucas*, *Coder do Lucas*, *Painel do Lucas*) ficava posicionado na parte inferior da barra lateral, forçando o usuário a rolar até o final da tela para acessar as funções mais usadas do sistema.
+  3. **Falta de Modo Retrátil (Icon-Only Rail)**: A barra lateral ocupava largura fixa de 240px (`w-60`), consumindo espaço valioso da tela em telas menores e em interfaces de chat/código.
+  4. **Duplicação Visual do Botão "Voltar" e Cabeçalho**: Na tela de chat (`/chat`), o cabeçalho global renderizava um botão "Voltar" isolado empilhado acima do cabeçalho próprio do Agente Lucas, causando poluição e desalinhamento visual.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Menu Lateral Retrátil (Collapse / Expand)**:
+     - Criado estado `isCollapsed` com persistência em `localStorage` (`9router_sidebar_collapsed`) no componente [Sidebar.js](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/Sidebar.js).
+     - No modo recolhido (`w-[72px]`), a barra lateral exibe apenas os ícones centralizados com borda iluminada para a rota ativa (`bg-brand-500 rounded-r`) e menus flutuantes (*flyout popovers*) no hover para acesso imediato a qualquer sub-item.
+     - No modo expandido (`w-64`), exibe títulos de categorias, badges contextuais (`PRO`, `Live`, `IDE`, `Admin`) e acordeões retráteis.
+  2. **Promoção do Bloco Agente Lucas ao Topo**:
+     - O bloco **Agente Lucas** foi movido para a primeira posição da navegação logo abaixo do logotipo, com destaque visual em gradiente esmeralda (`from-brand-500 to-brand-600`), badge pulsante e rotas diretas para `/chat`, `/coder` e `/dashboard`.
+  3. **Agrupamento Semântico com Submenus e Linhas Guias**:
+     - Todos os itens do sistema foram organizados em 5 grupos lógicos:
+       - ⚡ *Roteamento & Gateway* (Endpoint, Provedores, Combinações, Proxy Pools)
+       - 📊 *Métricas & Análise* (Telemetria, Consumo & Usage, Analytics, Scanner)
+       - 🧪 *IA Labs & Ferramentas* (Playground A/B, RAG Documentos, Skills, Token Saver, CLI Tools)
+       - 💼 *Negócios & Gestão* (Billing & Planos, CRM de Clientes)
+       - ⚙️ *Sistema & Ajustes* (Quotas, Notion Sync, Console Log, Media Providers, Configurações)
+     - Cada seção possui acordeão com linhas guias verticais e auto-expansão baseada na rota ativa (`usePathname()`).
+  4. **Ajuste e Refinamento do Botão "Voltar"**:
+     - No [Header.js](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/Header.js), o botão de retorno foi reformulado para o estilo *pill* moderno (`rounded-full px-3 py-1.5`), com micro-animação no hover (`arrow_back` com slide lateral), borda translúcida e mapeamento correto dos títulos de página para `/chat` e `/coder`.
+
+---
+
+### Capítulo 76: Implementação do Layout de Barra Lateral em Duas Colunas (Padrão Master-Detail / ERP Olist)
+
+* **Por que foi feita essa alteração (Causa Raiz & Inspiração de Design)**:
+  1. **Necessidade de Densidade e Clareza Visual**: Em sistemas de gestão de IA com múltiplos módulos (Agente, Gateway, Telemetria, Labs, Billing, Sistema), o menu vertical tradicional cria uma árvore vertical longa e fragmentada.
+  2. **Adoção do Padrão Olist ERP (2 Colunas)**: O design de referência da Olist utiliza uma **Coluna 1 (Rail de Módulos)** para alternar entre as grandes áreas do sistema com abas conectadas e indicador de ponto ativo (`•`), e uma **Coluna 2 (Drawer de Submenus)** que exibe a lista limpa e arejada das ações do módulo selecionado.
+  3. **Controle Dinâmico de Espaço em Tela**: O botão hambúrguer circular (`☰`) permite recolher a segunda coluna com 1 clique, liberando até 240px a mais de largura para visualização de código, logs e chats em telas cheias.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Arquitetura de Duas Colunas em [Sidebar.js](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/Sidebar.js)**:
+     - **Coluna 1 (`w-48 sm:w-52`)**: Rail escuro com o logotipo, botão hambúrguer `☰` no topo, módulos principais em cards arredondados (`rounded-l-2xl rounded-r-lg`) com ponto ativo (`size-1.5 bg-brand-500`), links de rodapé (`configurações`, `acesso remoto`, `agentes de IA — em breve`) e barra inferior com ThemeToggle e Avatar do usuário.
+     - **Coluna 2 (`w-56 sm:w-60`)**: Painel de submenus deslizante (`isSubmenuOpen`) com cabeçalho do módulo ativo e lista de itens detalhados com ícones minimalistas, hover suave e seleção destacada (`bg-brand-500/15 text-brand-500 font-bold`).
+  2. **Sincronização de Estado Automática**:
+     - O módulo ativo no Rail é detectado dinamicamente com base na rota atual (`usePathname()`). Ao navegar, a segunda coluna se atualiza automaticamente para refletir o contexto correto da página.
+  3. **Persistência de Preferência**:
+     - O estado do drawer (`9router_sidebar_submenu_open`) é persistido no `localStorage`.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
 

@@ -241,7 +241,12 @@ const TOOLS = {
       try { ps = require("../channels/push/pushSender").status(); } catch (e) { out.push(`pushSender indisponivel: ${e.message}`); }
       if (ps?.configured) {
         out.push(`Push dedicado: ${ps.provider} configurado (${JSON.stringify(ps).slice(0, 200)}).`);
-        out.push("Resultado: o push vai direto para o app no celular. O Telegram abaixo e so rede de seguranca.");
+        out.push("Resultado: o push sai para o topico. O Telegram abaixo e so rede de seguranca.");
+        // Armadilha real: o servidor aceita a publicacao mesmo sem ninguem
+        // inscrito, devolve 200, e o fallback do Telegram NUNCA dispara. Como
+        // nao existe API para consultar assinantes de topico publico, o unico
+        // remedio honesto e avisar que sucesso de envio nao prova recebimento.
+        out.push("ATENCAO: o servidor aceita a publicacao mesmo sem nenhum aparelho inscrito no topico — envio com sucesso NAO prova que voce recebeu. Confirme que o app de push no celular esta inscrito neste mesmo topico.");
       } else {
         out.push(`Push dedicado: NAO configurado. ${ps?.hint || ""}`);
       }
@@ -1621,6 +1626,140 @@ const PROSPECTOR_TOOLS = {
           : "Nao achei o item " + args.item_id + ".");
       }
       return out.length ? out.join("\n") : "Nada para registrar. Informe minutos, item_id ou a data de inicio.";
+    },
+  },
+  habitos_status: {
+    name: "habitos_status",
+    desc: "Mostra os habitos rastreados: se foram feitos hoje, a sequencia atual, a melhor sequencia e a aderencia da semana. Use quando o usuario perguntar como esta indo nos habitos, ou antes de cobrar algo dele.",
+    args: { type: "object", properties: {} },
+    run: async () => {
+      const H = require("../autonomous/habits");
+      const hs = H.resumo({ dias: 30 });
+      if (!hs.length) return "Nenhum habito cadastrado ainda. Use habito_criar para comecar — sem registro nao ha o que acompanhar.";
+      const out = [];
+      for (const h of hs) {
+        const marca = h.hoje === "feito" ? "feito hoje" : h.hoje === "falhou" ? "NAO feito hoje" : "hoje ainda em aberto";
+        if (h.tipo === "semanal") {
+          out.push(`- ${h.nome} (semanal): ${h.na_semana}/${h.meta_semanal} nesta semana — ${marca}`);
+        } else {
+          out.push(`- ${h.nome}: sequencia de ${h.streak} dia(s) (melhor: ${h.melhor_streak}), ${h.na_semana}/7 na semana — ${marca}`);
+        }
+      }
+      const pend = H.pendentesHoje();
+      if (pend.length) out.push("", "Ainda sem resposta hoje: " + pend.map((x) => x.nome).join(", ") + ".");
+      return out.join("\n");
+    },
+  },
+  habito_criar: {
+    name: "habito_criar",
+    desc: "Cadastra um habito para rastrear. Use tipo semanal com meta quando a frequencia nao e diaria (ex.: academia 3x por semana) — habito semanal medido por sequencia diaria fica sempre quebrado.",
+    args: {
+      type: "object",
+      properties: {
+        nome: { type: "string" },
+        tipo: { type: "string", description: "diario (default) ou semanal" },
+        meta_semanal: { type: "number", description: "Quantas vezes por semana, quando tipo=semanal" },
+      },
+      required: ["nome"],
+    },
+    run: async (args = {}) => {
+      const H = require("../autonomous/habits");
+      const r = H.criar({ nome: args.nome, tipo: args.tipo, metaSemanal: args.meta_semanal });
+      if (r.reativado) return `"${args.nome}" voltou a ser rastreado — o historico antigo de check-ins foi preservado.`;
+      if (!r.novo) return `"${args.nome}" ja estava cadastrado.`;
+      return `Habito "${args.nome}" criado. Marque com habito_marcar quando fizer.`;
+    },
+  },
+  habito_marcar: {
+    name: "habito_marcar",
+    desc: "Marca um habito como feito ou nao feito num dia. Aceita o nome parcial. Marcar como nao feito e diferente de nao responder: so o registro explicito quebra a sequencia.",
+    args: {
+      type: "object",
+      properties: {
+        nome: { type: "string", description: "Nome (ou parte) do habito" },
+        feito: { type: "boolean", description: "true = fez (default), false = registrou que nao fez" },
+        ymd: { type: "string", description: "Dia AAAA-MM-DD. Vazio = hoje." },
+        nota: { type: "string" },
+      },
+      required: ["nome"],
+    },
+    run: async (args = {}) => {
+      const H = require("../autonomous/habits");
+      const h = H.porNome(args.nome);
+      if (!h) return `Nao achei habito com "${args.nome}". Os cadastrados: ` + (H.listar().map((x) => x.nome).join(", ") || "nenhum") + ".";
+      const feito = args.feito === false ? false : true;
+      H.marcar(h.id, feito, { ymd: args.ymd || null, nota: args.nota || null });
+      if (!feito) return `Registrado que "${h.nome}" nao foi feito. Sequencia zerada — errar um dia e dado, nao fracasso.`;
+      const s = h.tipo === "diario" ? H.streak(h.id) : null;
+      return s != null
+        ? `"${h.nome}" marcado. Sequencia: ${s} dia(s).`
+        : `"${h.nome}" marcado. ${H.naSemana(h.id)}/${h.meta_semanal} nesta semana.`;
+    },
+  },
+  humor_registrar: {
+    name: "humor_registrar",
+    desc: "Registra o humor do dia de 1 a 5, com nota opcional. Base do mapa de humor da semana — sem registro, qualquer leitura sobre estar melhor ou pior e chute.",
+    args: {
+      type: "object",
+      properties: {
+        score: { type: "number", description: "1 (muito ruim) a 5 (muito bom)" },
+        nota: { type: "string", description: "O que marcou o dia" },
+        ymd: { type: "string", description: "Dia AAAA-MM-DD. Vazio = hoje." },
+      },
+      required: ["score"],
+    },
+    run: async (args = {}) => {
+      const mentor = require("../autonomous/mentor");
+      const painel = require("../autonomous/painel");
+      const r = mentor.registrarHumor(args.score, args.nota || null, args.ymd || null);
+      const m = painel.mapaHumor(14);
+      const linhas = [`Humor de ${r.ymd || "hoje"} registrado: ${r.score}/5.`];
+      if (m.media != null) linhas.push(`Media dos ultimos 14 dias: ${m.media}/5 em ${m.dias_registrados} registro(s).`);
+      // Só afirma tendência quando as duas metades da janela têm dado.
+      if (m.tendencia) linhas.push(`Tendencia: ${m.tendencia}.`);
+      else linhas.push("Ainda nao da para dizer tendencia: falta registro em uma das metades do periodo.");
+      return linhas.join("\n");
+    },
+  },
+  painel_resumo: {
+    name: "painel_resumo",
+    desc: "Resumo do painel inteiro: habitos, humor, metas abertas, aprendizado (ingles e roadmap) e numeros de prospeccao. Use para dar um panorama ou preparar o toque da noite.",
+    args: { type: "object", properties: {} },
+    run: async () => {
+      const p = require("../autonomous/painel").tudo({ dias: 30 });
+      const out = [];
+      // Cada seção reporta o próprio erro: uma quebrada não apaga as outras.
+      const h = p.habitos.dados;
+      if (!p.habitos.ok) out.push(`Habitos: erro (${p.habitos.erro}).`);
+      else if (!h.length) out.push("Habitos: nenhum cadastrado.");
+      else out.push("Habitos: " + h.map((x) => `${x.nome} ${x.tipo === "semanal" ? x.na_semana + "/" + x.meta_semanal + " na semana" : x.streak + "d"}`).join(" · "));
+
+      const m = p.humor.dados;
+      if (p.humor.ok) {
+        out.push(m.media != null
+          ? `Humor: media ${m.media}/5 em ${m.dias_registrados} dia(s)${m.tendencia ? ", " + m.tendencia : ""}; ${m.dias_sem_registro} dia(s) sem registro.`
+          : "Humor: sem nenhum registro na janela.");
+      }
+
+      const mt = p.metas.dados;
+      if (p.metas.ok) {
+        const atrasadas = mt.abertos.filter((c) => c.atrasado).length;
+        out.push(`Metas: ${mt.abertos.length} aberta(s)${atrasadas ? ` (${atrasadas} atrasada(s))` : ""}, ${mt.fechados_7d.length} fechada(s) em 7 dias.`);
+      }
+
+      const ap = p.aprendizado.dados;
+      if (p.aprendizado.ok) {
+        out.push(`Ingles: ${ap.ingles.vocabulario} palavra(s), ${ap.ingles.consolidadas} consolidada(s), ${ap.ingles.para_revisar_hoje} para revisar hoje.`);
+        out.push(ap.roadmap.inicio
+          ? `Roadmap: mes ${ap.roadmap.mes} — ${ap.roadmap.modulo?.nome || "?"}; semana com ${ap.roadmap.semana.pctTecnico}% da meta tecnica e ${ap.roadmap.semana.pctIngles}% da de ingles.`
+          : "Roadmap: falta a data de inicio — sem ela nao da para dizer em que mes voce esta.");
+      }
+
+      const n = p.negocio.dados;
+      if (p.negocio.ok && n.leads_7d != null) {
+        out.push(`Prospeccao: ${n.leads_7d} lead(s) em 7 dias (${n.com_contato_7d ?? 0} com contato), ${n.enviadas_7d ?? 0} enviada(s), ${n.rascunhos ?? 0} rascunho(s) parado(s).`);
+      }
+      return out.join("\n");
     },
   },
   whatsapp_session_backup: {

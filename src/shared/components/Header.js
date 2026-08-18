@@ -167,11 +167,25 @@ const getPageInfo = (pathname) => {
       icon: "monitor",
       breadcrumbs: [],
     };
+  if (pathname === "/chat")
+    return {
+      title: "Chat do Lucas",
+      description: "Agente Lucas autônomo com memória e execução de ferramentas",
+      icon: "forum",
+      breadcrumbs: [],
+    };
+  if (pathname === "/coder")
+    return {
+      title: "Coder do Lucas",
+      description: "IDE Coder do Agente Lucas integrada nativamente",
+      icon: "code",
+      breadcrumbs: [],
+    };
   if (pathname === "/dashboard")
     return {
-      title: "Endpoint",
-      description: "API endpoint configuration",
-      icon: "api",
+      title: "Painel do Lucas",
+      description: "Status do Agente Lucas, métricas e canais",
+      icon: "smart_toy",
       breadcrumbs: [],
     };
   return { title: "", description: "", breadcrumbs: [] };
@@ -227,16 +241,16 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
   };
 
   return (
-    <header className="shrink-0 flex items-center justify-between gap-3 px-4 lg:px-8 pt-3 pb-2 border-b border-border-subtle bg-surface/60 backdrop-blur-xl lg:bg-transparent lg:backdrop-blur-none z-20">
+    <header className="shrink-0 flex items-center justify-between gap-3 px-4 lg:px-6 py-2.5 border-b border-border/80 bg-surface/70 backdrop-blur-xl z-20">
       {/* Mobile menu button & Back Button */}
       <div className="flex items-center gap-2 shrink-0">
         {showMenuButton && (
           <button
             onClick={onMenuClick}
-            className="lg:hidden text-text-main hover:text-primary transition-colors p-1"
+            className="lg:hidden flex items-center justify-center size-8 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors p-1"
             aria-label="Abrir menu"
           >
-            <span className="material-symbols-outlined">menu</span>
+            <span className="material-symbols-outlined text-[20px]">menu</span>
           </button>
         )}
         {canGoBack && (
@@ -249,10 +263,12 @@ export default function Header({ onMenuClick, showMenuButton = true }) {
                 router.push("/dashboard");
               }
             }}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-border bg-surface hover:bg-surface-2 text-text-muted hover:text-text-main text-xs font-semibold transition-all active:scale-95 shadow-soft"
+            className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/80 bg-surface-2/80 hover:bg-surface-3 hover:border-brand-500/40 text-text-muted hover:text-brand-500 text-xs font-semibold transition-all active:scale-95 shadow-sm"
             title="Voltar para a página anterior"
           >
-            <span className="material-symbols-outlined text-[16px] text-brand-500">arrow_back</span>
+            <span className="material-symbols-outlined text-[16px] text-brand-500 group-hover:-translate-x-0.5 transition-transform duration-150">
+              arrow_back
+            </span>
             <span className="hidden sm:inline">Voltar</span>
           </button>
         )}

@@ -237,6 +237,73 @@ app.post("/api/modules", (req, res) => {
   }
 });
 
+// ── Painel de hábitos, humor, metas e aprendizado ──
+// Leitura agregada num único GET: o front não precisa conhecer os seis módulos
+// que alimentam o painel, e cada seção carrega o próprio erro quando falha.
+app.get("/api/painel", (req, res) => {
+  try {
+    const dias = Math.min(Math.max(Number(req.query.dias) || 30, 7), 90);
+    res.json(require("./autonomous/painel").tudo({ dias }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/habitos", (req, res) => {
+  try {
+    const habits = require("./autonomous/habits");
+    res.json({ habitos: habits.resumo({ dias: 30 }), pendentes_hoje: habits.pendentesHoje() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/habitos", (req, res) => {
+  try {
+    const { nome, tipo, meta_semanal } = req.body || {};
+    if (!nome) return res.status(400).json({ error: "nome obrigatório" });
+    const r = require("./autonomous/habits").criar({ nome, tipo, metaSemanal: meta_semanal });
+    res.json({ ok: true, ...r });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Marcar/desmarcar o dia. `feito:false` é registro explícito de não feito, que
+// é diferente de ausência de resposta — e só o primeiro quebra a sequência.
+app.post("/api/habitos/:id/checkin", (req, res) => {
+  try {
+    const { feito = true, ymd = null, nota = null } = req.body || {};
+    const r = require("./autonomous/habits").marcar(req.params.id, !!feito, { ymd, nota });
+    if (!r) return res.status(404).json({ error: "hábito não encontrado" });
+    res.json({ ok: true, ...r });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/habitos/:id", (req, res) => {
+  try {
+    // Arquiva, não apaga: o histórico é o valor do rastreador.
+    const ok = require("./autonomous/habits").arquivar(req.params.id);
+    if (!ok) return res.status(404).json({ error: "hábito não encontrado" });
+    res.json({ ok: true, arquivado: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/humor", (req, res) => {
+  try {
+    const { score, nota = null, ymd = null } = req.body || {};
+    const n = Number(score);
+    if (!(n >= 1 && n <= 5)) return res.status(400).json({ error: "score deve ser de 1 a 5" });
+    res.json({ ok: true, ...require("./autonomous/mentor").registrarHumor(n, nota, ymd) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Endpoints de RAG e Base de Conhecimento Local ──
 const rag = require("./rag");
 
