@@ -1222,6 +1222,15 @@ async function start() {
     console.warn("[dailyInsights] falha ao iniciar:", err.message);
   }
 
+  // Mentor: devocional às 7h e fechamento do dia às 22h BRT. O módulo existia
+  // com todas as peças mas não era agendado por ninguém — os toques nunca
+  // aconteciam. Entrega via proactiveNotifier → push dedicado no celular.
+  try {
+    require("./autonomous/mentor").start();
+  } catch (err) {
+    console.warn("[mentor] falha ao iniciar:", err.message);
+  }
+
   // Fila assíncrona SQLite em segundo plano
   try {
     require("./queue").startWorker();

@@ -295,7 +295,196 @@ function marcarTopicoEntregue(id, fonteUrl = null) {
   db.prepare("UPDATE mentor_curriculum SET entregue_em = datetime('now'), fonte_url = ? WHERE id = ?").run(fonteUrl, id);
 }
 
+// ────────────────────────────────────────────────────────────────
+// Composição dos toques
+//
+// Todo texto devocional/doutrinário passa por aqui ANCORADO na fonte buscada:
+// o modelo recebe o trecho oficial e só pode resumir e citar o que está nele.
+// É a diferença entre resumir a lição da semana e "lembrar" de doutrina — a
+// segunda produz versículo torto e interpretação que não é da igreja.
+// ────────────────────────────────────────────────────────────────
+const proxy = require("../proxy");
+
+async function resumirAncorado(instrucao, fonteTexto, fonteUrl) {
+  const res = await proxy.complete([
+    {
+      role: "system",
+      content:
+        "Você é um mentor adventista do sétimo dia. Regra absoluta: use SOMENTE o " +
+        "texto da fonte fornecida. Não acrescente doutrina, versículo ou " +
+        "interpretação que não esteja nele. Se a fonte não cobrir algo, diga que " +
+        "não está na fonte em vez de completar de memória.",
+    },
+    { role: "user", content: `${instrucao}\n\nFONTE (${fonteUrl}):\n"""\n${fonteTexto.slice(0, 9000)}\n"""` },
+  ], { timeoutMs: 30000, maxRetries: 1, caveman: false }); // caveman:false — a compressão deixa o texto telegráfico
+  return res.content.trim();
+}
+
+// Manhã: devocional da Escola Sabatina + compromissos abertos + foco do dia.
+async function composeManha() {
+  const licao = await licaoDaSemana();
+  if (!licao) {
+    // A regra do módulo: sem fonte, o devocional é pulado — não inventado.
+    return { ok: false, motivo: "a fonte da Escola Sabatina não respondeu" };
+  }
+
+  let devocional;
+  try {
+    devocional = await resumirAncorado(
+      "Escreva o devocional da manhã em no máximo 12 linhas: o tema da lição, o verso " +
+      "para memorizar (citado exatamente como está na fonte) e uma aplicação prática " +
+      "curta para hoje. Português do Brasil, tom direto, sem saudação genérica.",
+      licao.texto,
+      licao.url,
+    );
+  } catch (err) {
+    return { ok: false, motivo: `falha ao compor o devocional: ${err.message}` };
+  }
+
+  const partes = [devocional, "", `Fonte: ${licao.url}`];
+
+  const abertos = listarCompromissos("aberto");
+  if (abertos.length) {
+    partes.push("", "Compromissos abertos:");
+    for (const c of abertos.slice(0, 5)) {
+      partes.push(`- ${c.texto}${c.prazo ? ` (até ${c.prazo})` : ""}`);
+    }
+  }
+
+  return { ok: true, texto: partes.join("\n"), detalhe: `licao ${licao.numero}` };
+}
+
+// Noite: um tópico da trilha, buscado na fonte oficial, + revisão do dia.
+// A revisão NÃO é doutrina, então ela sai mesmo quando a fonte falha — perder
+// o acompanhamento junto com o devocional seria punir duas coisas por uma.
+async function composeNoite() {
+  const partes = [];
+  let detalhe = null;
+
+  const topico = proximoTopico();
+  if (topico) {
+    const achado = await acharFonteOficial(topico.topico);
+    if (achado) {
+      try {
+        const estudo = await resumirAncorado(
+          `Ensine este tópico em no máximo 14 linhas, para alguém começando a estudar ` +
+          `a fé adventista: "${topico.topico}". Fatos e datas só se estiverem na fonte.`,
+          achado.texto,
+          achado.url,
+        );
+        partes.push(estudo, "", `Fonte: ${achado.url}`);
+        marcarTopicoEntregue(topico.id, achado.url);
+        detalhe = `topico ${topico.id}`;
+      } catch (err) {
+        partes.push(`Hoje o estudo sobre "${topico.topico}" não saiu: ${err.message}.`);
+      }
+    } else {
+      // Pular é a única opção honesta aqui: o tópico permanece na fila para a
+      // próxima noite, em vez de ser entregue com conteúdo de memória.
+      partes.push(`Não consegui abrir a fonte oficial para "${topico.topico}" hoje. Fica para amanhã, sem improviso.`);
+    }
+  }
+
+  const m = metricasSemana();
+  const c = comparativoSemana();
+  const rev = ["", "Como está a semana:"];
+  if (m.leads7 != null) rev.push(`- ${m.leads7} lead(s) em 7 dias${seta(c.leads.atual, c.leads.anterior)}, ${m.leadsComContato ?? 0} com contato`);
+  if (m.enviadas7 != null) rev.push(`- ${m.enviadas7} mensagem(ns) enviada(s), ${m.respostas ?? 0} resposta(s), ${m.rascunhos ?? 0} rascunho(s) parado(s)`);
+  rev.push(`- ${m.abertos} compromisso(s) aberto(s), ${m.feitos7} fechado(s) nesta semana`);
+  if (m.humorMedia != null) rev.push(`- humor médio ${m.humorMedia.toFixed(1)}/5 em ${m.humor.length} registro(s)`);
+  else rev.push("- humor: sem registro nesta semana — me diga de 1 a 5 como foi hoje");
+  partes.push(...rev);
+
+  // Domingo à noite fecha a semana: é quando o comparativo tem sentido.
+  const { diaSemana } = agoraBRT();
+  if (/^dom/i.test(diaSemana)) {
+    partes.push("", `Balanço da semana: devocional em ${m.devocionais7} de 7 dias.`);
+    if (m.rascunhos) partes.push(`Há ${m.rascunhos} rascunho(s) esperando envio — sem enviar, não há resposta.`);
+  }
+
+  return { ok: true, texto: partes.join("\n"), detalhe };
+}
+
+// Localiza a página oficial de um tópico da trilha. Restringe ao domínio do
+// Centro White: o valor aqui é a fonte ser da própria IASD.
+async function acharFonteOficial(topico) {
+  let resultados = [];
+  try {
+    const webSearch = require("../tools/webSearch");
+    resultados = await webSearch.searchWeb(`site:centrowhite.org.br ${topico}`, 4);
+  } catch (err) {
+    console.warn(`[mentor] busca falhou: ${err.message}`);
+  }
+  const candidatos = resultados
+    .map((r) => r.url)
+    .filter((u) => /(^|\.)centrowhite\.org\.br/i.test(String(u)));
+  // Sem resultado da busca, a home ainda é fonte oficial e serve de porta.
+  candidatos.push(CENTRO_WHITE);
+
+  for (const url of candidatos.slice(0, 3)) {
+    const texto = await buscarTexto(url, 12000);
+    // Página curta é menu ou erro, não conteúdo de estudo.
+    if (texto && texto.length > 600) return { url, texto };
+  }
+  return null;
+}
+
+// ────────────────────────────────────────────────────────────────
+// Agendador. Enfileira no proactiveNotifier, que entrega por push dedicado.
+// ────────────────────────────────────────────────────────────────
+async function tick() {
+  const { ymd, hora } = agoraBRT();
+  const tipo = hora === HORA_MANHA ? "manha" : hora === HORA_NOITE ? "noite" : null;
+  if (!tipo) return;
+  if (jaEnviou(tipo, ymd)) return;
+
+  const destino = channelSender.ownerChatId();
+  if (!destino) {
+    // Registra a tentativa para o motivo aparecer no histórico, em vez de o
+    // toque simplesmente nunca acontecer sem explicação.
+    registrar(tipo, ymd, false, "OWNER_CHAT_ID não configurado");
+    console.warn("[mentor] sem OWNER_CHAT_ID — toque não enviado");
+    return;
+  }
+
+  let r;
+  try {
+    r = tipo === "manha" ? await composeManha() : await composeNoite();
+  } catch (err) {
+    registrar(tipo, ymd, false, `erro ao compor: ${err.message}`);
+    console.error(`[mentor] erro ao compor ${tipo}: ${err.message}`);
+    return;
+  }
+
+  if (!r.ok) {
+    registrar(tipo, ymd, false, r.motivo);
+    console.warn(`[mentor] toque ${tipo} pulado: ${r.motivo}`);
+    return;
+  }
+
+  const notifier = require("./proactiveNotifier");
+  notifier.push({ chatId: destino, body: r.texto, tag: `mentor-${tipo}`, priority: 3 });
+  registrar(tipo, ymd, true, r.detalhe);
+  console.log(`[mentor] toque ${tipo} enfileirado (${ymd})`);
+}
+
+let timer = null;
+function start() {
+  if (timer) return;
+  timer = setInterval(() => {
+    tick().catch((e) => console.error("[mentor] tick error:", e.message));
+  }, TICK_MS);
+  tick().catch(() => {});
+  console.log(`[mentor] iniciado — toques ${HORA_MANHA}h e ${HORA_NOITE}h BRT (tick ${TICK_MS / 60000}min)`);
+}
+
+function stop() {
+  if (timer) { clearInterval(timer); timer = null; }
+}
+
 module.exports = {
+  // agendamento
+  start, stop, tick, composeManha, composeNoite, acharFonteOficial,
   // tempo e estado
   agoraBRT, jaEnviou, registrar,
   // fontes
