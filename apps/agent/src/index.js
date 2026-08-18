@@ -237,6 +237,103 @@ app.post("/api/modules", (req, res) => {
   }
 });
 
+// ── Conversas dos canais (painel lateral do chat) ──
+// Lista conversas DIRETAS por padrão. Grupos só com ?grupos=1, porque o pedido
+// é conversar com pessoas — grupo no meio da lista de prospecção é ruído e o
+// risco de responder no grupo errado é real.
+app.get("/api/channels/conversations", (req, res) => {
+  try {
+    const store = require("./channels/channelStore");
+    const conversas = store.listConversations({
+      channel: req.query.channel || null,
+      somenteDiretas: req.query.grupos !== "1",
+      limit: Math.min(Math.max(Number(req.query.limit) || 40, 1), 200),
+    });
+    res.json({
+      conversas: conversas.map((c) => ({
+        channel: c.channel,
+        chatId: c.chat_id,
+        nome: c.chat_name || c.chat_id,
+        ultimaMensagem: c.last_text,
+        ultimaDirecao: c.last_direction,
+        em: c.last_at,
+        naoLidas: c.nao_lidas || 0,
+        total: c.msg_count,
+        // Sem replyTarget não há para onde enviar: o front desabilita o envio.
+        podeResponder: !!c.reply_target,
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/channels/conversations/messages", (req, res) => {
+  try {
+    const { channel, chatId } = req.query;
+    if (!channel || !chatId) return res.status(400).json({ error: "channel e chatId obrigatórios" });
+    const store = require("./channels/channelStore");
+    const msgs = store.recent({ channel, chatId, limit: Math.min(Number(req.query.limit) || 50, 200) });
+    if (req.query.marcarLida === "1") store.markChatRead({ channel, chatId });
+    res.json({
+      mensagens: msgs.map((m) => ({
+        id: m.id,
+        de: m.sender_name,
+        texto: m.text,
+        direcao: m.direction,
+        em: m.created_at,
+      })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Envio direto para uma conversa. É o que faltava: até aqui o "Responder" do
+// inbox só preenchia um prompt no chat e dependia do agente decidir enviar.
+app.post("/api/channels/send", async (req, res) => {
+  try {
+    const { channel, chatId, texto } = req.body || {};
+    if (!channel || !chatId || !String(texto || "").trim()) {
+      return res.status(400).json({ error: "channel, chatId e texto obrigatórios" });
+    }
+    const store = require("./channels/channelStore");
+
+    // O destino real é o reply_target gravado na conversa (JID), não o chat_id
+    // interno (`wa:5511...`), que não é endereçável no WhatsApp.
+    const conversa = store.listConversations({ channel, somenteDiretas: false, limit: 200 })
+      .find((c) => c.chat_id === String(chatId));
+    if (!conversa) return res.status(404).json({ error: "conversa não encontrada" });
+    if (!conversa.reply_target) {
+      return res.status(409).json({ error: "esta conversa não tem alvo de resposta registrado — não há para onde enviar" });
+    }
+
+    const r = await require("./channelSender").send(conversa.reply_target, String(texto).trim(), { channel });
+    // Fallback de webchat NÃO é entrega no WhatsApp: seria dizer que enviou
+    // quando a mensagem só ficou na interface.
+    if (!r.ok || r.via === "webchat-fallback" || r.via === "webchat-db") {
+      return res.status(502).json({
+        error: r.error || `não entregue no ${channel} (via ${r.via})`,
+        via: r.via || null,
+      });
+    }
+
+    store.record({
+      channel,
+      chatId,
+      chatName: conversa.chat_name,
+      senderName: "Você",
+      isGroup: !!conversa.is_group,
+      text: String(texto).trim(),
+      replyTarget: conversa.reply_target,
+      direction: "out",
+    });
+    res.json({ ok: true, via: r.via });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Painel de hábitos, humor, metas e aprendizado ──
 // Leitura agregada num único GET: o front não precisa conhecer os seis módulos
 // que alimentam o painel, e cada seção carrega o próprio erro quando falha.

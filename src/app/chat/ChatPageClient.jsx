@@ -13,6 +13,7 @@ import { useFileUpload } from "./hooks/useFileUpload";
 import { useNotionSave } from "./hooks/useNotionSave";
 
 import { ChannelInbox } from "./components/ChannelInbox";
+import { ConversasPanel } from "./components/ConversasPanel";
 import { VoiceSelectorModal } from "@/shared/components/VoiceSelectorModal";
 import { getSelectedVoice } from "@/shared/constants/edgeTtsVoices";
 import { translate as t } from "@/i18n/runtime";
@@ -67,6 +68,8 @@ function ChatShell() {
   const [voiceMode, setVoiceMode] = useState(false);
   const [autoRecordSignal, setAutoRecordSignal] = useState(0);
   const [voiceModalOpen, setVoiceModalOpen] = useState(false);
+  // Aba lateral de conversas: começa recolhida, e fechada não faz polling.
+  const [conversasAberto, setConversasAberto] = useState(false);
   const currentAudioRef = useRef(null);
   const lastAutoPlayedIdRef = useRef(null);
 
@@ -277,6 +280,21 @@ function ChatShell() {
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <ChannelInbox onSelectPrompt={(prompt) => handleSend(prompt)} />
 
+          {/* Abre a aba lateral de conversas diretas (WhatsApp/Telegram). */}
+          <button
+            type="button"
+            onClick={() => setConversasAberto((v) => !v)}
+            className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors sm:px-3 ${
+              conversasAberto
+                ? "border-brand-500 text-text-main"
+                : "border-border text-text-muted hover:border-brand-500 hover:text-text-main"
+            }`}
+            title="Conversas diretas do WhatsApp e Telegram"
+          >
+            <span className="material-symbols-outlined text-sm text-brand-500">forum</span>
+            <span className="hidden sm:inline">Conversas</span>
+          </button>
+
           <button
             onClick={clearSession}
             className="flex shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-text-muted transition-colors hover:bg-bg-alt hover:text-danger sm:px-3"
@@ -374,6 +392,13 @@ function ChatShell() {
               </div>
             </footer>
           </div>
+
+          {/* Aba lateral recolhivel: conversas diretas, com envio direto. */}
+          <ConversasPanel
+            aberto={conversasAberto}
+            onFechar={() => setConversasAberto(false)}
+            onPedirAoAgente={(prompt) => handleSend(prompt)}
+          />
       </div>
 
       <VoiceSelectorModal open={voiceModalOpen} onClose={() => setVoiceModalOpen(false)} />

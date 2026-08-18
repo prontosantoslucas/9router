@@ -72,6 +72,70 @@ function listChats({ channel, limit = 30 } = {}) {
   return db.prepare(sql).all(...params);
 }
 
+// Conversas para o painel lateral: última mensagem, não lidas e alvo de resposta.
+//
+// ────────────────────────────────────────────────────────────────
+// SÓ CONVERSAS DIRETAS (quando somenteDiretas)
+//
+// O filtro é DUPLO de propósito: `is_group = 0` E o chat_id sem o prefixo
+// `wa-group:`. As duas fontes que gravam aqui (Baileys nativo e webhook da
+// Evolution) derivam is_group do JID terminar em @g.us, mas basta uma mensagem
+// gravada por um caminho que não preencheu a coluna para um grupo aparecer na
+// lista de conversas pessoais. Com os dois critérios, um grupo teria de burlar
+// ambos. Também exclui broadcast/status e newsletter, que não são pessoas.
+//
+// O reply_target vem da mensagem MAIS RECENTE que tenha um: é o JID real para
+// onde responder, e sem ele o envio não tem destino.
+// ────────────────────────────────────────────────────────────────
+function listConversations({ channel = null, somenteDiretas = true, limit = 40 } = {}) {
+  const where = ["1=1"];
+  const params = [];
+  if (channel) { where.push("channel = ?"); params.push(channel); }
+  if (somenteDiretas) {
+    where.push("is_group = 0");
+    where.push("chat_id NOT LIKE 'wa-group:%'");
+    where.push("chat_id NOT LIKE '%@g.us%'");
+    where.push("chat_id NOT LIKE '%broadcast%'");
+    where.push("chat_id NOT LIKE '%@newsletter%'");
+  }
+  const sql = `
+    SELECT
+      m.channel,
+      m.chat_id,
+      MAX(m.created_at) AS last_at,
+      COUNT(*) AS msg_count,
+      SUM(CASE WHEN m.direction = 'in' AND m.notified = 0 THEN 1 ELSE 0 END) AS nao_lidas,
+      (SELECT chat_name FROM channel_messages x
+         WHERE x.chat_id = m.chat_id AND x.channel = m.channel AND x.chat_name IS NOT NULL
+         ORDER BY x.id DESC LIMIT 1) AS chat_name,
+      (SELECT reply_target FROM channel_messages x
+         WHERE x.chat_id = m.chat_id AND x.channel = m.channel AND x.reply_target IS NOT NULL
+         ORDER BY x.id DESC LIMIT 1) AS reply_target,
+      (SELECT text FROM channel_messages x
+         WHERE x.chat_id = m.chat_id AND x.channel = m.channel
+         ORDER BY x.id DESC LIMIT 1) AS last_text,
+      (SELECT direction FROM channel_messages x
+         WHERE x.chat_id = m.chat_id AND x.channel = m.channel
+         ORDER BY x.id DESC LIMIT 1) AS last_direction
+    FROM channel_messages m
+    WHERE ${where.join(" AND ")}
+    GROUP BY m.channel, m.chat_id
+    ORDER BY last_at DESC
+    LIMIT ?
+  `;
+  params.push(Math.min(200, Number(limit) || 40));
+  return db.prepare(sql).all(...params);
+}
+
+// Marca como lidas as mensagens recebidas de UMA conversa. Separado de
+// markNotified porque abrir uma conversa não deve zerar o aviso das outras.
+function markChatRead({ channel, chatId }) {
+  const info = db.prepare(
+    "UPDATE channel_messages SET notified = 1 WHERE channel = ? AND chat_id = ? AND direction = 'in' AND notified = 0"
+  ).run(channel, String(chatId));
+  return info.changes;
+}
+
 // Localiza um chat por nome parcial (para o usuário dizer "grupo X" em vez do id).
 function findChatByName(name, { channel } = {}) {
   let sql = "SELECT DISTINCT channel, chat_id, chat_name, is_group, reply_target FROM channel_messages WHERE chat_name LIKE ?";
@@ -94,4 +158,8 @@ function markNotified(ids = []) {
   db.prepare(`UPDATE channel_messages SET notified = 1 WHERE id IN (${placeholders})`).run(...ids);
 }
 
-module.exports = { record, recent, search, listChats, findChatByName, pendingNotifications, markNotified };
+module.exports = {
+  record, recent, search, listChats, findChatByName,
+  pendingNotifications, markNotified,
+  listConversations, markChatRead,
+};

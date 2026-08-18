@@ -119,6 +119,12 @@ const ALLOWED_PATHS = [
   "/api/habitos",
   "/api/agent/humor",
   "/api/humor",
+  // Conversas dos canais (painel lateral do chat). Atras da autenticacao:
+  // le e ENVIA mensagens pessoais de WhatsApp/Telegram.
+  "/api/agent/channels/conversations",
+  "/api/channels/conversations",
+  "/api/agent/channels/send",
+  "/api/channels/send",
 ];
 
 function isPathAllowed(targetPath) {
