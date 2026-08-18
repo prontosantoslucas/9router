@@ -1,30 +1,71 @@
 "use client";
 
-// Painel lateral recolhível com as conversas dos canais.
-//
-// ────────────────────────────────────────────────────────────────
-// DUAS DECISÕES QUE MUDAM O COMPORTAMENTO
-//
-// 1. SÓ CONVERSAS DIRETAS. O endpoint filtra grupos, status/broadcast e
-//    newsletter. Grupo no meio da lista é ruído, e o risco de responder no
-//    grupo errado é real — especialmente com mensagem de prospecção.
-//
-// 2. "ENVIADO" SÓ QUANDO O CANAL CONFIRMA. O envio antigo do inbox apenas
-//    preenchia um prompt no chat e dependia do agente decidir mandar. Aqui o
-//    POST vai direto ao WhatsApp/Telegram, e se o canal não confirmar a
-//    entrega, a mensagem aparece como ERRO com o motivo — nunca como enviada.
-// ────────────────────────────────────────────────────────────────
+// Painel lateral recolhível com as conversas dos canais (WhatsApp e Telegram).
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { RascunhosAba } from "./RascunhosAba";
 
 const INTERVALO_MS = 15000;
 
-function horaCurta(iso) {
-  if (!iso) return "";
+function parseData(iso) {
+  if (!iso) return null;
   const d = new Date(iso.includes("T") ? iso : iso.replace(" ", "T") + "Z");
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatarDataLista(iso) {
+  const d = parseData(iso);
+  if (!d) return "";
+  const agora = new Date();
+  const diffDias = Math.floor((agora - d) / (1000 * 60 * 60 * 24));
+  const hora = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  if (agora.toDateString() === d.toDateString()) {
+    return hora;
+  }
+  const ontem = new Date(agora);
+  ontem.setDate(ontem.getDate() - 1);
+  if (ontem.toDateString() === d.toDateString()) {
+    return "Ontem";
+  }
+  if (diffDias < 7) {
+    const diasSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+    return `${diasSemana[d.getDay()]} ${hora}`;
+  }
+  return d.toLocaleDateString([], { day: "2-digit", month: "2-digit" });
+}
+
+function formatarDataMensagem(iso) {
+  const d = parseData(iso);
+  if (!d) return "";
+  const agora = new Date();
+  const hora = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  if (agora.toDateString() === d.toDateString()) {
+    return hora;
+  }
+  const ontem = new Date(agora);
+  ontem.setDate(ontem.getDate() - 1);
+  if (ontem.toDateString() === d.toDateString()) {
+    return `Ontem, ${hora}`;
+  }
+  const diasSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+  return `${diasSemana[d.getDay()]}, ${d.toLocaleDateString([], { day: "2-digit", month: "2-digit" })} ${hora}`;
+}
+
+function obterTituloData(iso) {
+  const d = parseData(iso);
+  if (!d) return "";
+  const agora = new Date();
+  if (agora.toDateString() === d.toDateString()) {
+    return "Hoje";
+  }
+  const ontem = new Date(agora);
+  ontem.setDate(ontem.getDate() - 1);
+  if (ontem.toDateString() === d.toDateString()) {
+    return "Ontem";
+  }
+  return d.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
 }
 
 const ICONE_CANAL = { whatsapp: "chat", telegram: "send" };
@@ -47,8 +88,7 @@ export function ConversasPanel({ aberto, onFechar, onPedirAoAgente }) {
     return d.conversas || [];
   }, []);
 
-  // Lista: recarrega em intervalo enquanto o painel está aberto. Fechado não
-  // consulta — polling invisível só gasta bateria no celular.
+  // Lista: recarrega em intervalo enquanto o painel está aberto.
   useEffect(() => {
     if (!aberto || aba !== "conversas") return;
     let vivo = true;
@@ -72,7 +112,6 @@ export function ConversasPanel({ aberto, onFechar, onPedirAoAgente }) {
       if (!res.ok) throw new Error(`não consegui abrir a conversa (${res.status})`);
       const d = await res.json();
       setMensagens(d.mensagens || []);
-      // Abrir marcou como lida no servidor; reflete na lista sem esperar o tick.
       setConversas((prev) => prev.map((x) => (x.chatId === c.chatId ? { ...x, naoLidas: 0 } : x)));
     } catch (e) {
       setErro(e.message);
@@ -98,13 +137,14 @@ export function ConversasPanel({ aberto, onFechar, onPedirAoAgente }) {
       if (!res.ok || !d.ok) throw new Error(d.error || `falha ao enviar (${res.status})`);
 
       setRascunho("");
-      // Otimista só DEPOIS da confirmação do canal.
-      setMensagens((prev) => [...prev, {
-        id: `tmp${Date.now()}`, de: "Você", texto, direcao: "out", em: new Date().toISOString(),
-      }]);
-      setConversas((prev) => prev.map((x) => (
-        x.chatId === selecionada.chatId ? { ...x, ultimaMensagem: texto, ultimaDirecao: "out" } : x
-      )));
+      // Recarrega o histórico da conversa para exibir a mensagem enviada
+      const q = new URLSearchParams({ channel: selecionada.channel, chatId: selecionada.chatId, limit: "60" });
+      const r = await fetch(`/api/agent/channels/conversations/messages?${q}`);
+      if (r.ok) {
+        const data = await r.json();
+        setMensagens(data.mensagens || []);
+      }
+      buscarConversas().then(setConversas).catch(() => {});
     } catch (e) {
       setErro(e.message);
     } finally {
@@ -112,21 +152,31 @@ export function ConversasPanel({ aberto, onFechar, onPedirAoAgente }) {
     }
   };
 
+  const pedirAcaoAoAgente = (prompt) => {
+    if (!onPedirAoAgente) return;
+    onPedirAoAgente(prompt);
+  };
+
   if (!aberto) return null;
 
-  const totalNaoLidas = conversas.reduce((s, c) => s + (c.naoLidas || 0), 0);
-
   return (
-    <aside className="flex h-full w-full shrink-0 flex-col border-l border-border bg-surface md:w-[340px] dark:bg-surface-2">
-      <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-3">
+    <aside
+      className="fixed inset-y-0 right-0 z-40 flex w-full flex-col border-l border-border bg-surface shadow-2xl sm:w-[380px] dark:bg-surface"
+      aria-label="Conversas dos canais"
+    >
+      {/* ── Header ── */}
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="material-symbols-outlined text-base text-brand-500">forum</span>
-          <h3 className="truncate text-sm font-bold">
-            {selecionada ? selecionada.nome : aba === "rascunhos" ? "Rascunhos" : "Conversas"}
-          </h3>
-          {!selecionada && aba === "conversas" && totalNaoLidas > 0 && (
-            <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] font-bold text-white">
-              {totalNaoLidas}
+          <span className="material-symbols-outlined text-brand-500">forum</span>
+          <h2 className="truncate text-sm font-bold text-text-main">
+            {selecionada ? selecionada.nome || selecionada.chatId : "Canais de Atendimento"}
+          </h2>
+          {selecionada && (
+            <span className="flex items-center gap-1 text-[10px] font-semibold text-text-muted">
+              <span className="material-symbols-outlined text-xs text-brand-500">
+                {ICONE_CANAL[selecionada.channel] || "chat"}
+              </span>
+              <span className="capitalize">{selecionada.channel}</span>
             </span>
           )}
         </div>
@@ -179,7 +229,7 @@ export function ConversasPanel({ aberto, onFechar, onPedirAoAgente }) {
       ) : !selecionada ? (
         <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto">
           <p className="border-b border-border/60 px-3 py-2 text-[10px] uppercase tracking-wide text-text-muted">
-            Somente conversas diretas — grupos ficam de fora
+            Somente conversas diretas registradas
           </p>
 
           {erroLista ? (
@@ -200,7 +250,7 @@ export function ConversasPanel({ aberto, onFechar, onPedirAoAgente }) {
                   <button
                     type="button"
                     onClick={() => abrirConversa(c)}
-                    className="flex w-full flex-col gap-1 px-3 py-2.5 text-left hover:bg-surface-2"
+                    className="flex w-full flex-col gap-1 px-3 py-2.5 text-left hover:bg-surface-2 transition-colors"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="flex min-w-0 items-center gap-1.5">
@@ -215,15 +265,13 @@ export function ConversasPanel({ aberto, onFechar, onPedirAoAgente }) {
                             {c.naoLidas}
                           </span>
                         )}
-                        <span className="text-[10px] text-text-muted">{horaCurta(c.em)}</span>
+                        <span className="text-[10px] text-text-muted font-medium">{formatarDataLista(c.em)}</span>
                       </span>
                     </div>
                     <span className="line-clamp-1 text-[11px] text-text-muted">
                       {c.ultimaDirecao === "out" ? "Você: " : ""}{c.ultimaMensagem}
                     </span>
                     {!c.podeResponder && (
-                      // Diz por que o envio estará bloqueado, em vez de deixar
-                      // o usuário descobrir digitando.
                       <span className="text-[10px] text-warning">sem alvo de resposta registrado</span>
                     )}
                   </button>
@@ -235,31 +283,47 @@ export function ConversasPanel({ aberto, onFechar, onPedirAoAgente }) {
       ) : (
         <>
           {/* ── Thread ── */}
-          <div className="custom-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+          <div className="custom-scrollbar min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3 bg-bg-alt/30">
             {mensagens.length === 0 ? (
               <p className="py-4 text-center text-xs text-text-muted">Sem mensagens nesta conversa.</p>
             ) : (
-              mensagens.map((m) => (
-                <div
-                  key={m.id}
-                  className={`max-w-[85%] rounded-lg px-2.5 py-1.5 text-xs ${
-                    m.direcao === "out"
-                      ? "ml-auto bg-brand-500/15 text-text-main"
-                      : "mr-auto bg-surface-2 text-text-main"
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap break-words">{m.texto}</p>
-                  <span className="mt-0.5 block text-right text-[9px] text-text-muted">{horaCurta(m.em)}</span>
-                </div>
-              ))
+              mensagens.map((m, idx) => {
+                const dataAtual = parseData(m.em)?.toDateString();
+                const dataAnterior = idx > 0 ? parseData(mensagens[idx - 1].em)?.toDateString() : null;
+                const mostrarDivisor = dataAtual !== dataAnterior;
+
+                return (
+                  <div key={m.id} className="space-y-2">
+                    {mostrarDivisor && (
+                      <div className="flex items-center justify-center my-3">
+                        <span className="px-2.5 py-0.5 rounded-full bg-surface border border-border text-[10px] font-semibold text-text-muted capitalize shadow-xs">
+                          {obterTituloData(m.em)}
+                        </span>
+                      </div>
+                    )}
+                    <div
+                      className={`max-w-[85%] rounded-xl px-3 py-2 text-xs shadow-soft ${
+                        m.direcao === "out"
+                          ? "ml-auto bg-brand-500/15 text-text-main border border-brand-500/30"
+                          : "mr-auto bg-surface text-text-main border border-border"
+                      }`}
+                    >
+                      <p className="whitespace-pre-wrap break-words leading-relaxed">{m.texto}</p>
+                      <span className="mt-1 block text-right text-[9px] text-text-muted font-medium">
+                        {formatarDataMensagem(m.em)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
             )}
             <div ref={fimRef} />
           </div>
 
           {/* ── Envio direto ── */}
-          <div className="shrink-0 space-y-2 border-t border-border p-3">
+          <div className="shrink-0 space-y-2 border-t border-border p-3 bg-surface">
             {erro && (
-              <p className="rounded border border-danger/40 bg-danger/5 p-2 text-[11px] text-danger">
+              <p className="rounded-lg border border-danger/40 bg-danger/5 p-2 text-[11px] text-danger">
                 {erro}
               </p>
             )}
@@ -278,14 +342,14 @@ export function ConversasPanel({ aberto, onFechar, onPedirAoAgente }) {
                     ? "Mensagem (Enter envia, Shift+Enter quebra linha)"
                     : "Esta conversa não tem alvo de resposta registrado"
                 }
-                className="min-h-[38px] flex-1 resize-none rounded-md border border-border bg-surface px-2 py-1.5 text-xs disabled:opacity-50"
+                className="custom-scrollbar min-h-[50px] flex-1 resize-none rounded-xl border border-border bg-surface-2 p-2.5 text-xs text-text-main placeholder-text-muted focus:border-brand-500 focus:outline-none"
               />
               <button
                 type="button"
                 onClick={enviar}
                 disabled={!rascunho.trim() || !selecionada.podeResponder || enviando}
-                className="flex size-9 shrink-0 items-center justify-center rounded-md bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-40"
-                title="Enviar direto no canal"
+                className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-white shadow-soft transition-opacity hover:opacity-90 disabled:opacity-40"
+                title="Enviar mensagem direta"
               >
                 <span className="material-symbols-outlined text-[18px]">
                   {enviando ? "sync" : "send"}
@@ -293,19 +357,23 @@ export function ConversasPanel({ aberto, onFechar, onPedirAoAgente }) {
               </button>
             </div>
 
-            <button
-              type="button"
-              onClick={() => onPedirAoAgente?.(
-                `Escreva uma resposta para ${selecionada.nome} no ${selecionada.channel}. Última mensagem recebida: "${
-                  mensagens.filter((m) => m.direcao === "in").at(-1)?.texto || "(sem mensagem recebida)"
-                }". Devolva só o texto da mensagem, que eu reviso antes de enviar.`
-              )}
-              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border px-2 py-1.5 text-[11px] font-semibold text-text-muted hover:border-brand-500 hover:text-text-main"
-              title="O agente escreve o texto no chat; você revisa e envia daqui"
-            >
-              <span className="material-symbols-outlined text-sm text-brand-500">auto_fix_high</span>
-              Pedir ao agente para escrever
-            </button>
+            {/* Ações rápidas com o Agente */}
+            <div className="flex items-center justify-between pt-1 text-[11px] text-text-muted">
+              <button
+                type="button"
+                onClick={() => pedirAcaoAoAgente(`Resuma as últimas mensagens da conversa com ${selecionada.nome || selecionada.chatId} no ${selecionada.channel} e me diga se há algo pendente de resposta.`)}
+                className="hover:text-brand-500 hover:underline"
+              >
+                Pedir resumo ao Lucas
+              </button>
+              <button
+                type="button"
+                onClick={() => pedirAcaoAoAgente(`Sugira uma resposta para a conversa com ${selecionada.nome || selecionada.chatId} no ${selecionada.channel}.`)}
+                className="hover:text-brand-500 hover:underline"
+              >
+                Sugerir resposta
+              </button>
+            </div>
           </div>
         </>
       )}

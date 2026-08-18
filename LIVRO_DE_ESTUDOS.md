@@ -1727,6 +1727,22 @@ Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encod
 
 ---
 
+### Capítulo 83: Formatação Inteligente de Data/Hora e Divisores de Dia no Painel de Conversas de Canais
+
+* **Por que foi feita essa alteração (Causa Raiz & Ambiguidade Temporal)**:
+  1. **Omissão do Dia da Mensagem**: A função `horaCurta` no [ConversasPanel.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/chat/components/ConversasPanel.jsx) formatava os registros de data e hora das mensagens de WhatsApp/Telegram usando apenas o horário (`d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })`).
+  2. **Confusão de Mensagens Anteriores**: Quando uma mensagem enviada na quinta-feira às 20:57 era visualizada, o painel exibia apenas o texto `"20:57"`, dando a impressão incorreta ao usuário de que a mensagem havia acabado de ser recebida hoje às 20:57.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Formatação Contextual de Data e Hora**:
+     - No [ConversasPanel.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/chat/components/ConversasPanel.jsx), criadas as funções `formatarDataLista` e `formatarDataMensagem` que diferenciam mensagens de *Hoje*, *Ontem*, *Dia da Semana (ex: Qui, 20:57)* ou *Data Completa (13/08, 20:57)*.
+  2. **Divisores de Dia Automáticos na Thread**:
+     - Implementados badges divisores centrais na conversa (ex: `--- Quinta-feira, 13 de Agosto ---` / `--- Hoje ---`) agrupando as mensagens por dia, exatamente no padrão nativo do WhatsApp e Telegram.
+  3. **Gatilho de Atualização do Railway**:
+     - Incrementada a versão no [apps/agent/package.json](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/package.json) para disparar a compilação automática no Railway.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 
