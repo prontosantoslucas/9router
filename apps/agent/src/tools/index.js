@@ -182,12 +182,14 @@ const TOOLS = {
   },
   notify: {
     name: "notify",
-    desc: "Envia notificacao PUSH para o celular do usuario via Telegram. Use quando ele pedir para ser avisado de algo, ou quando algo importante acontecer fora da conversa.",
+    desc: "Envia notificacao PUSH para o celular do usuario: alerta dedicado (ntfy/Pushover) se configurado, senao pelo chat do Telegram. Use quando ele pedir para ser avisado de algo, ou quando algo importante acontecer fora da conversa.",
     args: {
       type: "object",
       properties: {
-        title: { type: "string", description: "Titulo (opcional)" },
+        title: { type: "string", description: "Titulo (opcional). No push dedicado aparece em negrito na tela de bloqueio." },
         text: { type: "string", description: "Conteudo da notificacao" },
+        prioridade: { type: "number", description: "1 a 5. 3 e o normal; 4+ vibra mesmo no silencioso. Use 4+ so para algo realmente urgente." },
+        url: { type: "string", description: "Link opcional para abrir a partir da notificacao" },
       },
       required: ["text"],
     },
@@ -196,22 +198,31 @@ const TOOLS = {
       // corpo apenas retornava a string, que aparecia no chat como se tivesse
       // sido enviada. Era a causa de as notificacoes nunca chegarem no celular.
       const channelSender = require("../channelSender");
-      const texto = (args.title ? `*${args.title}*\n` : "") + String(args.text || "").trim();
+      const texto = String(args.text || "").trim();
+      if (!texto) return "Notificacao sem texto — nada a enviar.";
 
-      // Destino: o chat configurado do dono. Cai no chat atual se nao houver,
-      // para nunca perder a mensagem em silencio.
-      const destino = process.env.OWNER_CHAT_ID || process.env.SCANNER_NOTIFY_TELEGRAM_CHAT_ID || ctx.chatId;
-      if (!destino) {
-        return "Nao ha destino de notificacao configurado. Defina OWNER_CHAT_ID (id do seu chat no Telegram) para receber push no celular. Texto que eu enviaria:\n" + texto;
-      }
+      const r = await channelSender.sendOwner(texto, {
+        title: args.title || null,
+        priority: args.prioridade || 3,
+        url: args.url || null,
+        // Sem destino do dono configurado, usa o chat atual: melhor entregar
+        // aqui do que perder o aviso em silencio.
+        fallbackChatId: ctx.chatId || null,
+      });
 
-      const r = await channelSender.send(destino, texto);
       if (!r.ok) return "Nao consegui enviar a notificacao: " + (r.error || "falha desconhecida");
-      // via informa o canal real: se caiu no fallback de webchat, NAO houve push.
+
+      // `via` diz o canal real. O usuario precisa saber quando NAO houve push,
+      // senao volta a achar que o sistema funciona quando nao funciona.
+      if (String(r.via).startsWith("push-")) return "Push enviado no celular via " + r.via + ".";
       if (r.via === "webchat-fallback") {
         return "O envio pelo canal principal falhou (" + (r.primary_error || "?") + ") e a mensagem ficou no webchat — voce NAO recebeu push no celular.";
       }
-      return "Notificacao enviada via " + (r.via || "canal padrao") + ".";
+      if (r.via === "webchat-db") {
+        return "A mensagem ficou no webchat — voce NAO recebeu push no celular. Configure NTFY_TOPIC (app ntfy, gratuito) ou OWNER_CHAT_ID do Telegram.";
+      }
+      const nota = r.tentativas?.length ? " (push dedicado nao usado: " + r.tentativas.join("; ") + ")" : "";
+      return "Notificacao enviada via " + (r.via || "canal padrao") + nota + ".";
     },
   },
   notify_status: {
@@ -225,9 +236,21 @@ const TOOLS = {
       const { detectChannel } = require("../channelSender");
       const out = [];
 
+      // Push dedicado vem primeiro porque e o canal preferido do notify.
+      let ps = null;
+      try { ps = require("../channels/push/pushSender").status(); } catch (e) { out.push(`pushSender indisponivel: ${e.message}`); }
+      if (ps?.configured) {
+        out.push(`Push dedicado: ${ps.provider} configurado (${JSON.stringify(ps).slice(0, 200)}).`);
+        out.push("Resultado: o push vai direto para o app no celular. O Telegram abaixo e so rede de seguranca.");
+      } else {
+        out.push(`Push dedicado: NAO configurado. ${ps?.hint || ""}`);
+      }
+      out.push("");
+
       const destino = process.env.OWNER_CHAT_ID || process.env.SCANNER_NOTIFY_TELEGRAM_CHAT_ID || ctx.chatId || null;
       if (!destino) {
-        return "Nenhum destino de notificacao configurado. Defina OWNER_CHAT_ID com o id do seu chat no Telegram — sem isso nao existe para onde mandar push.";
+        out.push("Chat do dono: nao configurado. Defina OWNER_CHAT_ID com o id do seu chat no Telegram para ter fallback.");
+        return out.join("\n");
       }
       const canal = detectChannel(destino);
       const fonte = process.env.OWNER_CHAT_ID

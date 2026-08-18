@@ -54,6 +54,29 @@ function push({ chatId, body, tag = null, priority = 5 }) {
   return info.lastInsertRowid;
 }
 
+// Push tem campo de título separado, e é ele que aparece em negrito na tela de
+// bloqueio. A tag é o único rótulo que a fila carrega, então vira título — mas
+// legível: "daily-insight-3" na notificação não diz nada.
+const TITULOS = {
+  "morning-briefing": "Bom dia",
+  "daily-insight": "Insight do dia",
+  "mentor-manha": "Devocional da manhã",
+  "mentor-noite": "Fechamento do dia",
+};
+
+function tituloDaTag(tag) {
+  const t = String(tag || "").trim();
+  if (!t) return "Lucas";
+  if (TITULOS[t]) return TITULOS[t];
+  // Tags numeradas ("daily-insight-3") caem no prefixo conhecido.
+  for (const [k, v] of Object.entries(TITULOS)) {
+    if (t.startsWith(k)) return v;
+  }
+  // Último recurso: a própria tag em forma de frase.
+  const legivel = t.replace(/[-_]+/g, " ").replace(/\s+\d+$/, "").trim();
+  return legivel ? legivel.charAt(0).toUpperCase() + legivel.slice(1) : "Lucas";
+}
+
 // Drena até MAX_PER_TICK notificações não enviadas. Respeita prioridade.
 const MAX_PER_TICK = 10;
 async function drain() {
@@ -74,15 +97,28 @@ async function drain() {
       const feedbackHint = rowTag.startsWith("daily-insight-")
         ? `\n\n_(id ${row.id} — responde "útil ${row.id}" ou "não útil ${row.id}")_`
         : "";
-      const res = await channelSender.send(row.chat_id, row.body + feedbackHint);
+      // Toque do dono vai por push dedicado (alerta no celular, fora das
+      // conversas); qualquer outro destinatário segue pelo canal do chat dele.
+      const dono = channelSender.ownerChatId();
+      const ehDono = !!dono && String(row.chat_id) === String(dono);
+      const res = ehDono
+        ? await channelSender.sendOwner(row.body + feedbackHint, {
+            title: tituloDaTag(rowTag),
+            fallbackChatId: row.chat_id,
+          })
+        : await channelSender.send(row.chat_id, row.body + feedbackHint);
       // `ok` também é true quando o canal do celular falhou e a mensagem só
       // ficou no webchat. Marcar isso como entregue sem registrar nada é o que
       // fazia o toque das 7h/22h constar como enviado sem nunca chegar no
       // celular. Grava o motivo junto, para a falha ficar visível.
       if (res.ok) {
+        // `tentativas` traz a falha do push; `primary_error`, a do canal de chat.
+        // As duas juntas, senao a nota culpa uma e mostra o erro da outra.
         const nota = res.via === "webchat-fallback"
-          ? `so no webchat (push falhou: ${res.primary_error || "?"})`
-          : null;
+          ? `so no webchat — ${[...(res.tentativas || []), res.primary_error].filter(Boolean).join("; ") || "motivo desconhecido"}`
+          : res.tentativas?.length
+            ? `entregue via ${res.via}, sem push dedicado: ${res.tentativas.join("; ")}`
+            : null;
         db.prepare("UPDATE proactive_notifications SET sent_at = (unixepoch()), error = ? WHERE id = ?")
           .run(nota, row.id);
       } else {
