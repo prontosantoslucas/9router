@@ -29,6 +29,66 @@ const LEAD_PROPS = [
   { name: "Data",      kind: "date",         from: () => new Date().toISOString() },
 ];
 
+// Tipos esperados por propriedade, usados tanto para CRIAR o banco quanto para
+// completar um banco existente que o usuário indicou.
+const LEAD_SCHEMA = {
+  Telefone:  { phone_number: {} },
+  Instagram: { url: {} },
+  Site:      { url: {} },
+  Cidade:    { select: {} },
+  Nicho:     { select: {} },
+  Status:    { select: {} },
+  Origem:    { select: {} },
+  Data:      { date: {} },
+};
+
+// Aceita ID cru, com hífens, ou URL colada do Notion.
+// A URL de um BANCO tem `?v=<viewId>`; a de uma página não. O id fica no
+// último segmento do path, com 32 hex (com ou sem hífen).
+function normalizeNotionId(input) {
+  const raw = String(input || "").trim();
+  if (!raw) return null;
+  const withoutQuery = raw.split("?")[0];
+  const lastSeg = withoutQuery.split("/").filter(Boolean).pop() || "";
+  const hex = (lastSeg.match(/[0-9a-fA-F]{32}/) || raw.match(/[0-9a-fA-F]{32}/) || [])[0]
+    || lastSeg.replace(/-/g, "").match(/^[0-9a-fA-F]{32}$/)?.[0];
+  if (!hex) return null;
+  const h = hex.toLowerCase();
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
+
+function isDatabaseUrl(input) {
+  return /[?&]v=/.test(String(input || ""));
+}
+
+// Completa um banco que já existe com as propriedades de lead que faltam.
+// Existe porque o sync ignora propriedade ausente em silêncio — apontar para
+// um banco sem "Telefone" produziria uma listagem só de nomes, que é
+// exatamente o problema que este módulo deveria resolver.
+async function ensureLeadProperties(databaseId) {
+  const schema = await notion.getSchema(databaseId);
+  if (!schema) return { ok: false, error: `não consegui ler o banco ${databaseId} — a integração do Notion tem acesso a ele? (página → ••• → Connections)` };
+
+  const missing = Object.keys(LEAD_SCHEMA).filter((k) => !schema[k]);
+  const hasTitle = Object.values(schema).some((v) => v.type === "title");
+  if (missing.length === 0) return { ok: true, added: [], alreadyComplete: true, hasTitle };
+
+  try {
+    const res = await fetch(`${NOTION_API}/databases/${databaseId}`, {
+      method: "PATCH",
+      headers: notion.getHeaders(),
+      body: JSON.stringify({ properties: Object.fromEntries(missing.map((k) => [k, LEAD_SCHEMA[k]])) }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, error: data?.message || `HTTP ${res.status}`, missing };
+    // invalida o cache pra o sync já ver as novas propriedades
+    await notion.getSchema(databaseId).catch(() => {});
+    return { ok: true, added: missing, hasTitle };
+  } catch (err) {
+    return { ok: false, error: err.message, missing };
+  }
+}
+
 function leadsDatabaseId() {
   return config.NOTION_LEADS_DATABASE_ID || "";
 }
@@ -223,4 +283,4 @@ function stats() {
   }
 }
 
-module.exports = { isConfigured, setLeadsDatabase, createLeadsDatabase, syncPendingLeads, stats, LEAD_PROPS };
+module.exports = { isConfigured, setLeadsDatabase, createLeadsDatabase, syncPendingLeads, stats, LEAD_PROPS, normalizeNotionId, isDatabaseUrl, ensureLeadProperties };

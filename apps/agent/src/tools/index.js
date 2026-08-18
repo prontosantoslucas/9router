@@ -1141,17 +1141,37 @@ const PROSPECTOR_TOOLS = {
     },
     run: async (args = {}) => {
       const nl = require("../notionLeads");
-      if (args.database_id) {
-        nl.setLeadsDatabase(String(args.database_id).trim());
-        return `✅ Listagem de leads apontada para o banco ${args.database_id}. Rode notion_leads_sync para enviar os pendentes.`;
+      const raw = args.database_id || args.parent_page_id || args.url;
+      if (!raw) return "Informe a URL (ou o id) da pagina onde criar o banco, ou de um banco que ja existe.";
+
+      const id = nl.normalizeNotionId(raw);
+      if (!id) return "Nao reconheci um id do Notion em: " + String(raw).slice(0, 80) + ". Cole a URL da pagina ou do banco.";
+
+      // URL de banco tem ?v=<viewId>; de pagina nao tem. Detectar isso evita o
+      // erro mais comum: mandar id de banco como parent_page_id (e vice-versa),
+      // que o Notion recusa com mensagem pouco obvia.
+      const looksLikeDb = args.database_id ? true : nl.isDatabaseUrl(raw);
+
+      if (looksLikeDb) {
+        // Completa o que faltar em vez de sincronizar pela metade: propriedade
+        // ausente e ignorada em silencio pelo sync, o que produziria uma
+        // listagem so de nomes.
+        const ens = await nl.ensureLeadProperties(id);
+        if (!ens.ok) return "Falhou: " + ens.error;
+        nl.setLeadsDatabase(id);
+        const out = ["Listagem de leads apontada para o banco " + id + "."];
+        out.push(ens.alreadyComplete
+          ? "O banco ja tinha todas as propriedades."
+          : "Criei as que faltavam: " + ens.added.join(", ") + ".");
+        if (!ens.hasTitle) out.push("ATENCAO: esse banco nao tem coluna de titulo — o nome do lead nao vai aparecer.");
+        out.push("Rode notion_leads_sync para enviar os pendentes.");
+        return out.join(" ");
       }
-      if (args.parent_page_id) {
-        const r = await nl.createLeadsDatabase(String(args.parent_page_id).trim(), args.title || "Leads Zenda");
-        return r.ok
-          ? `✅ Banco criado no Notion: ${r.url || r.databaseId}\nJá configurado. Rode notion_leads_sync para enviar os leads existentes.`
-          : `❌ Não criou o banco: ${r.error}`;
-      }
-      return "Informe parent_page_id (para criar um banco novo) ou database_id (para usar um existente).";
+
+      const r = await nl.createLeadsDatabase(id, args.title || "Leads Zenda");
+      return r.ok
+        ? "Banco criado no Notion: " + (r.url || r.databaseId) + ". Ja configurado — rode notion_leads_sync para enviar os leads existentes."
+        : "Nao criou o banco: " + r.error;
     },
   },
   notion_leads_sync: {
