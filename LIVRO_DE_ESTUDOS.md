@@ -1525,6 +1525,36 @@ Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encod
 * **Documentação que induziu ao erro**
   - `apps/agent/AGENTS.md` mandava conectar em `https://maxrouter-prod.up.railway.app/v1`, que hoje responde `404 Application not found`. A instrução desatualizada gerou uma hipótese falsa de causa raiz durante a investigação. Corrigido com aviso explícito e data de verificação.
 
+
+### Capítulo 73: Reescrita da Abordagem de Prospecção — Dor antes de Produto
+
+* **O que estava errado**
+  - O prompt de `generateOutreachMessage` injetava quatro bullets de funcionalidade ("atendimento 24/7", "agenda no Google Calendar", "reduz no-show") e instruía: *"convide para uma demonstração rápida de 5 minutos"*.
+  - Ou seja: o código **ordenava** falar de produto antes de dor e fechar com pergunta de sim/não. As duas coisas que a prática de pré-vendas B2B aponta como causa de mensagem ignorada.
+  - O fallback era pior — e era ele que rodava, porque a geração falhava (cota do Gemini esgotada): elogio genérico ("acompanho o trabalho de excelência"), despejo de funcionalidades e `Atenciosamente, Equipe` — assinatura de e-mail formal dentro do WhatsApp.
+
+* **O que a pesquisa mostrou (e o que não mostrou)**
+  - Pesquisado o material público do Full Sales System (metodologia, papel do SDR, SDR de alta performance, BDR x SDR).
+  - **Eles não publicam script nem template.** O conteúdo é metodologia e definição de papel: cinco pilares (pré-vendas/setters, closers, CRM, recrutamento, rituais de performance) e BANT/MEDDIC/SPIN citados como *guia de conversa, não script rígido*.
+  - O que é afirmado e aproveitável: pesquisa prévia detalhada antes do contato; "mensagens genéricas são ignoradas"; não focar em funcionalidade e sim na dor do prospect; usar pergunta aberta ("Qual o maior desafio que você enfrenta hoje com X?") em vez de sim/não; não desistir em 1-2 toques; cadência multicanal.
+  - Registrar essa lacuna importa: qualquer afirmação de que "o template é o do FSS" seria invenção. O que se aplicou foram os princípios declarados, não um modelo copiado.
+
+* **Como ficou**
+  1. **Estrutura de três partes**: (a) uma frase que prova que a mensagem é para aquele estabelecimento; (b) a dor em uma frase, na linguagem de quem vive o problema; (c) UMA pergunta aberta.
+  2. **Dor por nicho** em tabela (`DOR_POR_NICHO`), escrita do ponto de vista do prospect — "paciente que manda mensagem à noite perguntando preço de clareamento e só recebe resposta no dia seguinte, quando já marcou em outro lugar" — em vez da nossa proposta de valor.
+  3. **Proibições explícitas no prompt**: nada de funcionalidade, tecnologia, "IA", nome de produto, pedido de reunião, "5 minutos", elogio genérico, assinatura, link, mais de um emoji. E proibido afirmar que viu o Instagram/site se isso não está nos dados — o prompt antigo convidava à fabricação.
+  4. **Objetivo do toque 1 é RESPOSTA, não agenda.** Pedir reunião antes de estabelecer relevância é o que transforma a mensagem em spam.
+  5. **Limite por canal**: WhatsApp ~400 chars, Instagram DM ~280. Ao estourar, encurta a dor — nunca a pergunta, que é o que gera resposta.
+  6. **O fallback segue os mesmos princípios.** Como ele é usado justamente quando o LLM falha, deixá-lo ruim significava que a pior mensagem era a que mais saía.
+
+* **Detalhes que só apareceram testando**
+  - `"Falo com a Centro Veterinário Pet Vida?"` — concordância errada com nome masculino. Trocado por `"É da X?"`, que funciona nos dois casos e soa como pessoa, não script.
+  - A versão de Instagram estourava o limite de 280 (305 chars) para odontologia, porque a dor desse nicho é a mais longa. O truncamento agora corta a dor pela última palavra inteira e preserva a pergunta.
+
+* **O que ainda não foi feito**
+  - Cadência. A metodologia insiste em não desistir após 1-2 toques, e hoje existe apenas o toque 1. Toque 2 e 3 (com ângulo diferente, não "seguindo meu contato anterior") são o próximo passo natural.
+  - Medir resposta. Sem taxa de resposta registrada, qualquer avaliação de copy é opinião.
+
 ---
 
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*

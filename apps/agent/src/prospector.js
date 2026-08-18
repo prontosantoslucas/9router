@@ -354,48 +354,131 @@ Retorne em Markdown bem formatado, profissional e pronto para orientar o robô d
 /**
  * Gera mensagem comercial B2B altamente persuasiva para vender o Zenda AI.
  */
+// Abordagem de primeiro contato (cold outreach).
+//
+// A versão anterior injetava 4 bullets de funcionalidade no prompt e mandava
+// "convide para uma demonstração de 5 minutos" — ou seja, ordenava exatamente
+// o que a prática de SDR diz para NÃO fazer: falar de produto antes de dor, e
+// fechar com pergunta de sim/não. O resultado eram mensagens genéricas, que
+// são ignoradas.
+//
+// Princípios aplicados (metodologia de pré-vendas B2B, ver LIVRO_DE_ESTUDOS
+// cap. 73): pesquisa antes do contato, dor antes de produto, UMA pergunta
+// aberta, sem pedir reunião no primeiro toque. O objetivo do toque 1 é
+// RESPOSTA, não agenda.
+const CHANNEL_LIMITS = {
+  whatsapp: { maxChars: 400, linhas: "3 a 4 linhas curtas" },
+  instagram: { maxChars: 280, linhas: "2 a 3 linhas" },
+};
+
+// Dor por nicho, na linguagem de quem vive o problema — não na nossa.
+const DOR_POR_NICHO = [
+  { re: /odonto|dent/i, dor: "paciente que manda mensagem à noite perguntando preço de clareamento ou implante e só recebe resposta no dia seguinte, quando já marcou em outro lugar" },
+  { re: /est[eé]tic|dermato|harmoniza/i, dor: "quem vê o story, chama na hora perguntando valor do procedimento e desiste se não responde rápido" },
+  { re: /veterin|animal|pet/i, dor: "tutor com bicho passando mal fora do horário, que liga pra quem atender primeiro" },
+  { re: /m[eé]dic|consult[oó]rio|cl[íi]nic/i, dor: "paciente que precisa remarcar e fica sem resposta, virando falta na agenda" },
+  { re: /fisio|nutri|psic/i, dor: "primeira consulta que não fecha porque a dúvida sobre valor e convênio ficou sem resposta" },
+];
+
+function dorDoNicho(category) {
+  const hit = DOR_POR_NICHO.find((d) => d.re.test(String(category || "")));
+  return hit ? hit.dor : "mensagem de paciente fora do horário comercial que fica sem resposta e vira agendamento perdido";
+}
+
 async function generateOutreachMessage(lead, channel = "whatsapp") {
   const settings = getSettings();
-  const prompt = `Você é o especialista comercial de vendas do ${settings.product_name} (Plataforma de IA e Agente de Atendimento 24/7 via WhatsApp e Google Calendar para clínicas e consultórios).
-Escreva uma mensagem comercial de abordagem fria (outreach B2B) curta, natural, educada e de alta conversão para o potencial cliente abaixo:
+  const lim = CHANNEL_LIMITS[channel] || CHANNEL_LIMITS.whatsapp;
+  const dor = dorDoNicho(lead.category);
 
-Nome do Estabelecimento: ${lead.name}
-Nicho/Especialidade: ${lead.category}
-Cidade/Região: ${lead.city}
-Responsável/Doutor(a): ${lead.contact_person || 'Doutor(a) / Gestor(a)'}
-Canal de Envio: ${channel.toUpperCase()} (WhatsApp ou Instagram DM)
-${settings.custom_pitch ? `Diferencial Customizado: ${settings.custom_pitch}` : ''}
+  // Único material de pesquisa real que temos. Se for pobre, o prompt manda
+  // NÃO inventar em vez de encher de elogio genérico.
+  const pesquisa = String(lead.description || "").replace(/\s+/g, " ").trim().slice(0, 400);
 
-Proposta de Valor do Zenda AI:
-- Atendimento 24h por dia, 7 dias por semana no WhatsApp da clínica sem deixar paciente esperando.
-- Tira dúvidas de preços, procedimentos, convênios e horários.
-- Realiza agendamentos automáticos sincronizados diretamente com a agenda do Google Calendar da clínica.
-- Aumenta a captação e reduz o no-show sem sobrecarregar a secretária/recepção.
+  const prompt = `Escreva a PRIMEIRA mensagem de abordagem fria para o estabelecimento abaixo. Canal: ${channel.toUpperCase()}.
 
-Instruções:
-- Tom profissional, simpático e respeitoso.
-- Máximo de 3 a 4 parágrafos curtos.
-- Convide para uma demonstração rápida de 5 minutos nesta semana.
-- Retorne APENAS o texto pronto para envio, sem introduções ou aspas.`;
+DADOS REAIS (é só isso que sabemos — não invente nada além):
+- Nome: ${lead.name}
+- Segmento: ${lead.category}
+- Cidade: ${lead.city}
+${lead.contact_person ? `- Responsável: ${lead.contact_person}` : ""}
+${pesquisa ? `- O que apareceu na busca sobre eles: "${pesquisa}"` : "- Não temos informação específica sobre eles além do nome e segmento."}
+
+DOR que queremos tocar (use como base, com as palavras dela):
+${dor}
+
+ESTRUTURA OBRIGATÓRIA (${lim.linhas}, no máximo ${lim.maxChars} caracteres):
+1. Uma frase curta que mostre que a mensagem é pra ELES especificamente — use o nome e, se houver algo concreto na busca acima, cite. Se não houver, seja direto sem elogiar.
+2. A dor, em UMA frase, como quem já viu isso acontecer. Não afirme que aconteceu com eles — pergunte ou coloque como algo comum no segmento.
+3. UMA pergunta aberta sobre essa dor. Pergunta que só se responde com uma frase, nunca com "sim" ou "não".
+
+PROIBIDO (cada item abaixo derruba a resposta):
+- Citar funcionalidade, tecnologia, "IA", "automação", "integração", "Google Calendar" ou nome de produto. O primeiro contato NÃO fala de produto.
+- Pedir reunião, call, demonstração, "5 minutos" ou qualquer horário. O objetivo é resposta, não agenda.
+- Elogio genérico: "trabalho de excelência", "parabéns pelo conteúdo", "acompanho vocês", "referência na região".
+- Afirmar que viu o Instagram, o site ou um post específico se isso não está nos dados acima.
+- Assinatura, "Atenciosamente", nome de equipe. É ${channel === "instagram" ? "DM" : "WhatsApp"}, não e-mail.
+- Mais de 1 emoji. Preferível nenhum.
+- Link de qualquer tipo.
+
+Responda APENAS com o texto da mensagem, sem aspas e sem explicação.`;
 
   try {
     const res = await proxy.complete([
-      { role: "system", content: "Você é um especialista em vendas B2B de SaaS de IA para clínicas de saúde e estética." },
-      { role: "user", content: prompt }
+      {
+        role: "system",
+        content: "Você é SDR de pré-vendas B2B. Sua única meta no primeiro contato é gerar RESPOSTA, tocando numa dor real do prospect. Você nunca fala de produto, nunca pede reunião e nunca usa elogio genérico no primeiro toque.",
+      },
+      { role: "user", content: prompt },
     ], { timeoutMs: 10000, maxRetries: 1 });
-    return res.content.trim();
+
+    let txt = res.content.trim().replace(/^["'`]|["'`]$/g, "");
+    // Corta assinatura que o modelo às vezes acrescenta mesmo proibido.
+    txt = txt.replace(/\n+(atenciosamente|abra[cç]os|att\.?|equipe .*)$/i, "").trim();
+    return txt;
   } catch (err) {
-    console.warn("[Prospector Zenda] Fallback de pitch comercial:", err.message);
-    if (channel === "whatsapp") {
-      return `Olá, equipe da ${lead.name}! 👋\n\nAcompanho o trabalho de excelência que vocês realizam em ${lead.category} em ${lead.city}.\n\nEstou entrando em contato para apresentar o ${settings.product_name} — nosso Agente de Atendimento 24/7 com Inteligência Artificial para WhatsApp, integrado diretamente à agenda do consultório.\n\nO Zenda responde pacientes na hora, esclarece dúvidas sobre procedimentos e agenda consultas no Google Calendar automaticamente, aumentando o faturamento sem sobrecarregar sua recepção.\n\nPodemos agendar uma breve demonstração de 5 minutos nesta semana para eu te mostrar como funciona na prática?\n\nAtenciosamente,\nEquipe ${settings.product_name}`;
-    }
-    return `Olá, ${lead.name}! 👋 Parabéns pelo trabalho e conteúdo em ${lead.category}!\n\nDesenvolvemos o ${settings.product_name}, um Agente de IA para WhatsApp que atende seus pacientes 24/7 e agenda consultas de forma 100% automática.\n\nPodemos te apresentar uma demonstração rápida de 5 min?`;
+    console.warn("[Prospector Zenda] Fallback de abordagem:", err.message);
+    return fallbackOutreach(lead, channel, dor);
   }
 }
 
-/**
- * Dispara a mensagem via WhatsApp (Evolution API / Baileys).
- */
+// O fallback é usado sempre que a geração falha — e falhou por dias quando a
+// cota do Gemini esgotou. Então ele precisa seguir os MESMOS princípios, não
+// ser um despejo de funcionalidades como era antes.
+function fallbackOutreach(lead, channel, dor) {
+  const primeiroNome = String(lead.name || "").split(/[-–|,]/)[0].trim();
+  const cidade = String(lead.city || "").split(",")[0].trim();
+  const lim = CHANNEL_LIMITS[channel] || CHANNEL_LIMITS.whatsapp;
+
+  // "É da X?" em vez de "Falo com a X?": funciona para nome masculino e
+  // feminino ("a Centro Veterinário" saía errado) e soa como mensagem de
+  // pessoa, não de script.
+  const abertura = channel === "instagram"
+    ? `Oi! Vocês são de ${cidade || "aí"}, certo?`
+    : `Oi! É da ${primeiroNome || "clínica"}?`;
+
+  const meio = channel === "instagram"
+    ? `Vejo muito isso em ${String(lead.category || "clínica").toLowerCase()}: ${dor}.`
+    : `Pergunto porque vejo isso acontecer muito no segmento: ${dor}.`;
+
+  const pergunta = channel === "instagram"
+    ? "Como vocês lidam com as mensagens que chegam fora do horário?"
+    : "Como vocês resolvem isso hoje — sobra pra alguém responder depois, ou fica pra outro dia?";
+
+  let msg = `${abertura}\n\n${meio}\n\n${pergunta}`;
+
+  // Respeita o limite do canal. Se estourar, encurta a DOR (a parte elástica),
+  // nunca a pergunta — é ela que gera a resposta.
+  if (msg.length > lim.maxChars) {
+    const espaco = lim.maxChars - (abertura.length + pergunta.length + 8);
+    const dorCurta = dor.length > espaco ? dor.slice(0, Math.max(40, espaco - 1)).replace(/[\s,;]+\S*$/, "") + "…" : dor;
+    const meioCurto = channel === "instagram"
+      ? `Vejo muito isso no segmento: ${dorCurta}.`
+      : `Pergunto porque vejo muito isso: ${dorCurta}.`;
+    msg = `${abertura}\n\n${meioCurto}\n\n${pergunta}`;
+  }
+  return msg;
+}
+
 async function sendWhatsAppOutreach(phone, message) {
   if (!phone) return { ok: false, error: "Telefone ausente" };
   try {

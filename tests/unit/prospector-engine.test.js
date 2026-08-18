@@ -33,7 +33,10 @@ describe("Prospector Zenda B2B Client Engine (apps/agent/src/prospector.js)", ()
     expect(duplicate.lead.id).toBe(first.lead.id);
   });
 
-  it("should generate personalized Zenda sales pitch", async () => {
+  // A asserção anterior exigia que a mensagem citasse "Zenda"/"Inteligência
+  // Artificial" — ou seja, travava o comportamento que causava mensagem
+  // ignorada: produto antes de dor. O contrato agora é o oposto.
+  it("primeiro contato: toca dor, faz pergunta aberta e NÃO fala de produto", async () => {
     const lead = {
       name: "Centro Odontológico Moema",
       category: "Odontologia",
@@ -43,7 +46,28 @@ describe("Prospector Zenda B2B Client Engine (apps/agent/src/prospector.js)", ()
     const msg = await prospector.generateOutreachMessage(lead, "whatsapp");
     expect(typeof msg).toBe("string");
     expect(msg.length).toBeGreaterThan(20);
-    expect(msg.includes("Zenda") || msg.includes("Inteligência Artificial") || msg.includes("WhatsApp")).toBe(true);
+    expect(msg.length).toBeLessThanOrEqual(520); // margem sobre o limite do canal
+
+    // Termina puxando resposta, não pedindo aceite de sim/não.
+    expect(msg).toMatch(/\?/);
+
+    // Nada de produto/tecnologia no toque 1.
+    expect(msg).not.toMatch(/\b(Zenda|intelig[êe]ncia artificial|IA|automa[çc][ãa]o|Google Calendar|integra[çc][ãa]o)\b/i);
+
+    // Nada de pedir reunião nem assinatura de e-mail.
+    expect(msg).not.toMatch(/(demonstra[çc][ãa]o|5 minutos|cinco minutos|agendar uma call|reuni[ãa]o)/i);
+    expect(msg).not.toMatch(/(atenciosamente|abra[çc]os|equipe zenda)/i);
+
+    // Elogio genérico é o que faz a mensagem parecer template.
+    expect(msg).not.toMatch(/(trabalho de excel[êe]ncia|parab[ée]ns pelo|refer[êe]ncia na regi[ãa]o)/i);
+  }, 15000);
+
+  it("Instagram respeita o limite do canal e mantém a pergunta", async () => {
+    const lead = { name: "Clínica Estética&Luxo", category: "Clínica de Estética", city: "Rio de Janeiro", source: "web" };
+    const msg = await prospector.generateOutreachMessage(lead, "instagram");
+    expect(msg.length).toBeLessThanOrEqual(360); // margem sobre 280
+    expect(msg).toMatch(/\?/);
+    expect(msg).not.toMatch(/https?:\/\//); // sem link no primeiro toque
   }, 15000);
 
   it("should return system stats and lead listing", () => {
