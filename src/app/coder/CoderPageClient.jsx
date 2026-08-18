@@ -8,13 +8,8 @@ import { useFileUpload } from "@/app/chat/hooks/useFileUpload";
 import { ChatComposer } from "@/shared/components/primitives/ChatComposer";
 import { CoderWorkspace } from "@/app/chat/components/CoderWorkspace";
 import { enhanceUserPrompt, processOpenClaudePrompt } from "@/lib/coder/openclaudeEngine";
+import { saveCheckpoint } from "@/lib/coder/checkpointStore";
 
-/**
- * /coder em DUAS COLUNAS (estilo Bolt):
- *  - Esquerda: chat com histórico da conversa + composer (única entrada de prompt).
- *  - Direita: CoderWorkspace (arquivos / editor / preview / terminal).
- * O preview vive dentro do painel direito, então NÃO cobre mais o chat.
- */
 export default function CoderPageClient() {
   return (
     <ToastProvider>
@@ -29,11 +24,6 @@ const nextId = () => `m${Date.now()}_${msgSeq++}`;
 const MODELO_PADRAO = "auto";
 const CHAVE_MODELO = "coder_modelo";
 
-// O Coder sempre pediu "auto" e não expunha escolha nenhuma. Quando a lista do
-// combo "auto" envelhece (provedor sem credencial, cota virada), a geração morre
-// com 503 e não havia como contornar pela interface — o Coder inteiro ficava
-// inutilizável. As opções vêm do próprio combo "auto", que é a lista curada do
-// roteador, então o seletor nunca oferece modelo que o gateway não conhece.
 function useModelos() {
   const [modelos, setModelos] = useState([]);
   const [modelo, setModelo] = useState(MODELO_PADRAO);
@@ -48,10 +38,6 @@ function useModelos() {
         const lista = Array.isArray(auto?.models) ? auto.models : [];
         setModelos(lista);
 
-        // A escolha salva só é restaurada se ainda existir na lista curada:
-        // modelo tirado do ranking (provedor perdeu credencial) não deve voltar
-        // a ser usado só porque sobrou no localStorage. Ler aqui, e não num
-        // efeito próprio, também evita ler localStorage durante o SSR.
         let salvo = null;
         try { salvo = localStorage.getItem(CHAVE_MODELO); } catch {}
         if (salvo && (salvo === MODELO_PADRAO || lista.includes(salvo))) setModelo(salvo);
@@ -77,10 +63,13 @@ function CoderShell() {
   const [draftText, setDraftText] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusText, setStatusText] = useState("");
+  const [executionStep, setExecutionStep] = useState(0); // 0: Idle, 1: Planning, 2: Coding, 3: Assembling, 4: Done
+  const [selectedTargetElement, setSelectedTargetElement] = useState(null); // Click-to-Edit
+
   const [coderFiles, setCoderFiles] = useState([]);
   const [coderProjectName, setCoderProjectName] = useState("Nova Aplicação");
   const [coderLogs, setCoderLogs] = useState([
-    { type: "info", text: "Ambiente Coder inicializado com motor OpenClaude." },
+    { type: "info", text: "Ambiente Coder Lovable inicializado com motor OpenClaude." },
   ]);
   const [messages, setMessages] = useState([]);
   const [lastError, setLastError] = useState(null);
@@ -123,26 +112,41 @@ function CoderShell() {
     setDraftText(enhanceUserPrompt(raw));
   };
 
-  // Núcleo compartilhado por geração normal e por auto-correção.
+  // Núcleo compartilhado por geração normal e por auto-correção
   const runGeneration = async (prompt, { isFix = false } = {}) => {
     if (!prompt || isGenerating) return;
     setLastError(null);
     setIsGenerating(true);
-    setStatusText(isFix ? "Corrigindo..." : "Iniciando geração...");
+    setExecutionStep(1); // Planning
+    setStatusText(isFix ? "Analisando erro do preview..." : "Planejando arquitetura da aplicação...");
     setCoderLogs((prev) => [...prev, { type: "command", text: `${isFix ? "Fix" : "Prompt"}: ${prompt.slice(0, 60)}...` }]);
+
     try {
+      let finalFiles = coderFiles;
+      setExecutionStep(2); // Generating files
       const { message } = await processOpenClaudePrompt({
         prompt,
         currentFiles: coderFiles,
-        // O parâmetro sempre existiu no motor; faltava a interface passá-lo.
         model: modelo,
-        onStreamMessage: (msg) => setStatusText(msg),
+        onStreamMessage: (msg) => {
+          setStatusText(msg);
+          if (msg.includes("Gerando") || msg.includes("Criando")) setExecutionStep(2);
+          else if (msg.includes("Atualizando") || msg.includes("Validando")) setExecutionStep(3);
+        },
         onTerminalLog: (log) => setCoderLogs((prev) => [...prev, log]),
-        onUpdateFiles: (newFiles) => setCoderFiles(newFiles),
+        onUpdateFiles: (newFiles) => {
+          finalFiles = newFiles;
+          setCoderFiles(newFiles);
+        },
       });
+
+      setExecutionStep(4); // Done
+      // Salva snapshot no histórico de checkpoints (Lovable Version History)
+      saveCheckpoint(coderProjectName, prompt, finalFiles);
+
       pushMessage(
         "assistant",
-        message || (isFix ? "Correção aplicada. Verifique o preview." : "Projeto gerado. Veja os arquivos e o preview ao lado.")
+        message || (isFix ? "Correção aplicada com sucesso no preview." : "Aplicação gerada com sucesso! Veja o preview interativo e os arquivos.")
       );
     } catch (err) {
       setCoderLogs((prev) => [...prev, { type: "error", text: `Erro Coder: ${err.message}` }]);
@@ -151,20 +155,25 @@ function CoderShell() {
     } finally {
       setIsGenerating(false);
       setStatusText("");
+      setTimeout(() => setExecutionStep(0), 4000);
     }
   };
 
   const handleSend = async (text) => {
-    const prompt = (text ?? draftText).trim();
+    let prompt = (text ?? draftText).trim();
     if (!prompt || isGenerating) return;
+
+    if (selectedTargetElement) {
+      prompt = `[Alvo Selecionado no Preview: <${selectedTargetElement.tag}> "${selectedTargetElement.text}" (classe: ${selectedTargetElement.classes})]\n${prompt}`;
+      setSelectedTargetElement(null);
+    }
+
     setDraftText("");
-    setFixAttempts(0); // novo pedido zera o contador de auto-correções
+    setFixAttempts(0);
     pushMessage("user", prompt);
     await runGeneration(prompt);
   };
 
-  // Loop de auto-correção: reenvia o erro do preview + arquivos atuais pro modelo.
-  // Limitado a MAX_AUTOFIX por pedido para não entrar em ciclo infinito de tokens.
   const handleAutoFix = async () => {
     if (!lastError || isGenerating) return;
     if (fixAttempts >= MAX_AUTOFIX) {
@@ -178,7 +187,13 @@ function CoderShell() {
     await runGeneration(fixPrompt, { isFix: true });
   };
 
-  // Sinais do preview (iframe) via CoderWorkspace.
+  const handleRestoreCheckpoint = (cp) => {
+    if (!cp || !Array.isArray(cp.files)) return;
+    setCoderFiles(cp.files);
+    pushMessage("assistant", `⏪ Checkpoint restaurado para a versão de ${new Date(cp.timestamp).toLocaleTimeString()} ("${cp.prompt}").`);
+    showToast({ kind: "success", text: `Versão restaurada com ${cp.files.length} arquivos.` });
+  };
+
   const handlePreviewError = (text) => { if (!isGenerating) setLastError(text); };
   const handlePreviewReady = () => setLastError(null);
 
@@ -192,42 +207,119 @@ function CoderShell() {
       <DropOverlay isDragging={isDragging} />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
-        {/* ── ESQUERDA: chat com histórico ── */}
-        <aside className="flex min-h-0 w-full shrink-0 flex-col border-b border-border bg-surface md:h-full md:w-[380px] md:border-b-0 md:border-r dark:bg-surface-2">
-          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof window !== "undefined") {
-                  window.dispatchEvent(new CustomEvent("open-sidebar-menu"));
-                }
-              }}
-              className="lg:hidden flex items-center justify-center size-8 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors -ml-2 mr-1"
-              aria-label="Abrir menu lateral"
-              title="Abrir menu"
-            >
-              <span className="material-symbols-outlined text-[20px]">menu</span>
-            </button>
-            <span className="material-symbols-outlined text-base text-brand-500">code</span>
-            <h2 className="truncate text-sm font-bold">Coder — {coderProjectName}</h2>
+        {/* ── ESQUERDA: Chat & Execution Steps (Padrão Lovable) ── */}
+        <aside className="flex min-h-0 w-full shrink-0 flex-col border-b border-border bg-surface md:h-full md:w-[380px] md:border-b-0 md:border-r dark:bg-surface">
+          {/* Header do Coder */}
+          <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-3.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    window.dispatchEvent(new CustomEvent("open-sidebar-menu"));
+                  }
+                }}
+                className="lg:hidden flex items-center justify-center size-8 rounded-lg text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors -ml-1 mr-1"
+                aria-label="Abrir menu lateral"
+                title="Abrir menu"
+              >
+                <span className="material-symbols-outlined text-[20px]">menu</span>
+              </button>
+              <div className="flex items-center justify-center size-7 rounded-lg bg-gradient-to-br from-brand-500 to-brand-600 text-white font-bold shadow-soft">
+                <span className="material-symbols-outlined text-[17px]">auto_fix_high</span>
+              </div>
+              <h2 className="truncate text-xs font-bold font-display text-text-main">
+                Coder do Lucas
+              </h2>
+            </div>
+
+            {/* Seletor de Modelo */}
+            {modelos.length > 0 && (
+              <select
+                value={modelo}
+                onChange={(e) => escolher(e.target.value)}
+                className="rounded-lg border border-border bg-surface-2 px-2 py-1 text-[11px] font-semibold text-text-main focus:border-brand-500 focus:outline-none max-w-[130px] truncate"
+                title="Modelo de IA utilizado"
+              >
+                <option value="auto">⚡ Auto (Melhor)</option>
+                {modelos.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            )}
           </header>
 
-          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-3">
+          {/* Execution Steps Live Checklist (Lovable Workflow) */}
+          {executionStep > 0 && (
+            <div className="shrink-0 p-3 bg-surface-2 border-b border-border space-y-1.5 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between text-[11px] font-bold text-brand-400 uppercase tracking-wider">
+                <span>Progresso de Geração</span>
+                <span className="text-[10px] text-text-muted">{statusText || "Processando..."}</span>
+              </div>
+              <div className="space-y-1 text-xs">
+                {[
+                  { step: 1, label: "Planejando componentes e arquitetura" },
+                  { step: 2, label: "Gerando código React e estilos Tailwind" },
+                  { step: 3, label: "Validando Virtual File System e dependências" },
+                  { step: 4, label: "Preview atualizado em tempo real" },
+                ].map((s) => (
+                  <div key={s.step} className="flex items-center gap-2">
+                    {executionStep > s.step ? (
+                      <span className="material-symbols-outlined text-[14px] text-emerald-400">check_circle</span>
+                    ) : executionStep === s.step ? (
+                      <span className="material-symbols-outlined text-[14px] text-brand-500 animate-spin">sync</span>
+                    ) : (
+                      <span className="material-symbols-outlined text-[14px] text-text-muted/40">radio_button_unchecked</span>
+                    )}
+                    <span className={executionStep >= s.step ? "text-text-main font-medium" : "text-text-muted/60"}>
+                      {s.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Histórico de Mensagens */}
+          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-3 space-y-3">
             {messages.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center px-4 text-center">
-                <span className="material-symbols-outlined mb-2 text-3xl text-text-muted">forum</span>
-                <p className="text-sm font-semibold text-text-main">Descreva sua ideia</p>
-                <p className="mt-1 text-xs text-text-muted">
-                  O Coder gera o projeto em React/Tailwind e o preview aparece ao lado.
-                </p>
+              <div className="flex h-full flex-col items-center justify-center px-4 text-center space-y-3 my-8">
+                <div className="flex items-center justify-center size-12 rounded-2xl bg-brand-500/10 text-brand-500 border border-brand-500/20">
+                  <span className="material-symbols-outlined text-[26px]">prompt_suggestion</span>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-text-main">O que vamos construir hoje?</p>
+                  <p className="text-xs text-text-muted leading-relaxed max-w-xs">
+                    Crie dashboards, landing pages, sistemas SaaS ou apps interativos com componentes prontos e backend Supabase.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-1.5 w-full pt-2">
+                  {[
+                    "Landing page moderna de SaaS com gráficos de conversão",
+                    "Dashboard de gestão de tarefas com Kanban e tema escuro",
+                    "Calculadora financeira interativa com exportação PDF",
+                  ].map((sug) => (
+                    <button
+                      key={sug}
+                      type="button"
+                      onClick={() => handleSend(sug)}
+                      className="text-left p-2.5 rounded-xl bg-surface-2 hover:bg-surface-3 border border-border text-xs text-text-muted hover:text-text-main transition-colors truncate"
+                    >
+                      💡 {sug}
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {messages.map((m) => (
                   <MessageBubble key={m.id} message={m} />
                 ))}
                 {isGenerating && (
-                  <div className="flex items-center gap-2 px-1 text-xs italic text-text-muted" aria-live="polite">
+                  <div className="flex items-center gap-2 px-2 text-xs italic text-text-muted" aria-live="polite">
                     <span className="material-symbols-outlined animate-spin text-sm text-brand-500">sync</span>
                     <span className="truncate">{statusText || "Gerando..."}</span>
                   </div>
@@ -237,74 +329,68 @@ function CoderShell() {
             )}
           </div>
 
-          {/* Barra de auto-correção: aparece quando o preview reporta erro */}
+          {/* Barra de Auto-correção */}
           {lastError && !isGenerating && (
             <div className="shrink-0 border-t border-danger/30 bg-danger/5 p-3">
               <div className="flex items-center gap-2 text-xs text-danger">
                 <span className="material-symbols-outlined text-sm">error</span>
                 <span className="min-w-0 flex-1 truncate">
-                  Preview com erro.{fixAttempts >= MAX_AUTOFIX ? " Limite de auto-correções atingido." : ""}
+                  Preview com erro.{fixAttempts >= MAX_AUTOFIX ? " Limite de correções atingido." : ""}
                 </span>
                 <button
                   type="button"
                   onClick={handleAutoFix}
                   disabled={fixAttempts >= MAX_AUTOFIX}
-                  className="shrink-0 rounded-md bg-danger px-2.5 py-1 text-[11px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                  className="flex shrink-0 items-center gap-1 rounded-lg bg-danger px-2.5 py-1 text-xs font-bold text-white shadow-soft hover:opacity-90 disabled:opacity-40"
                 >
-                  <span className="material-symbols-outlined mr-1 align-[-2px] text-[13px]">auto_fix_high</span>
-                  Corrigir automaticamente
+                  <span className="material-symbols-outlined text-xs">auto_fix_high</span>
+                  <span>Corrigir com IA</span>
                 </button>
               </div>
             </div>
           )}
 
-          {/* Composer (única entrada do Coder) */}
-          <div className="shrink-0 space-y-2 border-t border-border p-3">
-            <div className="flex items-center justify-between gap-2">
+          {/* Click-to-Edit Target Chip */}
+          {selectedTargetElement && (
+            <div className="px-3 py-2 bg-brand-500/10 border-t border-brand-500/30 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="material-symbols-outlined text-brand-500 text-[16px]">ads_click</span>
+                <span className="font-bold text-brand-400 truncate">
+                  Alvo: &lt;{selectedTargetElement.tag}&gt; &quot;{selectedTargetElement.text || selectedTargetElement.selector}&quot;
+                </span>
+              </div>
               <button
                 type="button"
-                onClick={handleEnhancePrompt}
-                className="flex items-center gap-1.5 text-[11px] font-bold text-brand-500 hover:underline"
+                onClick={() => setSelectedTargetElement(null)}
+                className="text-text-muted hover:text-text-main text-xs"
+                title="Remover alvo"
               >
-                <span className="material-symbols-outlined text-sm">auto_fix_high</span>
-                <span>Melhorar meu prompt</span>
+                ✕
               </button>
-
-              {/* Escolha do modelo: a saída quando "auto" está com problema. */}
-              <select
-                value={modelo}
-                onChange={(e) => escolher(e.target.value)}
-                disabled={isGenerating}
-                title="Modelo usado para gerar. 'Automático' tenta os provedores em ordem; escolha um direto se o automático falhar."
-                className="max-w-[190px] truncate rounded-md border border-border bg-surface px-2 py-1 font-mono text-[10px] text-text-muted disabled:opacity-50"
-              >
-                <option value={MODELO_PADRAO}>Automático (fallback)</option>
-                {modelos.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
             </div>
+          )}
 
-            {isUploading && (
-              <div className="flex items-center gap-2 text-xs text-brand-500" aria-live="polite">
-                <span className="material-symbols-outlined animate-spin text-sm">sync</span>
-                <span>Processando arquivo...</span>
-              </div>
-            )}
-
+          {/* Composer do Chat */}
+          <div className="shrink-0 border-t border-border p-3 bg-surface">
             <ChatComposer
-              value={draftText}
-              onChange={setDraftText}
+              draftText={draftText}
+              setDraftText={setDraftText}
               onSend={handleSend}
               onUpload={handleUpload}
-              isSending={isGenerating}
-              placeholder="Descreva a aplicação ou alteração desejada..."
+              isUploading={isUploading}
+              isLoading={isGenerating}
+              onEnhancePrompt={handleEnhancePrompt}
+              placeholder={
+                selectedTargetElement
+                  ? `Diga o que alterar em <${selectedTargetElement.tag}>...`
+                  : "Descreva sua ideia para gerar ou editar..."
+              }
             />
           </div>
         </aside>
 
-        {/* ── DIREITA: workspace (arquivos / editor / preview / terminal) ── */}
-        <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        {/* ── DIREITA: CoderWorkspace (Editor, Preview, Viewports, Supabase) ── */}
+        <main className="min-h-0 flex-1 overflow-hidden">
           <CoderWorkspace
             files={coderFiles}
             setFiles={setCoderFiles}
@@ -315,8 +401,14 @@ function CoderShell() {
             standalone={false}
             onPreviewError={handlePreviewError}
             onPreviewReady={handlePreviewReady}
+            onSelectElement={(elem) => {
+              setSelectedTargetElement(elem);
+              showToast({ kind: "info", text: `Elemento <${elem.tag}> selecionado para edição.` });
+            }}
+            onPromptSchema={(prompt) => handleSend(prompt)}
+            onRestoreCheckpoint={handleRestoreCheckpoint}
           />
-        </div>
+        </main>
       </div>
     </div>
   );

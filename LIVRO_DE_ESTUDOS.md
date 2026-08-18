@@ -1743,6 +1743,28 @@ Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encod
 
 ---
 
+### Capítulo 84: Transformação do Coder com Recursos Completos Inspirados no Lovable.dev
+
+* **Por que foi feita essa alteração (Causa Raiz & Evolução de Plataforma)**:
+  1. **Necessidade de Ambiente de Desenvolvimento Completo de IA**: O usuário solicitou transformar o Coder em uma ferramenta equivalente ao padrão de referência **Lovable.dev** (Full-Stack AI App Builder), integrando edição visual (Click-to-Edit), controle de versões com rollback, viewports responsivos e integração de banco de dados.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Visual Element Inspector (Click-to-Edit) no [previewBuilder.js](file:///c:/Users/user/Documents/GitHub/9router/src/lib/coder/previewBuilder.js)**:
+     - Injeção de listener de inspeção DOM no iframe de preview (`ads_click` / modo inspect). Ao passar o mouse, desenha um contorno animado (`.lovable-inspect-highlight`); ao clicar, captura a tag, classes CSS e texto do elemento, enviando via `postMessage` para anexar o alvo ao chat.
+  2. **Controle de Versões e Checkpoints com Rollback ([checkpointStore.js](file:///c:/Users/user/Documents/GitHub/9router/src/lib/coder/checkpointStore.js))**:
+     - Cada geração de código salva automaticamente um snapshot completo do projeto com timestamp e prompt.
+     - Adicionado menu suspenso de histórico no [CoderWorkspace.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/chat/components/CoderWorkspace.jsx) permitindo restaurar qualquer versão anterior com 1 clique.
+  3. **Visualizador de Viewports Multi-dispositivo**:
+     - Alternância entre Desktop (100%), Tablet (768px) e Mobile (375px) com moldura realista para teste de responsividade imediato.
+  4. **Painel de Banco de Dados Supabase ([SupabaseDatabaseView.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/coder/components/SupabaseDatabaseView.jsx))**:
+     - Visualização de tabelas, contagem de registros e colunas, além de geração automática de scripts SQL de schema com IA.
+  5. **Passos de Execução ao Vivo no [CoderPageClient.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/coder/CoderPageClient.jsx)**:
+     - Checklist animado exibindo o ciclo de vida da geração (*Planejando componentes*, *Gerando código React/Tailwind*, *Validando VFS*, *Preview pronto*).
+  6. **Gatilho de Atualização do Railway**:
+     - Incrementada a versão no [apps/agent/package.json](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/package.json) para disparar a compilação no Railway.
+
+---
+
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
 
 
