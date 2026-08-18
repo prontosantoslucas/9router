@@ -1097,7 +1097,73 @@ const PROSPECTOR_TOOLS = {
     run: async () => {
       const prospector = require("../prospector");
       const res = await prospector.runCycle();
-      return `✅ Ciclo de prospecção concluído: ${res.discovered} novos clientes minerados, ${res.outreached} mensagens despachadas.`;
+
+      // Respeita ok:false. Antes retornava "✅ concluído" em qualquer caso —
+      // então falha técnica (ex.: erro de schema gravando lead) chegava ao
+      // modelo como "0 novos clientes", e ele inventava "filtros exaustos" e
+      // sugeria trocar de nicho. O erro precisa chegar como erro.
+      if (res.ok === false) {
+        return `❌ O ciclo NÃO concluiu. ${res.error || res.reason || "falha desconhecida"}`;
+      }
+
+      const parts = [`✅ Ciclo concluído: ${res.discovered} novos clientes minerados, ${res.outreached} mensagens despachadas.`];
+      if (res.notion) {
+        parts.push(res.notion.ok
+          ? `📓 Notion: ${res.notion.synced} lead(s) sincronizados.`
+          : `📓 Notion: falhou — ${res.notion.error || `${res.notion.failed} erro(s)`}`);
+      }
+      if (res.discovered === 0) {
+        parts.push("Obs: 0 NOVOS não significa 0 leads — os já conhecidos não são recontados. Use prospector_status para o total.");
+      }
+      return parts.join("\n");
+    },
+  },
+  notion_leads_setup: {
+    name: "notion_leads_setup",
+    desc: "Configura onde a listagem de leads é salva no Notion. Passe parent_page_id para CRIAR um banco novo já com os campos certos (Nome, Telefone, Instagram, Site, Cidade, Nicho, Status, Origem, Data), ou database_id para usar um banco que já existe.",
+    args: {
+      type: "object",
+      properties: {
+        parent_page_id: { type: "string", description: "ID da página do Notion que vai conter o banco novo. Cria o banco com os tipos corretos." },
+        database_id: { type: "string", description: "ID de um banco já existente, para usar em vez de criar." },
+        title: { type: "string", description: "Nome do banco a criar (default: 'Leads Zenda')" },
+      },
+      required: [],
+    },
+    run: async (args = {}) => {
+      const nl = require("../notionLeads");
+      if (args.database_id) {
+        nl.setLeadsDatabase(String(args.database_id).trim());
+        return `✅ Listagem de leads apontada para o banco ${args.database_id}. Rode notion_leads_sync para enviar os pendentes.`;
+      }
+      if (args.parent_page_id) {
+        const r = await nl.createLeadsDatabase(String(args.parent_page_id).trim(), args.title || "Leads Zenda");
+        return r.ok
+          ? `✅ Banco criado no Notion: ${r.url || r.databaseId}\nJá configurado. Rode notion_leads_sync para enviar os leads existentes.`
+          : `❌ Não criou o banco: ${r.error}`;
+      }
+      return "Informe parent_page_id (para criar um banco novo) ou database_id (para usar um existente).";
+    },
+  },
+  notion_leads_sync: {
+    name: "notion_leads_sync",
+    desc: "Envia para o Notion os leads que ainda não foram sincronizados, e informa quantos estão pendentes.",
+    args: {
+      type: "object",
+      properties: { limit: { type: "number", description: "Máximo de leads por execução (default 25)" } },
+      required: [],
+    },
+    run: async (args = {}) => {
+      const nl = require("../notionLeads");
+      const st = nl.stats();
+      if (!st.configured) {
+        return `❌ Notion de leads não configurado. Falta ${!require("../config").NOTION_TOKEN ? "NOTION_TOKEN" : "o banco de leads"}. Use notion_leads_setup.`;
+      }
+      const r = await nl.syncPendingLeads({ limit: Math.min(Math.max(Number(args.limit) || 25, 1), 100) });
+      const after = nl.stats();
+      return r.ok
+        ? `✅ ${r.synced} lead(s) enviados ao Notion. Total lá: ${after.sent}/${after.total} · pendentes: ${after.pending}`
+        : `⚠️ ${r.synced} enviados, ${r.failed || 0} falharam. ${r.error || (r.errors || []).join(" | ")}`;
     },
   },
   prospector_status: {

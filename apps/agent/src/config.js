@@ -59,6 +59,9 @@ const cfg = {
   NOTION_TOKEN: process.env.NOTION_TOKEN || "",
   NOTION_DATABASE_ID: process.env.NOTION_DATABASE_ID || "",
   NOTION_SECOND_DATABASE_ID: process.env.NOTION_SECOND_DATABASE_ID || "",
+  // Banco da listagem de leads do prospector. Pode vir da env var ou ser
+  // gravado pelo dashboard/tool (persiste em notion_config.leads_database_id).
+  NOTION_LEADS_DATABASE_ID: process.env.NOTION_LEADS_DATABASE_ID || "",
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "",
   GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || "",
   GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || "",

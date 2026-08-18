@@ -93,6 +93,10 @@ try { db.exec("ALTER TABLE prospector_leads ADD COLUMN city TEXT DEFAULT ''"); }
 try { db.exec("ALTER TABLE prospector_leads ADD COLUMN contact_person TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE prospector_leads ADD COLUMN website_url TEXT DEFAULT ''"); } catch {}
 try { db.exec("ALTER TABLE prospector_leads ADD COLUMN matched_product_id TEXT DEFAULT ''"); } catch {}
+// Página correspondente no Notion. NULL = ainda não sincronizado; é assim que
+// syncPendingLeads sabe o que falta enviar, e o que torna o envio idempotente
+// com o ciclo reencontrando os mesmos estabelecimentos a cada 15 min.
+try { db.exec("ALTER TABLE prospector_leads ADD COLUMN notion_page_id TEXT"); } catch {}
 
 // Seed de produtos padrão no portfólio
 try {
@@ -763,10 +767,24 @@ async function runCycle(onNotify) {
     };
   }
 
+  // Espelha a listagem no Notion. Fail-open e require tardio: se o módulo ou o
+  // Notion falharem, o ciclo já fez o trabalho dele e os leads continuam no
+  // banco local com notion_page_id NULL — sobem na próxima rodada.
+  let notionSync = null;
+  try {
+    const notionLeads = require("./notionLeads");
+    if (notionLeads.isConfigured()) {
+      notionSync = await notionLeads.syncPendingLeads({ limit: 25 });
+    }
+  } catch (err) {
+    console.warn("[Prospector Zenda] sync com Notion falhou (não fatal):", err.message);
+  }
+
   return {
     ok: true,
     discovered: discoveredCount,
     outreached: outreachedCount,
+    notion: notionSync,
     leads: discoveredLeads.map(l => ({ id: l.id, name: l.name, category: l.category, city: l.city, phone: l.phone, instagram: l.instagram_handle }))
   };
 }

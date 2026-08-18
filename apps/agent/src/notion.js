@@ -4,7 +4,7 @@ const db = require("./db");
 
 function loadPersisted() {
   try {
-    const row = db.prepare("SELECT token, database_id, second_database_id FROM notion_config WHERE id = 1").get();
+    const row = db.prepare("SELECT token, database_id, second_database_id, leads_database_id FROM notion_config WHERE id = 1").get();
     if (row) {
       config.NOTION_TOKEN = row.token || config.NOTION_TOKEN;
       config.NOTION_DATABASE_ID = row.database_id || config.NOTION_DATABASE_ID;
@@ -14,6 +14,7 @@ function loadPersisted() {
       // Semeado com o database real encontrado em 2026-07-31 (a linked view
       // da página homônima apontava pra este, não pro database-casca vazio).
       config.NOTION_SECOND_DATABASE_ID = row.second_database_id || config.NOTION_SECOND_DATABASE_ID || "92805e5e-aa0f-83d0-a94c-8189a151ba99";
+      config.NOTION_LEADS_DATABASE_ID = row.leads_database_id || config.NOTION_LEADS_DATABASE_ID || "";
     }
   } catch {}
 }
@@ -315,4 +316,11 @@ async function searchPages(query) {
   }
 }
 
-module.exports = { createPage, saveToCategory, queryDatabase, searchPages, isConfigured, setConfig, setSecondDatabase };
+// getHeaders/getSchema/titlePropertyName são exportados para o notionLeads.js
+// reaproveitar auth e leitura de schema (com o cache de 5 min) em vez de
+// duplicar essa lógica — o token e o tratamento de falha da API precisam se
+// comportar igual nos dois módulos.
+module.exports = {
+  createPage, saveToCategory, queryDatabase, searchPages, isConfigured, setConfig, setSecondDatabase,
+  getHeaders, getSchema, titlePropertyName,
+};

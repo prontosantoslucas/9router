@@ -181,4 +181,13 @@ try {
   if (!/duplicate column/i.test(err.message)) throw err;
 }
 
+// Banco dedicado à listagem de leads do prospector. Separado dos dois acima
+// de propósito: lead precisa de propriedade tipada (telefone, cidade, status)
+// pra listagem ser filtrável, e misturar com as notas poluiria os dois lados.
+try {
+  db.exec(`ALTER TABLE notion_config ADD COLUMN leads_database_id TEXT NOT NULL DEFAULT '';`);
+} catch (err) {
+  if (!/duplicate column/i.test(err.message)) throw err;
+}
+
 module.exports = db;
