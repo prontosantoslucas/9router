@@ -1127,6 +1127,59 @@ const PROSPECTOR_TOOLS = {
       return parts.join("\n");
     },
   },
+  whatsapp_session_backup: {
+    name: "whatsapp_session_backup",
+    desc: "Exporta a sessao do WhatsApp cifrada, como texto, para o usuario guardar FORA do Railway. E o unico jeito de reconectar sem escanear QR se o volume for recriado. O texto sozinho nao serve sem o segredo do servidor.",
+    args: { type: "object", properties: {} },
+    run: async () => {
+      const vault = require("../channels/whatsapp/sessionVault");
+      const st = vault.status();
+      if (!st.hasSecret) return "Nao posso cifrar: falta SESSION_BACKUP_KEY (ou AGENT_INTERNAL_SECRET) no ambiente.";
+      const r = vault.exportBlob();
+      if (!r.ok) return "Nao consegui exportar: " + r.error;
+      const linhas = [
+        "Sessao do WhatsApp exportada (" + r.files + " arquivos, origem: " + r.from + ").",
+        "GUARDE o texto abaixo num lugar seguro fora do Railway. Ele reconecta o WhatsApp sem QR.",
+        "",
+        r.blob,
+      ];
+      return linhas.join("\n");
+    },
+  },
+  whatsapp_session_restore: {
+    name: "whatsapp_session_restore",
+    desc: "Restaura a sessao do WhatsApp a partir do texto cifrado gerado por whatsapp_session_backup. Use quando o volume foi recriado e o WhatsApp voltou a pedir QR.",
+    args: {
+      type: "object",
+      properties: { blob: { type: "string", description: "O texto cifrado completo (comeca com v1.)" } },
+      required: ["blob"],
+    },
+    run: async (args = {}) => {
+      const vault = require("../channels/whatsapp/sessionVault");
+      const r = vault.importBlob(args.blob);
+      if (!r.ok) return "Nao restaurou: " + r.error;
+      return "Sessao restaurada (" + r.restored + " arquivos). Reinicie a conexao do WhatsApp para ela ser usada.";
+    },
+  },
+  whatsapp_session_status: {
+    name: "whatsapp_session_status",
+    desc: "Mostra o estado da persistencia da sessao do WhatsApp: arquivos locais, backup no banco e quando foi salvo.",
+    args: { type: "object", properties: {} },
+    run: async () => {
+      const vault = require("../channels/whatsapp/sessionVault");
+      const st = vault.status();
+      const nc = require("../channels/whatsapp/nativeClient").getStatus();
+      const out = [
+        "Conexao: " + (nc.connected ? "conectado" : nc.state),
+        "Arquivos de sessao no disco: " + st.localFiles,
+        "Backup cifrado no banco: " + (st.backupFiles ? st.backupFiles + " arquivos (" + st.backupAt + ")" : "nenhum"),
+        "Chave de cifra disponivel: " + (st.hasSecret ? "sim" : "NAO - backup desabilitado"),
+        "Diretorio: " + st.authDir,
+      ];
+      if (!st.backupFiles && st.localFiles) out.push("Aviso: ha sessao local sem backup. Rode whatsapp_session_backup e guarde o texto.");
+      return out.join("\n");
+    },
+  },
   notion_leads_setup: {
     name: "notion_leads_setup",
     desc: "Configura onde a listagem de leads é salva no Notion. Passe parent_page_id para CRIAR um banco novo já com os campos certos (Nome, Telefone, Instagram, Site, Cidade, Nicho, Status, Origem, Data), ou database_id para usar um banco que já existe.",

@@ -2,6 +2,7 @@ const path = require("path");
 const os = require("os");
 const fs = require("fs");
 const QRCode = require("qrcode");
+const sessionVault = require("./sessionVault");
 
 const dataDir = process.env.DATA_DIR || path.join(os.homedir(), ".9router");
 const AUTH_DIR = path.join(dataDir, "agent", "whatsapp-session");
@@ -40,6 +41,14 @@ async function start(onMessage) {
   isInitializing = true;
   connectionState = "connecting";
 
+  // Restaura ANTES do useMultiFileAuthState. Se rodasse depois, o Baileys já
+  // teria criado credenciais novas e o QR apareceria mesmo havendo backup.
+  try {
+    sessionVault.restoreIfMissing();
+  } catch (e) {
+    console.warn("[WhatsAppNative] restauração de sessão falhou:", e.message);
+  }
+
   try {
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
     const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: [2, 3000, 1017531287] }));
@@ -51,7 +60,12 @@ async function start(onMessage) {
       generateHighQualityLinkPreview: true,
     });
 
-    sock.ev.on("creds.update", saveCreds);
+    sock.ev.on("creds.update", async () => {
+      await saveCreds();
+      // Snapshot cifrado no banco, com debounce: creds.update dispara em
+      // rajada durante o handshake, e um snapshot por evento seria desperdício.
+      sessionVault.snapshotSoon();
+    });
 
     sock.ev.on("connection.update", async (update) => {
       const { connection, lastDisconnect, qr } = update;
