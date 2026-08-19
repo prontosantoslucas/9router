@@ -82,6 +82,7 @@ export const WEBHOOK_EVENTS = {
   DEAL_UPDATED: "deal.updated",
   DEAL_STAGE_CHANGED: "deal.stage_changed",
   DEAL_DELETED: "deal.deleted",
+  DEAL_CLOSE_APPROACHING: "deal.close_approaching",
   ALERT_CREATED: "alert.created",
   USAGE_THRESHOLD: "usage.threshold",
   BALANCE_LOW: "balance.low",

@@ -313,3 +313,112 @@ export async function getMonthComparison() {
     },
   };
 }
+
+export async function getMonthlyForecast() {
+  const db = await getAdapter();
+
+  const stageProbability = {
+    lead: 0.10,
+    qualified: 0.25,
+    proposal: 0.50,
+    negotiation: 0.75,
+    won: 1.0,
+  };
+
+  // 1) Forecast for the next 6 months based on expectedCloseAt
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const fromKey = now.toISOString().slice(0, 10);
+
+  const horizon = new Date(now);
+  horizon.setMonth(horizon.getMonth() + 6);
+  const toKey = horizon.toISOString().slice(0, 10);
+
+  const upcoming = db.all(
+    `SELECT stage, valueCents, expectedCloseAt
+     FROM crmDeals
+     WHERE stage NOT IN ('won', 'lost', 'cancelled')
+       AND expectedCloseAt IS NOT NULL
+       AND expectedCloseAt BETWEEN ? AND ?`,
+    [fromKey, toKey]
+  );
+
+  const byMonth = {};
+  for (const deal of upcoming) {
+    const month = deal.expectedCloseAt.slice(0, 7);
+    if (!byMonth[month]) byMonth[month] = { gross: 0, weighted: 0, count: 0 };
+    const prob = stageProbability[deal.stage] || 0;
+    byMonth[month].gross += deal.valueCents;
+    byMonth[month].weighted += deal.valueCents * prob;
+    byMonth[month].count += 1;
+  }
+
+  const forecastByMonth = [];
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const entry = byMonth[key] || { gross: 0, weighted: 0, count: 0 };
+    forecastByMonth.push({
+      month: key,
+      gross: Math.round(entry.gross / 100),
+      weighted: Math.round(entry.weighted / 100),
+      count: entry.count,
+    });
+  }
+
+  // 2) Actual won revenue by month (last 6 months, from closedAt)
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+  const wonByMonth = db.all(
+    `SELECT strftime('%Y-%m', closedAt) as month,
+            SUM(valueCents) as revenue,
+            COUNT(*) as count
+     FROM crmDeals
+     WHERE stage = 'won' AND closedAt IS NOT NULL AND closedAt >= ?
+     GROUP BY month
+     ORDER BY month ASC`,
+    [sixMonthsAgo.toISOString()]
+  );
+
+  const wonKeyed = {};
+  for (const m of wonByMonth) {
+    wonKeyed[m.month] = { revenue: Math.round(m.revenue / 100), count: m.count };
+  }
+
+  const wonByMonthList = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    wonByMonthList.push({
+      month: key,
+      revenue: wonKeyed[key]?.revenue || 0,
+      count: wonKeyed[key]?.count || 0,
+    });
+  }
+
+  // 3) Conversion rate by stage (current distribution + win probability)
+  const distribution = db.all(
+    `SELECT stage, COUNT(*) as count, SUM(valueCents) as totalValue
+     FROM crmDeals
+     GROUP BY stage`
+  );
+
+  const totalDeals = distribution.reduce((sum, row) => sum + row.count, 0) || 1;
+  const conversionByStage = distribution
+    .map((row) => ({
+      stage: row.stage,
+      count: row.count,
+      share: Math.round((row.count / totalDeals) * 100),
+      totalValue: Math.round((row.totalValue || 0) / 100),
+      probability: stageProbability[row.stage] || 0,
+      expectedRevenue: Math.round((row.totalValue || 0) * (stageProbability[row.stage] || 0) / 100),
+    }))
+    .sort((a, b) => b.totalValue - a.totalValue);
+
+  return {
+    forecastByMonth,
+    wonByMonth: wonByMonthList,
+    conversionByStage,
+  };
+}

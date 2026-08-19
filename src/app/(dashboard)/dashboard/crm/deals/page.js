@@ -6,7 +6,8 @@ import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from "@
 import {
   Plus, Download, Trash2, ArrowRightLeft, Loader2, Briefcase, Flag,
   LayoutGrid, Table, Search, Filter, Sparkles, CheckCircle2, MoreVertical,
-  Calendar, Building2, User, ChevronRight, ArrowUpRight, Pencil, X
+  Calendar, Building2, User, ChevronRight, ArrowUpRight, Pencil, X,
+  Trophy, ThumbsDown, RotateCcw
 } from "lucide-react";
 import {
   DEAL_STAGES, PRIORITIES, stageMeta, priorityMeta, sourceMeta,
@@ -138,6 +139,36 @@ export default function DealsPipelinePage() {
         setEditingDeal(null);
         fetchDeals();
         notify("✓ Negócio atualizado com sucesso!");
+      } else {
+        notify(data.error || "Erro ao atualizar negócio");
+      }
+    } catch (error) {
+      notify("Erro ao atualizar negócio");
+    }
+  }
+
+  async function handleSetOutcome(deal, outcome) {
+    const closedStages = ["won", "lost", "cancelled"];
+    const isClosing = closedStages.includes(outcome);
+    const wasClosed = closedStages.includes(deal.stage);
+
+    try {
+      const res = await fetch(`/api/crm/deals/${deal.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage: outcome,
+          closedAt: isClosing ? new Date().toISOString() : null,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        fetchDeals();
+        notify(
+          isClosing
+            ? `✓ Negócio marcado como ${stageMeta(outcome).label}`
+            : `✓ Negócio reaberto (${stageMeta(outcome).label})`
+        );
       } else {
         notify(data.error || "Erro ao atualizar negócio");
       }
@@ -425,6 +456,7 @@ export default function DealsPipelinePage() {
                 selected={selected}
                 onToggleSelect={toggleSelect}
                 onEditDeal={(deal) => setEditingDeal(deal)}
+                onSetOutcome={handleSetOutcome}
                 onAddDeal={() => {
                   setSelectedStage(stage.value);
                   setShowForm(true);
@@ -571,9 +603,10 @@ export default function DealsPipelinePage() {
   );
 }
 
-function KanbanColumn({ stage, deals, contacts, selected, onToggleSelect, onEditDeal, onAddDeal }) {
+function KanbanColumn({ stage, deals, contacts, selected, onToggleSelect, onEditDeal, onSetOutcome, onAddDeal }) {
   const totalValue = deals.reduce((sum, deal) => sum + (deal.valueCents || 0), 0);
   const sm = stageMeta(stage.value);
+  const [cardMenuId, setCardMenuId] = useState(null);
 
   return (
     <div className="flex-shrink-0 w-80 flex flex-col">
@@ -601,8 +634,18 @@ function KanbanColumn({ stage, deals, contacts, selected, onToggleSelect, onEdit
               deal={deal}
               contact={contacts[deal.contactId]}
               isSelected={selected.has(deal.id)}
+              menuOpen={cardMenuId === deal.id}
+              onToggleMenu={() => setCardMenuId(cardMenuId === deal.id ? null : deal.id)}
+              onCloseMenu={() => setCardMenuId(null)}
               onToggle={() => onToggleSelect(deal.id)}
-              onEdit={() => onEditDeal(deal)}
+              onEdit={() => {
+                setCardMenuId(null);
+                onEditDeal(deal);
+              }}
+              onSetOutcome={(outcome) => {
+                setCardMenuId(null);
+                onSetOutcome(deal, outcome);
+              }}
             />
           ))}
 
@@ -626,9 +669,10 @@ function KanbanColumn({ stage, deals, contacts, selected, onToggleSelect, onEdit
   );
 }
 
-function DealCard({ deal, contact, isDragging, isSelected, onToggle, onEdit }) {
+function DealCard({ deal, contact, isDragging, isSelected, onToggle, onEdit, onSetOutcome, menuOpen, onToggleMenu, onCloseMenu }) {
   const pm = priorityMeta(deal.priority);
   const sm = stageMeta(deal.stage);
+  const isClosed = ["won", "lost", "cancelled"].includes(deal.stage);
 
   return (
     <div
@@ -644,7 +688,7 @@ function DealCard({ deal, contact, isDragging, isSelected, onToggle, onEdit }) {
         <h3 className="text-xs font-bold text-text-main leading-snug group-hover:text-brand-400 transition-colors">
           {deal.title}
         </h3>
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="relative flex items-center gap-0.5 shrink-0">
           <Link
             href={`/dashboard/crm/deals/${deal.id}`}
             onClick={(e) => e.stopPropagation()}
@@ -664,6 +708,93 @@ function DealCard({ deal, contact, isDragging, isSelected, onToggle, onEdit }) {
           >
             <Pencil className="size-3.5" />
           </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleMenu?.();
+            }}
+            className={`rounded p-0.5 transition-colors ${
+              menuOpen ? "text-brand-500 opacity-100" : "text-text-muted opacity-0 group-hover:opacity-100 hover:text-brand-500"
+            }`}
+            title="Ações rápidas"
+          >
+            <MoreVertical className="size-4" />
+          </button>
+
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={onCloseMenu} />
+              <div className="absolute right-0 top-6 z-30 w-44 rounded-xl border border-border bg-surface p-1 shadow-elevated animate-in fade-in zoom-in-95">
+                <Link
+                  href={`/dashboard/crm/deals/${deal.id}`}
+                  className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-text-main hover:bg-surface-2 transition-colors"
+                >
+                  <ArrowUpRight className="size-3.5 text-brand-500" /> Abrir página
+                </Link>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit?.();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-text-main hover:bg-surface-2 transition-colors"
+                >
+                  <Pencil className="size-3.5 text-brand-500" /> Editar
+                </button>
+                <div className="my-1 border-t border-border/60" />
+                {!isClosed ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSetOutcome?.("won");
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-emerald-500 hover:bg-emerald-500/10 transition-colors"
+                    >
+                      <Trophy className="size-3.5" /> Marcar como Ganho
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSetOutcome?.("lost");
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-label-crimson hover:bg-label-crimson-bg transition-colors"
+                    >
+                      <ThumbsDown className="size-3.5" /> Marcar como Perdido
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSetOutcome?.("lead");
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-brand-500 hover:bg-brand-500/10 transition-colors"
+                  >
+                    <RotateCcw className="size-3.5" /> Reabrir Negócio
+                  </button>
+                )}
+                <div className="my-1 border-t border-border/60" />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggle?.();
+                    onCloseMenu?.();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-text-main hover:bg-surface-2 transition-colors"
+                >
+                  <CheckCircle2 className="size-3.5 text-brand-500" />
+                  {isSelected ? "Deselecionar" : "Selecionar"}
+                </button>
+              </div>
+            </>
+          )}
+
           <button
             type="button"
             onClick={(e) => {

@@ -10,6 +10,7 @@ import {
   getROIAnalysis,
   getForecast,
   getMonthComparison,
+  getMonthlyForecast,
 } from "@/lib/db";
 
 export async function GET(request) {
@@ -63,6 +64,11 @@ export async function GET(request) {
     if (type === "forecast") {
       const forecast = await getForecast();
       return NextResponse.json(forecast);
+    }
+
+    if (type === "monthly-forecast") {
+      const monthly = await getMonthlyForecast();
+      return NextResponse.json(monthly);
     }
 
     if (type === "comparison") {

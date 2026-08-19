@@ -5,9 +5,9 @@ import Link from "next/link";
 import {
   TrendingUp, TrendingDown, DollarSign, Target, Users, Zap,
   ArrowUp, ArrowDown, BarChart3, PieChart, Sparkles, RefreshCw,
-  Award, ShieldAlert, ArrowLeft
+  Award, ShieldAlert, ArrowLeft, Trophy
 } from "lucide-react";
-import { formatCurrency, initials, avatarColor } from "../crmMeta";
+import { formatCurrency, initials, avatarColor, stageMeta } from "../crmMeta";
 
 export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
@@ -19,6 +19,7 @@ export default function AnalyticsPage() {
   const [topUsage, setTopUsage] = useState([]);
   const [roi, setROI] = useState([]);
   const [dealsTrend, setDealsTrend] = useState([]);
+  const [monthlyForecast, setMonthlyForecast] = useState(null);
 
   useEffect(() => {
     fetchAnalytics();
@@ -27,12 +28,13 @@ export default function AnalyticsPage() {
   async function fetchAnalytics() {
     try {
       setLoading(true);
-      const [mainRes, topRevRes, topUsageRes, roiRes, trendRes] = await Promise.all([
+      const [mainRes, topRevRes, topUsageRes, roiRes, trendRes, monthlyRes] = await Promise.all([
         fetch("/api/crm/analytics"),
         fetch("/api/crm/analytics?type=top-revenue&limit=10"),
         fetch("/api/crm/analytics?type=top-usage&limit=10"),
         fetch("/api/crm/analytics?type=roi"),
         fetch("/api/crm/analytics?type=deals-trend&days=30"),
+        fetch("/api/crm/analytics?type=monthly-forecast"),
       ]);
 
       const mainData = await mainRes.json();
@@ -40,6 +42,7 @@ export default function AnalyticsPage() {
       const topUsageData = await topUsageRes.json();
       const roiData = await roiRes.json();
       const trendData = await trendRes.json();
+      const monthlyData = await monthlyRes.json();
 
       setPipeline(mainData.pipeline);
       setForecast(mainData.forecast);
@@ -48,6 +51,7 @@ export default function AnalyticsPage() {
       setTopUsage(topUsageData.top || []);
       setROI(roiData.analysis || []);
       setDealsTrend(trendData.trend || []);
+      setMonthlyForecast(monthlyData);
     } catch (error) {
       console.error("Erro ao buscar analytics:", error);
     } finally {
@@ -229,6 +233,150 @@ export default function AnalyticsPage() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Monthly Forecast (expectedCloseAt based) ── */}
+      {monthlyForecast && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Forecast next 6 months */}
+          <div className="rounded-2xl border border-border bg-surface p-5 space-y-4 shadow-soft">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <h2 className="text-sm font-bold font-display text-text-main flex items-center gap-2">
+                <TrendingUp className="size-4 text-brand-500" />
+                Forecast de Fechamentos (6 Meses)
+              </h2>
+              <span className="text-[10px] font-bold text-text-muted bg-surface-2 border border-border rounded-md px-2 py-0.5">
+                Baseado em data prevista
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {(monthlyForecast.forecastByMonth || []).map((m) => {
+                const maxGross = Math.max(1, ...(monthlyForecast.forecastByMonth || []).map((x) => x.gross));
+                const [year, month] = m.month.split("-");
+                const monthLabel = new Date(year, Number(month) - 1, 1).toLocaleDateString("pt-BR", { month: "short" });
+                return (
+                  <div key={m.month} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-text-main capitalize">{monthLabel}/{year.slice(2)}</span>
+                      <span className="font-mono text-text-muted">
+                        <span className="font-bold text-brand-400">{formatCurrency(m.gross)}</span>
+                        {" · "}ponderado {formatCurrency(m.weighted)}
+                      </span>
+                    </div>
+                    <div className="flex h-5 gap-1">
+                      <div
+                        className="rounded-md bg-brand-500/70 group-hover:bg-brand-500 transition-all"
+                        style={{ width: `${(m.gross / maxGross) * 100}%` }}
+                        title={`${m.month}: ${formatCurrency(m.gross)} previsto`}
+                      />
+                      <div
+                        className="rounded-md bg-emerald-400/70"
+                        style={{ width: `${(m.weighted / maxGross) * 100}%` }}
+                        title={`${m.month}: ${formatCurrency(m.weighted)} ponderado`}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              {(!monthlyForecast.forecastByMonth || monthlyForecast.forecastByMonth.length === 0) && (
+                <p className="py-6 text-center text-xs text-text-muted">Nenhum negócio com data de fechamento prevista.</p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-4 pt-2 border-t border-border text-[10px] font-bold text-text-muted">
+              <span className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-sm bg-brand-500/70" /> Previsto (bruto)
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-sm bg-emerald-400/70" /> Ponderado (prob. por estágio)
+              </span>
+            </div>
+          </div>
+
+          {/* Won revenue last 6 months */}
+          <div className="rounded-2xl border border-border bg-surface p-5 space-y-4 shadow-soft">
+            <h2 className="text-sm font-bold font-display text-text-main flex items-center gap-2 border-b border-border pb-3">
+              <Trophy className="size-4 text-yellow-400" />
+              Receita Realizada (6 Meses)
+            </h2>
+
+            <div className="space-y-3">
+              {(monthlyForecast.wonByMonth || []).map((m) => {
+                const maxWon = Math.max(1, ...(monthlyForecast.wonByMonth || []).map((x) => x.revenue));
+                const [year, month] = m.month.split("-");
+                const monthLabel = new Date(year, Number(month) - 1, 1).toLocaleDateString("pt-BR", { month: "short" });
+                return (
+                  <div key={m.month} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-text-main capitalize">{monthLabel}/{year.slice(2)}</span>
+                      <span className="font-mono text-text-muted">
+                        <span className="font-bold text-emerald-400">{formatCurrency(m.revenue)}</span>
+                        {m.count > 0 && <span> · {m.count} ganho(s)</span>}
+                      </span>
+                    </div>
+                    <div className="h-5 rounded-md bg-emerald-500/20">
+                      <div
+                        className="h-full rounded-md bg-emerald-400/70 transition-all"
+                        style={{ width: `${(m.revenue / maxWon) * 100}%` }}
+                        title={`${m.month}: ${formatCurrency(m.revenue)} ganhos`}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+              {(!monthlyForecast.wonByMonth || monthlyForecast.wonByMonth.length === 0) && (
+                <p className="py-6 text-center text-xs text-text-muted">Sem receita realizada nos últimos 6 meses.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Conversion by Stage ── */}
+      {monthlyForecast?.conversionByStage && monthlyForecast.conversionByStage.length > 0 && (
+        <div className="rounded-2xl border border-border bg-surface p-5 space-y-4 shadow-soft">
+          <h2 className="text-sm font-bold font-display text-text-main flex items-center gap-2 border-b border-border pb-3">
+            <Target className="size-4 text-brand-500" />
+            Conversão por Estágio
+          </h2>
+
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left text-xs text-text-main">
+              <thead className="border-b border-border bg-surface-2 text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                <tr>
+                  <th className="p-3">Estágio</th>
+                  <th className="p-3 text-right">Negócios</th>
+                  <th className="p-3 text-right">Participação</th>
+                  <th className="p-3 text-right">Prob. Conversão</th>
+                  <th className="p-3 text-right">Valor Total</th>
+                  <th className="p-3 text-right">Receita Esperada</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {monthlyForecast.conversionByStage.map((row) => {
+                  const sm = stageMeta(row.stage);
+                  return (
+                    <tr key={row.stage} className="hover:bg-surface-2/60 transition-colors">
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${sm.bg} ${sm.text}`}>
+                          {sm.label}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right font-bold font-mono">{row.count}</td>
+                      <td className="p-3 text-right text-text-muted">{row.share}%</td>
+                      <td className="p-3 text-right font-mono">
+                        <span className="font-bold text-brand-400">{(row.probability * 100).toFixed(0)}%</span>
+                      </td>
+                      <td className="p-3 text-right font-mono text-text-main">{formatCurrency(row.totalValue)}</td>
+                      <td className="p-3 text-right font-mono text-emerald-400">{formatCurrency(row.expectedRevenue)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

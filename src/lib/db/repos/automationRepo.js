@@ -302,3 +302,85 @@ export async function checkStaledDeals() {
 
   return alerts;
 }
+
+export async function checkCloseApproachingDeals(days = 7) {
+  const db = await getAdapter();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const target = new Date(today);
+  target.setDate(target.getDate() + days);
+
+  const todayKey = today.toISOString().slice(0, 10);
+  const targetKey = target.toISOString().slice(0, 10);
+
+  const results = db.all(
+    `SELECT 
+      d.id as dealId,
+      d.contactId,
+      d.title,
+      d.stage,
+      d.valueCents,
+      d.currency,
+      d.expectedCloseAt,
+      c.name as contactName
+    FROM crmDeals d
+    LEFT JOIN crmContacts c ON c.id = d.contactId
+    WHERE d.stage NOT IN ('won', 'lost', 'cancelled')
+      AND d.expectedCloseAt IS NOT NULL
+      AND d.expectedCloseAt BETWEEN ? AND ?`,
+    [todayKey, targetKey]
+  );
+
+  const alerts = [];
+  for (const row of results) {
+    const existing = db.get(
+      `SELECT id FROM crmAlerts WHERE type = 'deal_close_approaching' AND dealId = ? AND resolved = 0`,
+      [row.dealId]
+    );
+
+    if (existing) continue;
+
+    const daysUntil = Math.round((new Date(row.expectedCloseAt) - today) / 86400000);
+    const alert = await createAlert({
+      type: "deal_close_approaching",
+      severity: daysUntil <= 2 ? "critical" : "warning",
+      contactId: row.contactId,
+      dealId: row.dealId,
+      title: "Fechamento Próximo",
+      message: `O deal "${row.title}" tem fechamento previsto para ${row.expectedCloseAt} (em ${daysUntil} dia(s), stage: ${row.stage})`,
+      metadata: {
+        dealTitle: row.title,
+        stage: row.stage,
+        daysUntil,
+        expectedCloseAt: row.expectedCloseAt,
+        valueCents: row.valueCents,
+        currency: row.currency,
+        contactName: row.contactName,
+      },
+    });
+    alerts.push(alert);
+
+    // Fire webhook for close-approaching automation
+    try {
+      const { fireWebhook, WEBHOOK_EVENTS } = await import("@/lib/webhooks.js");
+      await fireWebhook(WEBHOOK_EVENTS.DEAL_CLOSE_APPROACHING, {
+        deal: {
+          id: row.dealId,
+          contactId: row.contactId,
+          title: row.title,
+          stage: row.stage,
+          valueCents: row.valueCents,
+          currency: row.currency,
+          expectedCloseAt: row.expectedCloseAt,
+          contactName: row.contactName,
+        },
+        daysUntil,
+      });
+    } catch (error) {
+      console.error("[automations] close-approaching webhook failed:", error.message);
+    }
+  }
+
+  return alerts;
+}

@@ -320,6 +320,15 @@ export async function updateDeal(id, data) {
       })();
     }
 
+    // Fire webhook for any deal update (outcome, value, close date, etc.)
+    (async () => {
+      const { fireWebhook, WEBHOOK_EVENTS } = await import("@/lib/webhooks.js");
+      await fireWebhook(WEBHOOK_EVENTS.DEAL_UPDATED, {
+        deal: merged,
+        changedFields: Object.keys(data),
+      });
+    })();
+
     result = rowToDeal(merged);
   });
 
@@ -329,6 +338,8 @@ export async function updateDeal(id, data) {
 export async function deleteDeal(id) {
   const db = await getAdapter();
   db.run(`DELETE FROM crmDeals WHERE id = ?`, [id]);
+  db.run(`DELETE FROM crmActivities WHERE dealId = ?`, [id]);
+  db.run(`DELETE FROM crmAlerts WHERE dealId = ?`, [id]);
 }
 
 export async function getActivities({ contactId, dealId, limit = 100, offset = 0 } = {}) {

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Pencil, Briefcase, Calendar, Clock, Sparkles, Loader2,
   Building2, User, TrendingUp, Trophy, StickyNote, Send, X, Flag,
-  CircleDollarSign, Hourglass
+  CircleDollarSign, Hourglass, ThumbsDown, RotateCcw
 } from "lucide-react";
 import {
   DEAL_STAGES, PRIORITIES, CONTACT_STATUSES,
@@ -86,6 +86,36 @@ export default function DealDetailPage({ params }) {
         }
         fetchActivities(id);
         notify("✓ Negócio atualizado!");
+      } else {
+        notify(data.error || "Erro ao atualizar negócio");
+      }
+    } catch (error) {
+      notify("Erro ao atualizar negócio");
+    }
+  }
+
+  async function handleSetOutcome(outcome) {
+    const closedStages = ["won", "lost", "cancelled"];
+    const isClosing = closedStages.includes(outcome);
+    try {
+      const id = (await params).id;
+      const res = await fetch(`/api/crm/deals/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage: outcome,
+          closedAt: isClosing ? new Date().toISOString() : null,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setDeal(data.deal);
+        fetchActivities(id);
+        notify(
+          isClosing
+            ? `✓ Negócio marcado como ${stageMeta(outcome).label}!`
+            : "✓ Negócio reaberto!"
+        );
       } else {
         notify(data.error || "Erro ao atualizar negócio");
       }
@@ -191,14 +221,45 @@ export default function DealDetailPage({ params }) {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowEditForm(true)}
-          className="flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-1.5 text-xs font-bold text-text-main hover:bg-surface-2 transition-colors"
-        >
-          <Pencil className="size-3.5 text-brand-500" />
-          <span>Editar Negócio</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {!isClosed ? (
+            <>
+              <button
+                type="button"
+                onClick={() => handleSetOutcome("won")}
+                className="flex items-center gap-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 text-xs font-bold hover:bg-emerald-500/20 transition-colors"
+              >
+                <Trophy className="size-3.5" />
+                <span>Marcar Ganho</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetOutcome("lost")}
+                className="flex items-center gap-1.5 rounded-xl bg-label-crimson-bg text-label-crimson border border-label-crimson/20 px-3 py-1.5 text-xs font-bold hover:opacity-80 transition-opacity"
+              >
+                <ThumbsDown className="size-3.5" />
+                <span>Marcar Perdido</span>
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleSetOutcome("lead")}
+              className="flex items-center gap-1.5 rounded-xl border border-brand-500/30 bg-brand-500/10 text-brand-400 px-3 py-1.5 text-xs font-bold hover:bg-brand-500/20 transition-colors"
+            >
+              <RotateCcw className="size-3.5" />
+              <span>Reabrir Negócio</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowEditForm(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-1.5 text-xs font-bold text-text-main hover:bg-surface-2 transition-colors"
+          >
+            <Pencil className="size-3.5 text-brand-500" />
+            <span>Editar Negócio</span>
+          </button>
+        </div>
       </div>
 
       {/* ── 360° Deal Header Card ── */}

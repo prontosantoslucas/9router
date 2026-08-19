@@ -95,14 +95,14 @@ export {
 export {
   getAlerts, createAlert, resolveAlert,
   getWebhooks, getWebhooksByEvent, createWebhook, updateWebhookStatus, deleteWebhook,
-  checkUsageAlerts, checkBalanceAlerts, checkStaledDeals,
+  checkUsageAlerts, checkBalanceAlerts, checkStaledDeals, checkCloseApproachingDeals,
 } from "./repos/automationRepo.js";
 
 // CRM Analytics
 export {
   getPipelineStats, getConversionFunnel, getDealsTrend, getRevenueTrend,
   getStageVelocity, getTopContactsByRevenue, getTopContactsByUsage,
-  getROIAnalysis, getForecast, getMonthComparison,
+  getROIAnalysis, getForecast, getMonthComparison, getMonthlyForecast,
 } from "./repos/analyticsRepo.js";
 
 // Export/import full DB

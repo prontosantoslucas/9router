@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { checkUsageAlerts, checkBalanceAlerts, checkStaledDeals } from "@/lib/db";
+import {
+  checkUsageAlerts, checkBalanceAlerts, checkStaledDeals, checkCloseApproachingDeals,
+} from "@/lib/db";
 
 export async function POST(request) {
   try {
@@ -21,6 +23,11 @@ export async function POST(request) {
     if (!type || type === "deals") {
       const dealAlerts = await checkStaledDeals();
       results.push(...dealAlerts);
+    }
+
+    if (!type || type === "closing") {
+      const closingAlerts = await checkCloseApproachingDeals();
+      results.push(...closingAlerts);
     }
 
     return NextResponse.json({

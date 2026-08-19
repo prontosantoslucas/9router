@@ -274,6 +274,7 @@ function WebhookForm({ onSave, onCancel }) {
     "deal.updated",
     "deal.stage_changed",
     "deal.deleted",
+    "deal.close_approaching",
     "alert.created",
     "usage.threshold",
     "balance.low",
