@@ -31,6 +31,10 @@ const PUBLIC_API_PATHS = [
   "/api/version",
   "/api/settings/require-login",
   "/api/vsl1",
+  // Public checkout (página externa de pagamento) + webhooks de pagamento
+  // (gateways não enviam cookies de sessão; assinatura validada no handler)
+  "/api/checkout",
+  "/api/payments/webhook",
 ];
 
 // Public top-level prefixes (LLM API endpoints with their own API key auth).

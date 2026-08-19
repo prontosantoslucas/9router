@@ -76,6 +76,9 @@ const NAV_SECTIONS = [
     items: [
       { href: "/dashboard/billing", label: "Planos & Faturas", icon: "payments" },
       { href: "/dashboard/crm", label: "CRM de Clientes", icon: "people" },
+      { href: "/dashboard/crm/billing", label: "Checkout & Faturamento", icon: "credit_card" },
+      { href: "/dashboard/crm/analytics", label: "Analytics CRM", icon: "insights" },
+      { href: "/dashboard/crm/automations", label: "Automações CRM", icon: "bolt" },
     ],
   },
   {

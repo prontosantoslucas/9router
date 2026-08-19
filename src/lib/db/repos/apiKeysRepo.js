@@ -11,6 +11,7 @@ function rowToKey(row) {
     isActive: row.isActive === 1 || row.isActive === true,
     createdAt: row.createdAt,
     userId: row.userId ?? null,
+    contactId: row.contactId ?? null,
     planId: row.planId ?? null,
     label: row.label ?? null,
     balanceCents: row.balanceCents ?? 0,
@@ -187,4 +188,14 @@ export async function banApiKey(id, reason) {
 export async function unbanApiKey(id) {
   const db = await getAdapter();
   db.run(`UPDATE apiKeys SET bannedAt = NULL, banReason = NULL, revokedAt = NULL, isActive = 1, strikeCount = 0 WHERE id = ?`, [id]);
+}
+
+export async function getApiKeysByContact(contactId) {
+  const db = await getAdapter();
+  return db.all(`SELECT * FROM apiKeys WHERE contactId = ? ORDER BY createdAt DESC`, [contactId]).map(rowToKey);
+}
+
+export async function linkApiKeyToContact(keyId, contactId) {
+  const db = await getAdapter();
+  db.run(`UPDATE apiKeys SET contactId = ? WHERE id = ?`, [contactId, keyId]);
 }

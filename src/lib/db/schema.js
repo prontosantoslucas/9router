@@ -3,7 +3,7 @@
 // pre-change safety backup in migrate.js: when the stored version is lower,
 // one lightweight DB backup is taken before applying schema changes. Forgetting
 // to bump only skips that backup Ã¢â‚¬â€ it does NOT break the additive auto-sync.
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export const PRAGMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -84,6 +84,7 @@ export const TABLES = {
       isActive: "INTEGER DEFAULT 1",
       createdAt: "TEXT NOT NULL",
       userId: "TEXT",
+      contactId: "TEXT",
       planId: "TEXT",
       label: "TEXT",
       balanceCents: "INTEGER DEFAULT 0",
@@ -99,6 +100,7 @@ export const TABLES = {
     indexes: [
       "CREATE INDEX IF NOT EXISTS idx_ak_key ON apiKeys(key)",
       "CREATE INDEX IF NOT EXISTS idx_ak_user ON apiKeys(userId)",
+      "CREATE INDEX IF NOT EXISTS idx_ak_contact ON apiKeys(contactId)",
       "CREATE INDEX IF NOT EXISTS idx_ak_period ON apiKeys(periodEnd)",
     ],
   },
@@ -392,6 +394,39 @@ export const TABLES = {
       amountCents: "INTEGER NOT NULL",
     },
     indexes: ["CREATE INDEX IF NOT EXISTS idx_ili_inv ON invoiceLineItems(invoiceId)"],
+  },
+  crmIntegrations: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      provider: "TEXT NOT NULL",
+      name: "TEXT",
+      config: "TEXT NOT NULL",
+      isActive: "INTEGER DEFAULT 1",
+      createdAt: "TEXT NOT NULL",
+      updatedAt: "TEXT NOT NULL",
+    },
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_ci_provider ON crmIntegrations(provider)"],
+  },
+  crmCheckouts: {
+    columns: {
+      id: "TEXT PRIMARY KEY",
+      contactId: "TEXT NOT NULL",
+      dealId: "TEXT",
+      integrationId: "TEXT NOT NULL",
+      amountCents: "INTEGER NOT NULL",
+      currency: "TEXT DEFAULT 'BRL'",
+      description: "TEXT",
+      status: "TEXT DEFAULT 'pending'",
+      externalRef: "TEXT",
+      expiresAt: "TEXT",
+      createdAt: "TEXT NOT NULL",
+      paidAt: "TEXT",
+      metadata: "TEXT DEFAULT '{}'",
+    },
+    indexes: [
+      "CREATE INDEX IF NOT EXISTS idx_ck_status ON crmCheckouts(status)",
+      "CREATE INDEX IF NOT EXISTS idx_ck_contact ON crmCheckouts(contactId)",
+    ],
   },
 };
 

@@ -1,32 +1,34 @@
 import { NextResponse } from "next/server";
-import { getContacts, getContact, getContactByEmail, upsertContact, deleteContact } from "@/lib/crm/crmRepo.js";
+import { getContacts, createContact } from "@/lib/db";
 
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
-    const email = searchParams.get("email");
-    if (id) return NextResponse.json({ contact: await getContact(id) });
-    // Bug fix: quando busca é por email, precisa usar getContactByEmail; getContact busca por id.
-    if (email) return NextResponse.json({ contact: await getContactByEmail(email) });
-    return NextResponse.json({ contacts: await getContacts() });
-  } catch (e) { return NextResponse.json({ error: e.message }, { status: 500 }); }
+    const search = searchParams.get("search") || undefined;
+    const tags = searchParams.get("tags")?.split(",").filter(Boolean) || undefined;
+    const limit = parseInt(searchParams.get("limit") || "100");
+    const offset = parseInt(searchParams.get("offset") || "0");
+
+    const contacts = await getContacts({ search, tags, limit, offset });
+    return NextResponse.json({ contacts });
+  } catch (error) {
+    console.error("GET /api/crm/contacts error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }
 
 export async function POST(request) {
   try {
-    const data = await request.json();
-    const contact = await upsertContact(data);
-    return NextResponse.json({ contact }, { status: 201 });
-  } catch (e) { return NextResponse.json({ error: e.message }, { status: 400 }); }
-}
+    const body = await request.json();
+    
+    if (!body.name) {
+      return NextResponse.json({ error: "name is required" }, { status: 400 });
+    }
 
-export async function DELETE(request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get("id");
-    if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-    await deleteContact(id);
-    return NextResponse.json({ ok: true });
-  } catch (e) { return NextResponse.json({ error: e.message }, { status: 500 }); }
+    const contact = await createContact(body);
+    return NextResponse.json({ contact }, { status: 201 });
+  } catch (error) {
+    console.error("POST /api/crm/contacts error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 }

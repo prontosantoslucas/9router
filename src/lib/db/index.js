@@ -30,6 +30,7 @@ export {
 // API keys
 export {
   getApiKeys, getApiKeyById, createApiKey, updateApiKey, deleteApiKey, validateApiKey,
+  getApiKeysByContact, linkApiKeyToContact,
 } from "./repos/apiKeysRepo.js";
 
 // Combos
@@ -67,12 +68,42 @@ export {
   saveRequestDetail, getRequestDetails, getRequestDetailById, getDistinctProviders,
 } from "./repos/requestDetailsRepo.js";
 
+// CRM Billing/Checkout
+export {
+  getIntegrations, getIntegrationByProvider, createIntegration,
+  updateIntegrationConfig, deleteIntegration,
+  createCheckout, getCheckoutById, listCheckouts,
+  updateCheckoutStatus, deleteCheckout,
+} from "./repos/checkoutRepo.js";
+
 // Threads / conversations
 export {
   getOrCreateThread, getThreadMessages,
   addThreadMessage, addThreadMessages,
   deleteThread, listThreads,
 } from "./repos/threadsRepo.js";
+
+// CRM
+export {
+  getContacts, getContactById, getContactByEmail,
+  createContact, updateContact, deleteContact,
+  getDeals, getDealById, createDeal, updateDeal, deleteDeal,
+  getActivities, createActivity, getContactStats,
+} from "./repos/crmRepo.js";
+
+// CRM Automations
+export {
+  getAlerts, createAlert, resolveAlert,
+  getWebhooks, getWebhooksByEvent, createWebhook, updateWebhookStatus, deleteWebhook,
+  checkUsageAlerts, checkBalanceAlerts, checkStaledDeals,
+} from "./repos/automationRepo.js";
+
+// CRM Analytics
+export {
+  getPipelineStats, getConversionFunnel, getDealsTrend, getRevenueTrend,
+  getStageVelocity, getTopContactsByRevenue, getTopContactsByUsage,
+  getROIAnalysis, getForecast, getMonthComparison,
+} from "./repos/analyticsRepo.js";
 
 // Export/import full DB
 export async function exportDb() {
