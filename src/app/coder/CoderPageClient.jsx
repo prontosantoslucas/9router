@@ -30,19 +30,29 @@ function useModelos() {
 
   useEffect(() => {
     let vivo = true;
-    fetch("/api/combos")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!vivo) return;
-        const auto = d?.combos?.find((c) => c.name === "auto");
-        const lista = Array.isArray(auto?.models) ? auto.models : [];
-        setModelos(lista);
+    Promise.all([
+      fetch("/api/models").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch("/api/combos").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ]).then(([modelsData, combosData]) => {
+      if (!vivo) return;
+      const list = [];
+      if (combosData?.combos && Array.isArray(combosData.combos)) {
+        combosData.combos.forEach((c) => {
+          if (c.name && c.name !== "auto" && !list.includes(c.name)) list.push(c.name);
+        });
+      }
+      if (modelsData?.models && Array.isArray(modelsData.models)) {
+        modelsData.models.forEach((m) => {
+          const id = m.id || m.name;
+          if (id && !list.includes(id)) list.push(id);
+        });
+      }
+      setModelos(list);
 
-        let salvo = null;
-        try { salvo = localStorage.getItem(CHAVE_MODELO); } catch {}
-        if (salvo && (salvo === MODELO_PADRAO || lista.includes(salvo))) setModelo(salvo);
-      })
-      .catch(() => {});
+      let salvo = null;
+      try { salvo = localStorage.getItem(CHAVE_MODELO); } catch {}
+      if (salvo && (salvo === MODELO_PADRAO || list.includes(salvo))) setModelo(salvo);
+    });
     return () => { vivo = false; };
   }, []);
 

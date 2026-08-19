@@ -1831,6 +1831,35 @@ Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encod
   3. **Gatilho de Atualização do Railway**:
      - Versão incrementada no [apps/agent/package.json](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/package.json).
 
+### Capítulo 88: Sincronização do Git Push no Railway e Correção da Geração de Código Lovable no Coder
+
+* **Por que estava dando esse problema (Causa Raiz Detalhada)**:
+  1. **Deploy Pendente por Ausência de `git push`**:
+     - O commit `688ece59` havia sido gravado com sucesso no Git local, porém a branch local `master` estava à frente de `origin/master` em 1 commit sem ter executado `git push origin master`.
+     - O Railway monitora o repositório remoto no GitHub (`origin/master`). Como o push não havia subido, o Railway continuava rodando o commit anterior (`c5bc2a4f`), mantendo a versão antiga no ar.
+  2. **Falha de Resolução de Imports no Preview do Coder (Padrão Lovable)**:
+     - No [`src/lib/coder/previewBuilder.js`](file:///c:/Users/user/Documents/GitHub/9router/src/lib/coder/previewBuilder.js), a função `resolveVfsPath` rejeitava imports com aliases padrão como `@/components/...` ou `~/...`, retornando `null`.
+     - Isso fazia o preview tentar importar arquivos internos do VFS a partir de URLs do `esm.sh` externas, disparando erros 404 e tela de erro de compilação.
+  3. **Instâncias Múltiplas do React e Conflito de Hooks**:
+     - O `importmap` carregava pacotes como `lucide-react`, `framer-motion` e `recharts` sem o parâmetro `?external=react,react-dom`, gerando instâncias duplicadas do React no navegador e disparando erros de renderização (*"Invalid hook call / multiple copies of React"*).
+  4. **System Prompt Restritivo no Gerador de Código**:
+     - O prompt do sistema no [`generatorClient.js`](file:///c:/Users/user/Documents/GitHub/9router/src/lib/coder/generatorClient.js) proibia o uso de qualquer biblioteca além do react/react-dom, limitando a capacidade do modelo de produzir componentes modernos e ricos com ícones Lucide, gráficos Recharts e animações Framer Motion suportados pelo motor Lovable.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Publicação dos Commits no GitHub (`git push origin master`)**:
+     - Executado o `git push origin master`, enviando todos os commits locais para o repositório remoto e acionando o build automático no Railway.
+  2. **Suporte Completo a Aliases de Import no VFS ([previewBuilder.js](file:///c:/Users/user/Documents/GitHub/9router/src/lib/coder/previewBuilder.js))**:
+     - Implementada a resolução de `@/` e `~/` para `/src/` e `/`, além de busca de extensões candidatas (`.tsx`, `.ts`, `.jsx`, `.js`, `/index.tsx`).
+     - Adicionado fallback automático para o CDN do Babel Standalone (`unpkg` caso `cdnjs` falhe).
+  3. **Unificação do ImportMap do React e Stack Lovable ([previewBuilder.js](file:///c:/Users/user/Documents/GitHub/9router/src/lib/coder/previewBuilder.js))**:
+     - Parametrizados `lucide-react`, `framer-motion` e `recharts` com `?external=react,react-dom`, garantindo que todos compartilhem a mesma instância global do React 18 sem conflitos de hooks.
+  4. **Atualização do System Prompt do Coder ([generatorClient.js](file:///c:/Users/user/Documents/GitHub/9router/src/lib/coder/generatorClient.js))**:
+     - Instruções detalhadas para criação de interfaces modernas, suporte nativo a Lucide, Framer Motion, Recharts, Supabase e geração estrita de `src/App.tsx` e `src/main.tsx`.
+  5. **Carregamento Unificado de Modelos ([CoderPageClient.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/coder/CoderPageClient.jsx))**:
+     - O seletor de modelos agora carrega dinamicamente todos os combos e modelos cadastrados no gateway.
+  6. **Gatilho de Atualização do Railway**:
+     - Versão incrementada para `1.0.8` no [apps/agent/package.json](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/package.json).
+
 ---
 
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*

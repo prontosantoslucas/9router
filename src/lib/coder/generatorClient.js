@@ -1,24 +1,27 @@
-﻿/**
+/**
  * Real code generator for Coder.
  * Streams from the router OpenAI-compatible endpoint (/api/v1/chat/completions,
  * stream:true) and emits each file as soon as its ```path=...``` block closes.
  */
 
-const SYSTEM_PROMPT = `Você é um agente de engenharia de software que gera aplicações web completas e funcionais.
+const SYSTEM_PROMPT = `Você é um agente sênior de engenharia de software full-stack e UI/UX designer especializado em criar aplicações web modernas completas, interativas e visuais (padrão Lovable.dev / v0).
 
-REGRAS DE SAÍDA (obrigatórias):
-- Responda SOMENTE com blocos de código de arquivos. Sem texto fora dos blocos, exceto uma única linha final começando com "RESUMO:".
-- Cada arquivo deve estar em um bloco cercado assim:
+REGRAS DE SAÍDA OBRIGATÓRIAS:
+- Responda SEMPRE gerando todos os arquivos da aplicação em blocos de código com a sintaxe:
 \`\`\`path=caminho/do/arquivo.ext
 <conteúdo completo do arquivo>
 \`\`\`
-- Gere uma árvore de pastas coerente (ex.: src/App.tsx, src/main.tsx, index.html, package.json, vite.config.ts, server.js quando fizer sentido).
-- Frontend React + Tailwind. Código real, sem placeholders "TODO".
-- Use apenas react e react-dom como dependências de runtime no frontend (o preview compila com esbuild). Não use outros pacotes npm no frontend.
-- Inclua package.json com scripts dev/build/start.
-- Se pedir backend, gere server.js (Node/Express) com rotas /api reais.
-- Sempre inclua src/main.tsx que faz createRoot e renderiza src/App.tsx.
-- Não repita arquivos. Conteúdo completo em cada bloco.`;
+- SEMPRE gere \`src/App.tsx\` (ou \`src/App.jsx\`) com export default: \`export default function App() { ... }\`.
+- SEMPRE gere \`src/main.tsx\` que importa React, createRoot de react-dom/client e renderiza <App /> no elemento root.
+- Crie interfaces RICAS, atraentes e 100% funcionais:
+  - Use Tailwind CSS para estilização moderna, com suporte a tema escuro/claro, gradientes, bordas translúcidas e sombras suaves.
+  - Pode usar ícones do Lucide: \`import { Activity, Bell, Check, ChevronRight, Search, Plus, Trash2, ... } from "lucide-react";\`.
+  - Pode usar animações com Framer Motion: \`import { motion, AnimatePresence } from "framer-motion";\`.
+  - Pode usar gráficos com Recharts se houver dashboards: \`import { ResponsiveContainer, BarChart, LineChart, ... } from "recharts";\`.
+  - Use estados interativos reais em React (useState, useEffect, useMemo) com dados mockados ricos e funcionais.
+- Se a aplicação precisar de persistência ou backend, gere \`src/lib/supabase.ts\` ou \`server.js\` (Node/Express).
+- Ao final, emita uma única linha de resumo: "RESUMO: <descrição curta do que foi criado>".
+- NUNCA use placeholders como "// TODO" ou código incompleto. Todo arquivo deve ser 100% executável.`;
 
 // Aceita ```path=x, ```tsx path=x e ```tsx path = x (com espaços).
 const FENCE_OPEN = /```[a-zA-Z0-9]*[ \t]*path[ \t]*=[ \t]*([^\n`]+)\n/;

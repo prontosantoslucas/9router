@@ -83,18 +83,23 @@ export function buildPreviewDoc(files = [], projectName = "App", options = {}) {
   </script>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+  <script>
+    if (typeof Babel === "undefined") {
+      document.write('<script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"><\\/script>');
+    }
+  </script>
   <script type="importmap">
   {
     "imports": {
-      "react": "https://esm.sh/react@18.3.1?dev",
+      "react": "https://esm.sh/react@18.3.1",
       "react/": "https://esm.sh/react@18.3.1/",
-      "react-dom": "https://esm.sh/react-dom@18.3.1?dev",
-      "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?dev",
+      "react-dom": "https://esm.sh/react-dom@18.3.1",
+      "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
       "react-dom/": "https://esm.sh/react-dom@18.3.1/",
       "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
-      "lucide-react": "https://esm.sh/lucide-react@0.468.0",
-      "framer-motion": "https://esm.sh/framer-motion@11.13.1",
-      "recharts": "https://esm.sh/recharts@2.13.3",
+      "lucide-react": "https://esm.sh/lucide-react@0.468.0?external=react",
+      "framer-motion": "https://esm.sh/framer-motion@11.13.1?external=react,react-dom",
+      "recharts": "https://esm.sh/recharts@2.13.3?external=react,react-dom",
       "canvas-confetti": "https://esm.sh/canvas-confetti@1.9.3",
       "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.47.10",
       "clsx": "https://esm.sh/clsx@2.1.1",
@@ -147,9 +152,53 @@ export function buildPreviewDoc(files = [], projectName = "App", options = {}) {
     window.addEventListener("unhandledrejection", (ev) => { showErr(ev.reason?.stack || ev.reason || ev); });
 
     function resolveVfsPath(spec, importer) {
-      if (spec.startsWith("http://") || spec.startsWith("https://") || (!spec.startsWith(".") && !spec.startsWith("/"))) {
+      if (spec.startsWith("http://") || spec.startsWith("https://")) {
         return null;
       }
+
+      // Handle @/ or ~/ alias (maps to /src/ or /)
+      if (spec.startsWith("@/") || spec.startsWith("~/")) {
+        const sub = spec.slice(2);
+        const candidates = [
+          "/src/" + sub,
+          "/src/" + sub + ".tsx",
+          "/src/" + sub + ".ts",
+          "/src/" + sub + ".jsx",
+          "/src/" + sub + ".js",
+          "/src/" + sub + "/index.tsx",
+          "/src/" + sub + "/index.jsx",
+          "/" + sub,
+          "/" + sub + ".tsx",
+          "/" + sub + ".ts",
+          "/" + sub + ".jsx",
+          "/" + sub + ".js",
+        ];
+        for (const c of candidates) {
+          if (VFS[c] !== undefined) return c;
+        }
+        return "/src/" + sub;
+      }
+
+      // Handle relative imports without ./ (e.g. components/Navbar, lib/utils)
+      if (!spec.startsWith(".") && !spec.startsWith("/")) {
+        const directCandidates = [
+          "/src/" + spec,
+          "/src/" + spec + ".tsx",
+          "/src/" + spec + ".ts",
+          "/src/" + spec + ".jsx",
+          "/src/" + spec + ".js",
+          "/" + spec,
+          "/" + spec + ".tsx",
+          "/" + spec + ".ts",
+          "/" + spec + ".jsx",
+          "/" + spec + ".js",
+        ];
+        for (const c of directCandidates) {
+          if (VFS[c] !== undefined) return c;
+        }
+        return null; // External package
+      }
+
       const baseParts = importer ? importer.split("/").slice(0, -1) : [""];
       const rawParts = spec.startsWith("/") ? spec.split("/") : [...baseParts, ...spec.split("/")];
       const stack = [];
