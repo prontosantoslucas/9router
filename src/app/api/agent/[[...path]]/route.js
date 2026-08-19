@@ -130,6 +130,9 @@ const ALLOWED_PATHS = [
   "/api/prospector/drafts",
   "/api/agent/prospector/dispatcher",
   "/api/prospector/dispatcher",
+  // Estado real do pareamento do WhatsApp.
+  "/api/agent/whatsapp/status",
+  "/api/whatsapp/status",
 ];
 
 function isPathAllowed(targetPath) {

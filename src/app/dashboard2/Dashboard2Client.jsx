@@ -50,12 +50,30 @@ export default function Dashboard2Client() {
   // Status real dos serviços (agent/memory/google/workers/channels)
   const [sidecars, setSidecars] = useState(null);
 
+  // Estado REAL do WhatsApp, reconsultado em intervalo. Antes o painel
+  // acreditava numa flag ligada por acao do usuario e nunca reconsultada: uma
+  // vez verde, ficava verde a sessao inteira, mesmo com o socket fechado.
+  const [waStatus, setWaStatus] = useState(null);
+
   useEffect(() => {
     fetchStats();
     fetchGoogleStatus();
     fetchBotStatus();
     fetchSidecars();
     fetchProspector();
+  }, []);
+
+  useEffect(() => {
+    let vivo = true;
+    const buscar = () => {
+      fetch("/api/agent/whatsapp/status")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (vivo && d) setWaStatus(d); })
+        .catch(() => {});
+    };
+    buscar();
+    const t = setInterval(buscar, 15000);
+    return () => { vivo = false; clearInterval(t); };
   }, []);
 
   const fetchProspector = async () => {
@@ -341,7 +359,9 @@ export default function Dashboard2Client() {
   };
 
   const isTgUserbotConnected = tgConnected || !!sidecars?.channels?.telegramUserbot;
-  const isWaConnected = waConnected || !!sidecars?.channels?.whatsapp;
+  // Verde SO com socket aberto de fato. Nem `waConnected` (ligado por acao e
+  // nunca revisto) nem EVOLUTION_API_URL configurada provam pareamento.
+  const isWaConnected = !!waStatus?.conectado;
 
   return (
     <div className="min-h-screen bg-bg text-text-main p-4 sm:p-8 space-y-8">
@@ -410,7 +430,7 @@ export default function Dashboard2Client() {
               sub: sidecars.memory?.mode === "github" ? "GitHub (meueulucas)" : sidecars.memory?.configured ? "MCP on" : "off",
             },
             { label: "Google", ok: sidecars.google?.configured, sub: sidecars.google?.hasRefreshToken ? "conectado" : "não conectado" },
-            { label: "WhatsApp", ok: sidecars.channels?.whatsapp, sub: sidecars.channels?.whatsapp ? "Evolution on" : "off" },
+            { label: "WhatsApp", ok: !!waStatus?.conectado, sub: waStatus?.conectado ? "pareado" : waStatus?.evolution?.configurada ? "Evolution configurada, nao pareado" : "nao pareado" },
             { label: "Telegram Userbot", ok: sidecars.channels?.telegramUserbot, sub: sidecars.channels?.telegramUserbot ? "pareado" : "não pareado" },
           ].map((s) => (
             <div key={s.label} className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 dark:bg-surface-2">

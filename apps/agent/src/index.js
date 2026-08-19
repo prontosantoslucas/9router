@@ -237,6 +237,45 @@ app.post("/api/modules", (req, res) => {
   }
 });
 
+// ── Estado REAL do WhatsApp ──
+//
+// Existe porque o painel dizia "WhatsApp pareado e ativo" com o socket fechado.
+// Duas causas independentes: `channels.whatsapp` do /api/status/sidecars era
+// `!!EVOLUTION_API_URL || connected` — ou seja, ter a URL configurada bastava
+// para parecer conectado — e a flag do front só era ligada por ação do usuário,
+// nunca reconsultada, então continuava verde depois de a sessão cair.
+//
+// Aqui não há campo ambíguo: `conectado` é o socket aberto de fato, e
+// `configurado` é outra coisa, com nome diferente.
+app.get(["/api/whatsapp/status", "/api/agent/whatsapp/status"], (req, res) => {
+  try {
+    const nativo = require("./channels/whatsapp/nativeClient").getStatus();
+    const evolutionUrl = cfg.EVOLUTION_API_URL || null;
+    res.json({
+      // Verdade única para a UI pintar verde.
+      conectado: !!nativo.connected,
+      nativo: {
+        conectado: !!nativo.connected,
+        estado: nativo.state,
+        temQrCode: !!nativo.hasQrCode,
+      },
+      evolution: {
+        configurado: !!evolutionUrl,
+        url: evolutionUrl,
+        // Evolution configurada NÃO significa pareada: o envio pode falhar
+        // igual. Quem sabe disso é a própria API dela, não esta variável.
+        observacao: evolutionUrl
+          ? "Evolution configurada — o envio passa por ela; estar configurada não prova que o número está pareado."
+          : "Evolution não configurada — o envio usa o cliente nativo (Baileys).",
+      },
+      // O que o envio realmente vai tentar, para o painel poder dizer a verdade.
+      canalDeEnvio: evolutionUrl ? "evolution" : "nativo",
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Rascunhos de abordagem e despacho com ritmo controlado ──
 app.get("/api/prospector/drafts", (req, res) => {
   try {
@@ -1128,7 +1167,11 @@ app.get("/api/status/sidecars", async (req, res) => {
     google,
     workers,
     channels: {
-      whatsapp: !!cfg.EVOLUTION_API_URL || require("./channels/whatsapp/nativeClient").getStatus().connected,
+      // Conexao REAL, nao configuracao. Antes bastava EVOLUTION_API_URL estar
+      // definida para este campo virar true, e o painel pintava
+      // "WhatsApp pareado e ativo" com o socket fechado.
+      whatsapp: require("./channels/whatsapp/nativeClient").getStatus().connected,
+      whatsappEvolutionConfigurada: !!cfg.EVOLUTION_API_URL,
       telegramUserbot: !!userbotAuth.getSavedSession(),
     },
   });
