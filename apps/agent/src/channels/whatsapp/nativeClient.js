@@ -183,14 +183,18 @@ async function getQrCode() {
     start();
   }
 
-  // Aguarda até 8 segundos para obter o QR Code gerado
-  for (let i = 0; i < 16; i++) {
+  // Aguarda até 15 segundos (30 iterações de 500ms) para obter o QR Code gerado pelo Baileys
+  for (let i = 0; i < 30; i++) {
     await new Promise((r) => setTimeout(r, 500));
     if (connectionState === "open") return { status: "open", connected: true, state: "open" };
     if (lastQrCodeBase64) return { base64: lastQrCodeBase64, code: lastQrCodeRaw, status: "QRCODE" };
   }
 
-  return { error: "Aguardando geração do QR Code pelo WhatsApp... Tente novamente em alguns segundos." };
+  return {
+    status: connectionState === "connecting" ? "connecting" : "waiting",
+    waiting: true,
+    message: "Aguardando geração do QR Code pelo WhatsApp... Conexão em andamento.",
+  };
 }
 
 async function sendTextMessage(to, text) {

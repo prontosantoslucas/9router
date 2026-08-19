@@ -1782,6 +1782,55 @@ Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encod
   3. **Gatilho de Atualização do Railway**:
      - Incrementada a versão no [apps/agent/package.json](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/package.json) para disparar a compilação no Railway.
 
+### Capítulo 86: Correção do Bloqueio de Proxy 403 e Exibição dos Controles do Prospector 24/7 no Dashboard
+
+* **Por que estava dando esse problema (Causa Raiz Detalhada)**:
+  1. **Bloqueio de Rota pela Allowlist do Proxy Next.js (`/api/agent/[[...path]]/route.js`)**:
+     - A rota de proxy reverso do Next.js para o Agente Lucas possui uma lista estrita de segurança (`ALLOWED_PATHS`).
+     - A lista continha apenas as rotas `/api/agent/prospector/drafts` e `/api/agent/prospector/dispatcher`, **omitindo as rotas `/api/agent/prospector` e `/api/prospector` gerais**.
+     - Quando o [Dashboard2Client.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/dashboard2/Dashboard2Client.jsx) fazia a requisição `GET /api/agent/prospector/status`, o proxy interceptava e retornava **HTTP 403 Forbidden** (`Acesso negado: o caminho '/api/prospector/status' não está na allowlist do proxy`).
+  2. **Travamento no Estado "Carregando..." e Ocultação dos Controles**:
+     - No componente [Dashboard2Client.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/dashboard2/Dashboard2Client.jsx), a função `fetchProspector` falhava com o retorno 403, mantendo o estado `prospector` indefinidamente como `null`.
+     - A renderização continha a regra `{!prospector ? <p>Carregando…</p> : <div>...switches e botões...</div>}`. Por conta do `null`, a interface permanecia travada em "Carregando...", ocultando o badge de status (Ativo/Desativado), os seletores de ligar/desligar o motor contínuo, os toggles de disparo (WhatsApp e Instagram) e o botão de execução imediata.
+  3. **Referência a Função Inexistente no Botão Global**:
+     - O botão "Atualizar Todos os Serviços" do cabeçalho chamava `fetchModules()` (função removida na refatoração dos módulos fictícios), disparando um erro JavaScript e não atualizando os dados do prospector.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Liberação das Rotas na Allowlist do Proxy ([src/app/api/agent/[[...path]]/route.js](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/agent/[[...path]]/route.js))**:
+     - Incluídos os caminhos `/api/agent/prospector` e `/api/prospector` no array `ALLOWED_PATHS`, liberando com segurança todos os endpoints da Prospecção 24/7 (`/status`, `/settings`, `/run`, `/leads`, `/send`, `/drafts`, `/dispatcher`).
+  2. **Aprimoramento do Card de Prospecção 24/7 ([src/app/dashboard2/Dashboard2Client.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/dashboard2/Dashboard2Client.jsx))**:
+     - Adicionado o badge visual de status `HealthDot` (`status={prospector?.settings?.enabled ? "ok" : "warning"}` com label *"Rodando"*, *"Ativo"* ou *"Desativado"*) no topo do card, unificando a identidade visual com os outros serviços.
+     - Implementado tratamento resiliente com spinner animado, exibição de erros de comunicação (`prospectorMsg`) e botão de "Recarregar".
+     - Substituída a chamada `fetchModules()` por `fetchProspector()` no botão "Atualizar Todos os Serviços".
+  3. **Criação de Teste Unitário Automatizado ([tests/unit/agent-proxy-route.test.js](file:///c:/Users/user/Documents/GitHub/9router/tests/unit/agent-proxy-route.test.js))**:
+     - Teste de integração do proxy validando que requisições para `/api/agent/prospector/status` passam com sucesso (HTTP 200) e retornam os dados consolidados da prospecção.
+  4. **Gatilho de Atualização do Railway**:
+     - Versão incrementada para `1.0.7` no [apps/agent/package.json](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/package.json).
+
+### Capítulo 87: Resiliência na Geração do QR Code do WhatsApp (Baileys Handshake & Polling Reativo)
+
+* **Por que estava dando esse problema (Causa Raiz Detalhada)**:
+  1. **Tempo Insuficiente de Handshake no Baileys**:
+     - No [`apps/agent/src/channels/whatsapp/nativeClient.js`](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/channels/whatsapp/nativeClient.js), a função `getQrCode()` aguardava apenas 8 segundos (16 iterações de 500ms) pela emissão do evento `connection.update` com o QR code do WhatsApp.
+     - Durante a inicialização a frio do Baileys (`makeWASocket` com negociação de chaves e conexão WebSocket com os servidores da Meta), o handshake pode levar entre 10 e 15 segundos em ambientes de nuvem (Railway).
+     - Ao estourar os 8 segundos, o backend retornava `{ error: "Aguardando geração do QR Code pelo WhatsApp... Tente novamente em alguns segundos." }`.
+  2. **Bloqueio por `window.alert()` no Frontend**:
+     - No [`Dashboard2Client.jsx`](file:///c:/Users/user/Documents/GitHub/9router/src/app/dashboard2/Dashboard2Client.jsx), a função `handleConnectWhatsApp` tratava qualquer retorno com `error` disparando imediatamente um pop-up bloqueante `alert(...)`, interrompendo o fluxo na tela e deixando a interface parada sem estado de carregamento nem tentativas de repetição.
+  3. **Falta de Detecção Imediata de Leitura**:
+     - O polling de status do WhatsApp ocorria a cada 15 segundos fixos, de modo que mesmo após o usuário escanear o QR Code no celular, a tela demorava a refletir o estado de conexão estabelecida.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Aumento do Timeout e Resposta Estruturada no Backend ([nativeClient.js](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/src/channels/whatsapp/nativeClient.js))**:
+     - O tempo de espera na primeira chamada foi expandido de 8s para 15s (30 iterações de 500ms), cobrindo com folga a inicialização do socket.
+     - Caso o handshake ainda esteja em progresso, o backend retorna `{ status: "connecting", waiting: true }` de forma limpa, permitindo que o frontend continue acompanhando a conexão.
+  2. **Polling Reativo e Feedback Visual no Painel ([Dashboard2Client.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/dashboard2/Dashboard2Client.jsx))**:
+     - Implementados os estados `waLoadingQr` e `waQrError`.
+     - Ao clicar em "Gerar QR Code", o card exibe um spinner animado (*"Conectando aos servidores do WhatsApp... Iniciando o handshake Baileys e gerando o QR Code"*).
+     - Se o socket ainda estiver iniciando, a função `handleConnectWhatsApp` efetua retentativas automáticas em segundo plano a cada 2.5s (até 8 tentativas), sem pop-ups intrusivos.
+     - Enquanto o QR Code está visível na tela, o intervalo de polling do status (`/api/agent/whatsapp/status`) é acelerado para **3 segundos**, detectando e exibindo a conexão verde imediatamente assim que o usuário faz a leitura pelo celular.
+  3. **Gatilho de Atualização do Railway**:
+     - Versão incrementada no [apps/agent/package.json](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/package.json).
+
 ---
 
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*

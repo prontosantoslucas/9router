@@ -88,4 +88,26 @@ describe("Agent Proxy Catch-all Route (/api/agent/[[...path]])", () => {
       global.fetch = originalFetch;
     }
   });
+
+  it("should allow /api/agent/prospector/status through proxy allowlist", async () => {
+    const req = new Request("http://localhost/api/agent/prospector/status", {
+      method: "GET",
+    });
+    req.nextUrl = new URL("http://localhost/api/agent/prospector/status");
+    req.cookies = { get: (name) => (name === "auth_token" ? { value: "valid-jwt-token" } : null) };
+    const context = { params: Promise.resolve({ path: ["prospector", "status"] }) };
+
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn(async () => new Response(JSON.stringify({ ok: true, running: true, totalLeads: 10 }), { status: 200 }));
+
+    try {
+      const response = await GET(req, context);
+      expect(response.status).toBe(200);
+      const json = await response.json();
+      expect(json.ok).toBe(true);
+      expect(json.totalLeads).toBe(10);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
 });

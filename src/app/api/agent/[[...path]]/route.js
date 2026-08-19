@@ -125,11 +125,9 @@ const ALLOWED_PATHS = [
   "/api/channels/conversations",
   "/api/agent/channels/send",
   "/api/channels/send",
-  // Rascunhos de abordagem e configuracao do despachante.
-  "/api/agent/prospector/drafts",
-  "/api/prospector/drafts",
-  "/api/agent/prospector/dispatcher",
-  "/api/prospector/dispatcher",
+  // Prospecção 24/7 (status, settings, run, leads, send, drafts, dispatcher)
+  "/api/agent/prospector",
+  "/api/prospector",
   // Estado real do pareamento do WhatsApp.
   "/api/agent/whatsapp/status",
   "/api/whatsapp/status",

@@ -28,9 +28,11 @@ export default function Dashboard2Client() {
   const [tgStep, setTgStep] = useState(1); // 1 = Credenciais, 2 = OTP (+2FA)
   const [tgConnected, setTgConnected] = useState(false);
 
-  // Form WhatsApp (Evolution API)
+  // Form WhatsApp (Evolution API / Baileys Nativo)
   const [waConnected, setWaConnected] = useState(false);
   const [waQrCode, setWaQrCode] = useState(null);
+  const [waLoadingQr, setWaLoadingQr] = useState(false);
+  const [waQrError, setWaQrError] = useState(null);
 
   // Toggles de Módulos
   // Controles de prospecção. Substituíram o card "Módulos Avançados", cujos seis
@@ -68,20 +70,38 @@ export default function Dashboard2Client() {
     const buscar = () => {
       fetch("/api/agent/whatsapp/status")
         .then((r) => (r.ok ? r.json() : null))
-        .then((d) => { if (vivo && d) setWaStatus(d); })
+        .then((d) => {
+          if (vivo && d) {
+            setWaStatus(d);
+            if (d.conectado) {
+              setWaConnected(true);
+              setWaQrCode(null);
+              setWaLoadingQr(false);
+              setWaQrError(null);
+            }
+          }
+        })
         .catch(() => {});
     };
     buscar();
-    const t = setInterval(buscar, 15000);
+    const intervalMs = waQrCode || waLoadingQr ? 3000 : 15000;
+    const t = setInterval(buscar, intervalMs);
     return () => { vivo = false; clearInterval(t); };
-  }, []);
+  }, [waQrCode, waLoadingQr]);
 
   const fetchProspector = async () => {
     try {
       const res = await fetch("/api/agent/prospector/status");
-      if (res.ok) setProspector(await res.json());
+      if (res.ok) {
+        setProspector(await res.json());
+        setProspectorMsg(null);
+      } else {
+        const errText = await res.text().catch(() => "");
+        setProspectorMsg(`Falha ao obter status (HTTP ${res.status}): ${errText || "Acesso negado ou serviço indisponível"}`);
+      }
     } catch (err) {
       console.error("[Dashboard2] Erro ao carregar prospector:", err);
+      setProspectorMsg("Erro de conexão ao carregar prospector: " + String(err.message || err));
     }
   };
 
@@ -333,29 +353,56 @@ export default function Dashboard2Client() {
   };
 
   const handleConnectWhatsApp = async () => {
+    setWaLoadingQr(true);
+    setWaQrError(null);
     setWaQrCode(null);
-    try {
-      const res = await fetch("/api/agent/evolution/instance", { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data.error) {
-        alert(`WhatsApp: ${data.error || `Falha na Evolution API (HTTP ${res.status})`}`);
-        return;
-      }
-      const qrString = data.base64 || data.code || null;
-      if (!qrString) {
+
+    let attempts = 0;
+    const maxAttempts = 8;
+
+    const fetchQr = async () => {
+      attempts++;
+      try {
+        const res = await fetch("/api/agent/evolution/instance", { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+
         if (data.status && /open|connected/i.test(data.status)) {
           setWaConnected(true);
+          setWaLoadingQr(false);
           await fetchSidecars();
-          alert("WhatsApp já está conectado.");
-        } else {
-          alert("Aguardando QR Code... tente novamente em alguns segundos.");
+          return;
         }
-        return;
+
+        const qrString = data.base64 || data.code || null;
+        if (qrString) {
+          setWaQrCode(qrString);
+          setWaLoadingQr(false);
+          return;
+        }
+
+        // Se o backend ainda estiver negociando o handshake ou gerando o QR pelo Baileys
+        if (data.waiting || data.status === "connecting" || (data.error && data.error.includes("Aguardando"))) {
+          if (attempts < maxAttempts) {
+            setTimeout(fetchQr, 2500);
+            return;
+          }
+        }
+
+        if (!res.ok || data.error) {
+          setWaQrError(data.error || `Falha ao obter QR Code (HTTP ${res.status})`);
+          setWaLoadingQr(false);
+          return;
+        }
+
+        setWaQrError("QR Code não retornado. Tente novamente.");
+        setWaLoadingQr(false);
+      } catch (err) {
+        setWaQrError(`Erro ao conectar: ${err.message}`);
+        setWaLoadingQr(false);
       }
-      setWaQrCode(qrString);
-    } catch (err) {
-      alert(`Erro ao gerar QR Code do WhatsApp: ${err.message}`);
-    }
+    };
+
+    fetchQr();
   };
 
   const isTgUserbotConnected = tgConnected || !!sidecars?.channels?.telegramUserbot;
@@ -385,7 +432,7 @@ export default function Dashboard2Client() {
             fetchSidecars();
             fetchBotStatus();
             fetchGoogleStatus();
-            fetchModules();
+            fetchProspector();
           }}
           className="flex items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 text-xs font-bold shadow-soft hover:bg-bg-alt hover:border-brand-500/50 transition-all dark:bg-surface-2"
         >
@@ -663,7 +710,18 @@ export default function Dashboard2Client() {
               <span className="material-symbols-outlined text-success">chat</span>
               <h3 className="font-bold text-base">WhatsApp (Nativo / Baileys)</h3>
             </div>
-            <HealthDot status={isWaConnected ? "ok" : "warning"} label={isWaConnected ? "Conectado" : waQrCode ? "Aguardando Leitura" : "Aguardando QR Code"} />
+            <HealthDot
+              status={isWaConnected ? "ok" : "warning"}
+              label={
+                isWaConnected
+                  ? "Conectado"
+                  : waLoadingQr
+                  ? "Gerando QR..."
+                  : waQrCode
+                  ? "Aguardando Leitura"
+                  : "Aguardando QR Code"
+              }
+            />
           </div>
 
           {isWaConnected ? (
@@ -680,6 +738,14 @@ export default function Dashboard2Client() {
                 Desconectar Instância do WhatsApp
               </button>
             </div>
+          ) : waLoadingQr ? (
+            <div className="flex flex-col items-center justify-center p-6 bg-bg-alt rounded-lg space-y-3">
+              <span className="material-symbols-outlined text-3xl animate-spin text-brand-500">progress_activity</span>
+              <p className="text-xs font-semibold text-text-main">Conectando aos servidores do WhatsApp...</p>
+              <p className="text-[11px] text-text-muted text-center max-w-xs">
+                Iniciando o handshake Baileys e gerando o QR Code. Isso pode levar alguns segundos.
+              </p>
+            </div>
           ) : waQrCode ? (
             <div className="flex flex-col items-center justify-center p-4 bg-bg-alt rounded-lg space-y-3">
               <img
@@ -695,20 +761,29 @@ export default function Dashboard2Client() {
                 Escaneie o QR Code no seu celular em <span className="font-bold text-text-main">WhatsApp → Aparelhos Conectados</span>
               </p>
               <button
+                type="button"
                 onClick={handleConnectWhatsApp}
-                className="text-xs text-brand-500 font-bold hover:underline flex items-center gap-1 mt-1"
+                className="text-xs text-brand-500 font-bold hover:underline flex items-center gap-1 mt-1 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-sm">refresh</span>
                 <span>Gerar Novo QR Code</span>
               </button>
             </div>
           ) : (
-            <button
-              onClick={handleConnectWhatsApp}
-              className="w-full rounded-lg border border-border bg-surface py-3 text-xs font-bold text-text-main hover:border-brand-500 transition-colors"
-            >
-              Gerar QR Code para Pareamento no WhatsApp
-            </button>
+            <div className="space-y-3">
+              {waQrError && (
+                <div className="rounded-lg bg-danger/10 p-3 text-xs font-semibold text-danger border border-danger/20">
+                  {waQrError}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={handleConnectWhatsApp}
+                className="w-full rounded-lg border border-border bg-surface py-3 text-xs font-bold text-text-main hover:border-brand-500 transition-colors cursor-pointer"
+              >
+                Gerar QR Code para Pareamento no WhatsApp
+              </button>
+            </div>
           )}
         </div>
         {/* Card 4: Google Workspace (Gmail, Calendar, Drive, Docs) */}
@@ -753,15 +828,46 @@ export default function Dashboard2Client() {
               <span className="material-symbols-outlined text-brand-500">radar</span>
               <h3 className="font-bold text-base">Prospecção 24/7</h3>
             </div>
-            {prospector?.totalLeads !== undefined && (
-              <span className="text-[11px] text-text-muted">
-                {prospector.totalLeads} lead(s) · {prospector.draftedOutreach ?? 0} rascunho(s)
-              </span>
-            )}
+            <div className="flex items-center gap-3">
+              {prospector?.totalLeads !== undefined && (
+                <span className="text-[11px] text-text-muted">
+                  {prospector.totalLeads} lead(s) · {prospector.draftedOutreach ?? 0} rascunho(s)
+                </span>
+              )}
+              <HealthDot
+                status={prospector?.settings?.enabled ? "ok" : "warning"}
+                label={
+                  prospector?.settings?.enabled
+                    ? prospector.running
+                      ? "Rodando"
+                      : "Ativo"
+                    : "Desativado"
+                }
+              />
+            </div>
           </div>
 
           {!prospector ? (
-            <p className="text-xs text-text-muted">Carregando…</p>
+            <div className="space-y-3 py-2">
+              <div className="flex items-center justify-between text-xs text-text-muted">
+                <span className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm animate-spin text-brand-500">progress_activity</span>
+                  <span>Carregando status da prospecção…</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={fetchProspector}
+                  className="text-[11px] font-semibold text-brand-500 hover:underline cursor-pointer"
+                >
+                  Recarregar
+                </button>
+              </div>
+              {prospectorMsg && (
+                <p className="text-[11px] text-danger bg-danger/10 p-2.5 rounded-lg border border-danger/20">
+                  {prospectorMsg}
+                </p>
+              )}
+            </div>
           ) : (
             <div className="space-y-3">
               {/* Motor: gate real no início do runCycle */}

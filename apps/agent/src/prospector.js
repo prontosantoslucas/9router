@@ -515,6 +515,7 @@ async function generateOpener(lead, channel = "whatsapp") {
     txt = txt.replace(/\n+(atenciosamente|abra[cç]os|att\.?|equipe .*)$/i, "").trim();
     // Garante o token: sem ele a saudação nunca é aplicada na listagem.
     if (!txt.includes(SAUDACAO_TOKEN)) txt = `${SAUDACAO_TOKEN}! ${txt}`;
+    if (!txt.includes("?")) txt = txt.replace(/\.+$/, "") + "?";
     return txt;
   } catch (err) {
     console.warn("[Prospector Zenda] Fallback de abertura:", err.message);
