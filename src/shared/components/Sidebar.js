@@ -77,6 +77,7 @@ const NAV_SECTIONS = [
     items: [
       { href: "/dashboard/crm", label: "CRM Command Center", icon: "space_dashboard" },
       { href: "/dashboard/crm/deals", label: "Pipeline & Kanban", icon: "view_kanban" },
+      { href: "/dashboard/crm/timeline", label: "Calendário de Fechamentos", icon: "calendar_month" },
       { href: "/dashboard/crm/contacts", label: "Contatos & Clientes", icon: "people" },
       { href: "/dashboard/billing", label: "Planos & Faturas", icon: "payments" },
       { href: "/dashboard/crm/billing", label: "Checkout & Cobranças", icon: "credit_card" },

@@ -1,9 +1,9 @@
-// Ã¢Å¡Â Ã¯Â¸Â AGENT/DEV: Bump this by +1 EVERY TIME you change the schema below
+// ⚠️ AGENT/DEV: Bump this by +1 EVERY TIME you change the schema below
 // (add/remove/alter a table, column, or index in TABLES). It drives the
 // pre-change safety backup in migrate.js: when the stored version is lower,
 // one lightweight DB backup is taken before applying schema changes. Forgetting
-// to bump only skips that backup Ã¢â‚¬â€ it does NOT break the additive auto-sync.
-export const SCHEMA_VERSION = 9;
+// to bump only skips that backup — it does NOT break the additive auto-sync.
+export const SCHEMA_VERSION = 10;
 
 export const PRAGMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -313,6 +313,7 @@ export const TABLES = {
       notes: "TEXT",
       source: "TEXT",
       status: "TEXT DEFAULT 'lead'", // lead, prospect, customer, inactive
+      customFields: "TEXT DEFAULT '{}'", // JSON object: { field: value }
       createdAt: "TEXT NOT NULL",
       updatedAt: "TEXT NOT NULL",
     },
@@ -327,13 +328,14 @@ export const TABLES = {
       currency: "TEXT DEFAULT 'USD'",
       stage: "TEXT NOT NULL DEFAULT 'lead'",
       priority: "TEXT DEFAULT 'none'", // none, low, medium, high, urgent
+      expectedCloseAt: "TEXT", // date (YYYY-MM-DD) for calendar/timeline view
       source: "TEXT",
       notes: "TEXT",
       closedAt: "TEXT",
       createdAt: "TEXT NOT NULL",
       updatedAt: "TEXT NOT NULL",
     },
-    indexes: ["CREATE INDEX IF NOT EXISTS idx_crm_deals_contact ON crmDeals(contactId)", "CREATE INDEX IF NOT EXISTS idx_crm_deals_stage ON crmDeals(stage)", "CREATE INDEX IF NOT EXISTS idx_crm_deals_priority ON crmDeals(priority)"],
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_crm_deals_contact ON crmDeals(contactId)", "CREATE INDEX IF NOT EXISTS idx_crm_deals_stage ON crmDeals(stage)", "CREATE INDEX IF NOT EXISTS idx_crm_deals_priority ON crmDeals(priority)", "CREATE INDEX IF NOT EXISTS idx_crm_deals_close ON crmDeals(expectedCloseAt)"],
   },
   crmActivities: {
     columns: {

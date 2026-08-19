@@ -6,7 +6,7 @@ import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from "@
 import {
   Plus, Download, Trash2, ArrowRightLeft, Loader2, Briefcase, Flag,
   LayoutGrid, Table, Search, Filter, Sparkles, CheckCircle2, MoreVertical,
-  Calendar, Building2, User, ChevronRight, ArrowUpRight
+  Calendar, Building2, User, ChevronRight, ArrowUpRight, Pencil, X
 } from "lucide-react";
 import {
   DEAL_STAGES, PRIORITIES, stageMeta, priorityMeta, sourceMeta,
@@ -26,6 +26,7 @@ export default function DealsPipelinePage() {
   const [bulkPriority, setBulkPriority] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPriority, setFilterPriority] = useState("all");
+  const [editingDeal, setEditingDeal] = useState(null);
   const [toast, setToast] = useState(null);
 
   const sensors = useSensors(
@@ -121,6 +122,27 @@ export default function DealsPipelinePage() {
       }
     } catch (error) {
       notify("Erro ao criar negócio");
+    }
+  }
+
+  async function handleUpdateDeal(formData) {
+    if (!editingDeal) return;
+    try {
+      const res = await fetch(`/api/crm/deals/${editingDeal.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setEditingDeal(null);
+        fetchDeals();
+        notify("✓ Negócio atualizado com sucesso!");
+      } else {
+        notify(data.error || "Erro ao atualizar negócio");
+      }
+    } catch (error) {
+      notify("Erro ao atualizar negócio");
     }
   }
 
@@ -402,6 +424,7 @@ export default function DealsPipelinePage() {
                 contacts={contacts}
                 selected={selected}
                 onToggleSelect={toggleSelect}
+                onEditDeal={(deal) => setEditingDeal(deal)}
                 onAddDeal={() => {
                   setSelectedStage(stage.value);
                   setShowForm(true);
@@ -529,11 +552,21 @@ export default function DealsPipelinePage() {
           stage={selectedStage}
         />
       )}
+
+      {/* ── Modal: Editar Negócio ── */}
+      {editingDeal && (
+        <DealForm
+          deal={editingDeal}
+          onSave={handleUpdateDeal}
+          onCancel={() => setEditingDeal(null)}
+          stage={editingDeal.stage}
+        />
+      )}
     </div>
   );
 }
 
-function KanbanColumn({ stage, deals, contacts, selected, onToggleSelect, onAddDeal }) {
+function KanbanColumn({ stage, deals, contacts, selected, onToggleSelect, onEditDeal, onAddDeal }) {
   const totalValue = deals.reduce((sum, deal) => sum + (deal.valueCents || 0), 0);
   const sm = stageMeta(stage.value);
 
@@ -564,6 +597,7 @@ function KanbanColumn({ stage, deals, contacts, selected, onToggleSelect, onAddD
               contact={contacts[deal.contactId]}
               isSelected={selected.has(deal.id)}
               onToggle={() => onToggleSelect(deal.id)}
+              onEdit={() => onEditDeal(deal)}
             />
           ))}
 
@@ -587,7 +621,7 @@ function KanbanColumn({ stage, deals, contacts, selected, onToggleSelect, onAddD
   );
 }
 
-function DealCard({ deal, contact, isDragging, isSelected, onToggle }) {
+function DealCard({ deal, contact, isDragging, isSelected, onToggle, onEdit }) {
   const pm = priorityMeta(deal.priority);
   const sm = stageMeta(deal.stage);
 
@@ -605,19 +639,32 @@ function DealCard({ deal, contact, isDragging, isSelected, onToggle }) {
         <h3 className="text-xs font-bold text-text-main leading-snug group-hover:text-brand-400 transition-colors">
           {deal.title}
         </h3>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggle?.();
-          }}
-          className={`shrink-0 rounded p-0.5 transition-colors ${
-            isSelected ? "text-brand-500" : "text-text-muted opacity-0 group-hover:opacity-100 hover:text-brand-500"
-          }`}
-          title={isSelected ? "Deselecionar" : "Selecionar"}
-        >
-          <CheckCircle2 className={`size-4 ${isSelected ? "fill-brand-500 text-white" : ""}`} />
-        </button>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit?.();
+            }}
+            className="rounded p-0.5 text-text-muted opacity-0 group-hover:opacity-100 hover:text-brand-500 transition-colors"
+            title="Editar negócio"
+          >
+            <Pencil className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle?.();
+            }}
+            className={`rounded p-0.5 transition-colors ${
+              isSelected ? "text-brand-500" : "text-text-muted opacity-0 group-hover:opacity-100 hover:text-brand-500"
+            }`}
+            title={isSelected ? "Deselecionar" : "Selecionar"}
+          >
+            <CheckCircle2 className={`size-4 ${isSelected ? "fill-brand-500 text-white" : ""}`} />
+          </button>
+        </div>
       </div>
 
       {contact && (
@@ -633,27 +680,41 @@ function DealCard({ deal, contact, isDragging, isSelected, onToggle }) {
 
       <div className="flex items-center justify-between pl-1.5 pt-1 border-t border-border/50 text-xs">
         <span className="font-bold font-mono text-text-main">{formatCurrency(deal.valueCents, deal.currency)}</span>
-        <div className="flex items-center gap-1 text-[10px] text-text-muted font-mono">
-          <Calendar className="size-3 text-text-muted/60" />
-          <span>{timeAgo(deal.createdAt)}</span>
+        <div className="flex items-center gap-2 text-[10px] text-text-muted font-mono">
+          {deal.expectedCloseAt && (
+            <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md ${
+              new Date(deal.expectedCloseAt) < new Date() && !["won", "lost", "cancelled"].includes(deal.stage)
+                ? "bg-label-crimson-bg text-label-crimson"
+                : "bg-label-blue-bg text-label-blue"
+            }`}>
+              <Calendar className="size-3" />
+              {formatDate(deal.expectedCloseAt)}
+            </span>
+          )}
+          <span className="flex items-center gap-1 text-text-muted/60">
+            <span>{timeAgo(deal.createdAt)}</span>
+          </span>
         </div>
       </div>
     </div>
   );
 }
 
-function DealForm({ onSave, onCancel, stage }) {
+function DealForm({ onSave, onCancel, stage, deal }) {
   const [contacts, setContacts] = useState([]);
   const [formData, setFormData] = useState({
-    contactId: "",
-    title: "",
-    valueCents: 50000,
-    currency: "BRL",
-    priority: "medium",
-    notes: "",
+    contactId: deal?.contactId || "",
+    title: deal?.title || "",
+    valueCents: deal?.valueCents ?? 50000,
+    currency: deal?.currency || "BRL",
+    priority: deal?.priority || "medium",
+    expectedCloseAt: deal?.expectedCloseAt || "",
+    notes: deal?.notes || "",
   });
+  const [formStage, setFormStage] = useState(deal?.stage || stage);
   const [saving, setSaving] = useState(false);
-  const sm = stageMeta(stage);
+  const isEdit = !!deal;
+  const sm = stageMeta(formStage);
 
   useEffect(() => {
     fetchContacts();
@@ -672,7 +733,7 @@ function DealForm({ onSave, onCancel, stage }) {
   async function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
-    await onSave(formData);
+    await onSave({ ...formData, stage: formStage });
     setSaving(false);
   }
 
@@ -681,14 +742,16 @@ function DealForm({ onSave, onCancel, stage }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-      <div className="w-full max-w-lg rounded-2xl border border-border bg-surface p-6 shadow-2xl space-y-5 animate-in zoom-in-95">
+      <div className="w-full max-w-lg rounded-2xl border border-border bg-surface p-6 shadow-2xl space-y-5 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto custom-scrollbar">
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div className="space-y-0.5">
             <h2 className="text-sm font-bold font-display text-text-main flex items-center gap-2">
               <Briefcase className="size-4 text-brand-500" />
-              Novo Negócio no Pipeline
+              {isEdit ? "Editar Negócio" : "Novo Negócio no Pipeline"}
             </h2>
-            <p className="text-xs text-text-muted">Cadastre uma nova oportunidade no funil de vendas.</p>
+            <p className="text-xs text-text-muted">
+              {isEdit ? "Atualize os dados desta oportunidade de venda." : "Cadastre uma nova oportunidade no funil de vendas."}
+            </p>
           </div>
           <button
             type="button"
@@ -771,12 +834,37 @@ function DealForm({ onSave, onCancel, stage }) {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-semibold text-text-muted">Estágio Inicial</label>
-              <div className="flex h-9 items-center rounded-xl border border-border bg-surface-2 px-3 text-xs text-text-main font-semibold">
-                <span className={`mr-2 size-2 rounded-full ${sm.bg}`} />
-                {sm.label}
-              </div>
+              <label className="mb-1 block text-xs font-semibold text-text-muted">Estágio</label>
+              {isEdit ? (
+                <select
+                  value={formStage}
+                  onChange={(e) => setFormStage(e.target.value)}
+                  className={inputCls}
+                >
+                  {DEAL_STAGES.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex h-9 items-center rounded-xl border border-border bg-surface-2 px-3 text-xs text-text-main font-semibold">
+                  <span className={`mr-2 size-2 rounded-full ${sm.bg}`} />
+                  {sm.label}
+                </div>
+              )}
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-text-muted">
+              Data de Fechamento Prevista
+              <span className="ml-1.5 text-[10px] text-text-muted/70">(usada na visão Calendário)</span>
+            </label>
+            <input
+              type="date"
+              value={formData.expectedCloseAt}
+              onChange={(e) => setFormData({ ...formData, expectedCloseAt: e.target.value })}
+              className={inputCls}
+            />
           </div>
 
           <div>
@@ -804,7 +892,7 @@ function DealForm({ onSave, onCancel, stage }) {
               className="flex-1 h-9 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-xs font-bold text-white shadow-soft hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5 disabled:opacity-50"
             >
               {saving && <Loader2 className="size-3.5 animate-spin" />}
-              <span>Criar Negócio</span>
+              <span>{isEdit ? "Salvar Alterações" : "Criar Negócio"}</span>
             </button>
           </div>
         </form>

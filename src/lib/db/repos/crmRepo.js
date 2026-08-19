@@ -14,6 +14,7 @@ function rowToContact(row) {
     notes: row.notes,
     source: row.source,
     status: row.status || "lead",
+    customFields: row.customFields ? JSON.parse(row.customFields) : {},
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -29,6 +30,7 @@ function rowToDeal(row) {
     currency: row.currency,
     stage: row.stage,
     priority: row.priority || "none",
+    expectedCloseAt: row.expectedCloseAt || null,
     source: row.source,
     notes: row.notes,
     closedAt: row.closedAt,
@@ -102,13 +104,14 @@ export async function createContact(data) {
     notes: data.notes || null,
     source: data.source || null,
     status: data.status || "lead",
+    customFields: JSON.stringify(data.customFields || {}),
     createdAt: now,
     updatedAt: now,
   };
 
   db.run(
-    `INSERT INTO crmContacts(id, userId, name, email, phone, company, tags, notes, source, status, createdAt, updatedAt)
-     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO crmContacts(id, userId, name, email, phone, company, tags, notes, source, status, customFields, createdAt, updatedAt)
+     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       contact.id,
       contact.userId,
@@ -120,6 +123,7 @@ export async function createContact(data) {
       contact.notes,
       contact.source,
       contact.status,
+      contact.customFields,
       contact.createdAt,
       contact.updatedAt,
     ]
@@ -148,7 +152,7 @@ export async function updateContact(id, data) {
     };
 
     db.run(
-      `UPDATE crmContacts SET userId = ?, name = ?, email = ?, phone = ?, company = ?, tags = ?, notes = ?, source = ?, status = ?, updatedAt = ? WHERE id = ?`,
+      `UPDATE crmContacts SET userId = ?, name = ?, email = ?, phone = ?, company = ?, tags = ?, notes = ?, source = ?, status = ?, customFields = ?, updatedAt = ? WHERE id = ?`,
       [
         merged.userId,
         merged.name,
@@ -159,6 +163,7 @@ export async function updateContact(id, data) {
         merged.notes,
         merged.source,
         merged.status,
+        merged.customFields ? JSON.stringify(merged.customFields) : row.customFields,
         merged.updatedAt,
         id,
       ]
@@ -225,6 +230,7 @@ export async function createDeal(data) {
     currency: data.currency || "USD",
     stage: data.stage || "lead",
     priority: data.priority || "none",
+    expectedCloseAt: data.expectedCloseAt || null,
     source: data.source || null,
     notes: data.notes || null,
     closedAt: data.closedAt || null,
@@ -233,8 +239,8 @@ export async function createDeal(data) {
   };
 
   db.run(
-    `INSERT INTO crmDeals(id, contactId, title, valueCents, currency, stage, priority, source, notes, closedAt, createdAt, updatedAt)
-     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO crmDeals(id, contactId, title, valueCents, currency, stage, priority, expectedCloseAt, source, notes, closedAt, createdAt, updatedAt)
+     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       deal.id,
       deal.contactId,
@@ -243,6 +249,7 @@ export async function createDeal(data) {
       deal.currency,
       deal.stage,
       deal.priority,
+      deal.expectedCloseAt,
       deal.source,
       deal.notes,
       deal.closedAt,
@@ -277,7 +284,7 @@ export async function updateDeal(id, data) {
     };
 
     db.run(
-      `UPDATE crmDeals SET contactId = ?, title = ?, valueCents = ?, currency = ?, stage = ?, priority = ?, source = ?, notes = ?, closedAt = ?, updatedAt = ? WHERE id = ?`,
+      `UPDATE crmDeals SET contactId = ?, title = ?, valueCents = ?, currency = ?, stage = ?, priority = ?, expectedCloseAt = ?, source = ?, notes = ?, closedAt = ?, updatedAt = ? WHERE id = ?`,
       [
         merged.contactId,
         merged.title,
@@ -285,6 +292,7 @@ export async function updateDeal(id, data) {
         merged.currency,
         merged.stage,
         merged.priority,
+        merged.expectedCloseAt || null,
         merged.source,
         merged.notes,
         merged.closedAt,

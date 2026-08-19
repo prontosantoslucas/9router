@@ -5,7 +5,7 @@ import {
   ArrowLeft, Mail, Phone, Building2, Plus, Key, Loader2,
   Pencil, Clock, TrendingUp, Briefcase, Trophy, RefreshCw,
   FileText, StickyNote, GitBranch, MailOpen, MessageSquare,
-  Sparkles, ExternalLink, Calendar, Send
+  Sparkles, ExternalLink, Calendar, Send, Trash2
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -322,6 +322,33 @@ export default function ContactDetailPage({ params }) {
           </div>
         )}
       </div>
+
+      {/* ── Campos Personalizados ── */}
+      {Object.keys(contact.customFields || {}).length > 0 && (
+        <div className="rounded-2xl border border-border bg-surface p-5 shadow-soft space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-bold font-display text-text-main flex items-center gap-2">
+              <FileText className="size-4 text-brand-500" />
+              Campos Personalizados
+            </h2>
+            <button
+              type="button"
+              onClick={() => setShowEditForm(true)}
+              className="flex items-center gap-1 text-[11px] font-bold text-brand-400 hover:text-brand-300 transition-colors"
+            >
+              <Pencil className="size-3" /> Editar
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {Object.entries(contact.customFields).map(([key, value]) => (
+              <div key={key} className="rounded-xl border border-border bg-surface-2 px-3 py-2.5 space-y-0.5">
+                <div className="text-[10px] font-bold text-text-muted uppercase tracking-wider">{key}</div>
+                <div className="text-xs font-semibold text-text-main break-words">{String(value) || "—"}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── KPI Stats Summary ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
@@ -746,13 +773,24 @@ function EditContactModal({ contact, onSave, onCancel }) {
     notes: contact.notes || "",
     tags: contact.tags || [],
   });
+  const [customFields, setCustomFields] = useState(
+    Object.entries(contact.customFields || {}).map(([key, value]) => ({ key, value }))
+  );
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
-    await onSave(formData);
+    const cf = {};
+    customFields.forEach(({ key, value }) => {
+      if (key.trim()) cf[key.trim()] = value;
+    });
+    await onSave({ ...formData, customFields: cf });
     setSaving(false);
+  }
+
+  function updateField(index, field, val) {
+    setCustomFields((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: val } : row)));
   }
 
   const inputCls =
@@ -801,6 +839,54 @@ function EditContactModal({ contact, onSave, onCancel }) {
           <div>
             <label className="mb-1 block text-xs font-semibold text-text-muted">Notas</label>
             <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={3} className="w-full rounded-xl border border-border bg-surface-2 p-2.5 text-xs text-text-main" />
+          </div>
+
+          <div className="border-t border-border pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-semibold text-text-muted">Campos Personalizados</label>
+              <button
+                type="button"
+                onClick={() => setCustomFields((prev) => [...prev, { key: "", value: "" }])}
+                className="flex items-center gap-1 text-[11px] font-bold text-brand-400 hover:text-brand-300 transition-colors"
+              >
+                <Plus className="size-3" /> Adicionar campo
+              </button>
+            </div>
+
+            {customFields.length === 0 && (
+              <p className="text-[11px] text-text-muted/70 py-1.5">
+                Nenhum campo personalizado. Adicione dados extras como CPF, segmento, tamanho da empresa...
+              </p>
+            )}
+
+            <div className="space-y-2">
+              {customFields.map((row, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={row.key}
+                    onChange={(e) => updateField(i, "key", e.target.value)}
+                    placeholder="Nome do campo (ex.: CPF)"
+                    className={`${inputCls} flex-1`}
+                  />
+                  <input
+                    type="text"
+                    value={row.value}
+                    onChange={(e) => updateField(i, "value", e.target.value)}
+                    placeholder="Valor"
+                    className={`${inputCls} flex-1`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setCustomFields((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="rounded-lg p-1.5 text-text-muted hover:text-label-crimson hover:bg-label-crimson-bg transition-colors"
+                    title="Remover campo"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="flex gap-2 pt-2 border-t border-border">
