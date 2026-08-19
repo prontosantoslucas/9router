@@ -13,6 +13,7 @@ function rowToContact(row) {
     tags: row.tags ? JSON.parse(row.tags) : [],
     notes: row.notes,
     source: row.source,
+    status: row.status || "lead",
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -27,6 +28,7 @@ function rowToDeal(row) {
     valueCents: row.valueCents,
     currency: row.currency,
     stage: row.stage,
+    priority: row.priority || "none",
     source: row.source,
     notes: row.notes,
     closedAt: row.closedAt,
@@ -48,7 +50,7 @@ function rowToActivity(row) {
   };
 }
 
-export async function getContacts({ search, tags, limit = 100, offset = 0 } = {}) {
+export async function getContacts({ search, tags, status, limit = 100, offset = 0 } = {}) {
   const db = await getAdapter();
   let sql = `SELECT * FROM crmContacts WHERE 1=1`;
   const params = [];
@@ -62,6 +64,11 @@ export async function getContacts({ search, tags, limit = 100, offset = 0 } = {}
   if (tags && tags.length > 0) {
     sql += ` AND (${tags.map(() => `tags LIKE ?`).join(" OR ")})`;
     tags.forEach((tag) => params.push(`%"${tag}"%`));
+  }
+
+  if (status) {
+    sql += ` AND status = ?`;
+    params.push(status);
   }
 
   sql += ` ORDER BY updatedAt DESC LIMIT ? OFFSET ?`;
@@ -94,13 +101,14 @@ export async function createContact(data) {
     tags: JSON.stringify(data.tags || []),
     notes: data.notes || null,
     source: data.source || null,
+    status: data.status || "lead",
     createdAt: now,
     updatedAt: now,
   };
 
   db.run(
-    `INSERT INTO crmContacts(id, userId, name, email, phone, company, tags, notes, source, createdAt, updatedAt)
-     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO crmContacts(id, userId, name, email, phone, company, tags, notes, source, status, createdAt, updatedAt)
+     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       contact.id,
       contact.userId,
@@ -111,6 +119,7 @@ export async function createContact(data) {
       contact.tags,
       contact.notes,
       contact.source,
+      contact.status,
       contact.createdAt,
       contact.updatedAt,
     ]
@@ -139,7 +148,7 @@ export async function updateContact(id, data) {
     };
 
     db.run(
-      `UPDATE crmContacts SET userId = ?, name = ?, email = ?, phone = ?, company = ?, tags = ?, notes = ?, source = ?, updatedAt = ? WHERE id = ?`,
+      `UPDATE crmContacts SET userId = ?, name = ?, email = ?, phone = ?, company = ?, tags = ?, notes = ?, source = ?, status = ?, updatedAt = ? WHERE id = ?`,
       [
         merged.userId,
         merged.name,
@@ -149,6 +158,7 @@ export async function updateContact(id, data) {
         merged.tags,
         merged.notes,
         merged.source,
+        merged.status,
         merged.updatedAt,
         id,
       ]
@@ -172,7 +182,7 @@ export async function deleteContact(id) {
   });
 }
 
-export async function getDeals({ contactId, stage, limit = 100, offset = 0 } = {}) {
+export async function getDeals({ contactId, stage, priority, limit = 100, offset = 0 } = {}) {
   const db = await getAdapter();
   let sql = `SELECT * FROM crmDeals WHERE 1=1`;
   const params = [];
@@ -185,6 +195,11 @@ export async function getDeals({ contactId, stage, limit = 100, offset = 0 } = {
   if (stage) {
     sql += ` AND stage = ?`;
     params.push(stage);
+  }
+
+  if (priority) {
+    sql += ` AND priority = ?`;
+    params.push(priority);
   }
 
   sql += ` ORDER BY updatedAt DESC LIMIT ? OFFSET ?`;
@@ -209,6 +224,7 @@ export async function createDeal(data) {
     valueCents: data.valueCents || 0,
     currency: data.currency || "USD",
     stage: data.stage || "lead",
+    priority: data.priority || "none",
     source: data.source || null,
     notes: data.notes || null,
     closedAt: data.closedAt || null,
@@ -217,8 +233,8 @@ export async function createDeal(data) {
   };
 
   db.run(
-    `INSERT INTO crmDeals(id, contactId, title, valueCents, currency, stage, source, notes, closedAt, createdAt, updatedAt)
-     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO crmDeals(id, contactId, title, valueCents, currency, stage, priority, source, notes, closedAt, createdAt, updatedAt)
+     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       deal.id,
       deal.contactId,
@@ -226,6 +242,7 @@ export async function createDeal(data) {
       deal.valueCents,
       deal.currency,
       deal.stage,
+      deal.priority,
       deal.source,
       deal.notes,
       deal.closedAt,
@@ -260,13 +277,14 @@ export async function updateDeal(id, data) {
     };
 
     db.run(
-      `UPDATE crmDeals SET contactId = ?, title = ?, valueCents = ?, currency = ?, stage = ?, source = ?, notes = ?, closedAt = ?, updatedAt = ? WHERE id = ?`,
+      `UPDATE crmDeals SET contactId = ?, title = ?, valueCents = ?, currency = ?, stage = ?, priority = ?, source = ?, notes = ?, closedAt = ?, updatedAt = ? WHERE id = ?`,
       [
         merged.contactId,
         merged.title,
         merged.valueCents,
         merged.currency,
         merged.stage,
+        merged.priority,
         merged.source,
         merged.notes,
         merged.closedAt,
@@ -383,5 +401,41 @@ export async function getContactStats(contactId) {
     wonDeals,
     apiKeysCount: apiKeys.length,
     apiKeys,
+  };
+}
+
+export async function getCrmDashboardStats() {
+  const db = await getAdapter();
+
+  const contactCounts = db.all(
+    `SELECT status, COUNT(*) as count FROM crmContacts GROUP BY status`
+  );
+  const byStatus = {};
+  let totalContacts = 0;
+  contactCounts.forEach((row) => {
+    byStatus[row.status || "lead"] = row.count;
+    totalContacts += row.count;
+  });
+
+  const dealRows = db.all(`SELECT stage, priority, COUNT(*) as count, SUM(valueCents) as total FROM crmDeals GROUP BY stage`);
+  const stages = {};
+  let openValue = 0;
+  dealRows.forEach((row) => {
+    stages[row.stage] = { count: row.count, total: row.total || 0 };
+    if (!["won", "lost", "cancelled"].includes(row.stage)) openValue += row.total || 0;
+  });
+
+  const wonTotal = db.get(`SELECT SUM(valueCents) as total FROM crmDeals WHERE stage = 'won'`)?.total || 0;
+  const paidCheckouts = db.get(`SELECT COUNT(*) as count FROM crmCheckouts WHERE status = 'paid'`)?.count || 0;
+  const revenueCents = db.get(`SELECT SUM(amountCents) as total FROM crmCheckouts WHERE status = 'paid'`)?.total || 0;
+
+  return {
+    contacts: totalContacts,
+    byStatus,
+    stages,
+    openValue,
+    wonTotal,
+    paidCheckouts,
+    revenueCents,
   };
 }

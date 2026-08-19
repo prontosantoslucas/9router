@@ -5,7 +5,7 @@ import { deleteContact } from "@/lib/db";
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { action, ids, tag, stage, type = "contacts" } = body;
+    const { action, ids, tag, stage, status, priority, type = "contacts" } = body;
 
     if (!Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json({ error: "ids é obrigatório" }, { status: 400 });
@@ -57,6 +57,40 @@ export async function POST(request) {
           const tags = JSON.parse(row.tags || "[]").filter((t) => t !== tag);
           db.run("UPDATE crmContacts SET tags = ?, updatedAt = ? WHERE id = ?", [
             JSON.stringify(tags),
+            new Date().toISOString(),
+            id,
+          ]);
+          affected.push(id);
+        }
+      });
+      return NextResponse.json({ success: true, affected: affected.length });
+    }
+
+    if (action === "set-status" && status) {
+      const affected = [];
+      db.transaction(() => {
+        for (const id of ids) {
+          const row = db.get("SELECT * FROM crmContacts WHERE id = ?", [id]);
+          if (!row) continue;
+          db.run("UPDATE crmContacts SET status = ?, updatedAt = ? WHERE id = ?", [
+            status,
+            new Date().toISOString(),
+            id,
+          ]);
+          affected.push(id);
+        }
+      });
+      return NextResponse.json({ success: true, affected: affected.length });
+    }
+
+    if (action === "set-priority" && priority) {
+      const affected = [];
+      db.transaction(() => {
+        for (const id of ids) {
+          const row = db.get("SELECT * FROM crmDeals WHERE id = ?", [id]);
+          if (!row) continue;
+          db.run("UPDATE crmDeals SET priority = ?, updatedAt = ? WHERE id = ?", [
+            priority,
             new Date().toISOString(),
             id,
           ]);

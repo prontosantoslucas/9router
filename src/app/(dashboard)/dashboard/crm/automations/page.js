@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { AlertTriangle, CheckCircle, Info, XCircle, RefreshCw, Plus, Trash2 } from "lucide-react";
@@ -97,18 +97,18 @@ export default function AutomationsPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Automações & Alertas</h1>
+        <h1 className="text-3xl font-bold">AutomaÃ§Ãµes & Alertas</h1>
         <button
           onClick={handleCheckAlerts}
           disabled={checking}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+          className="flex items-center gap-2 bg-brand-500 text-white px-4 py-2 rounded-lg hover:bg-brand-600 disabled:opacity-50"
         >
           <RefreshCw size={18} className={checking ? "animate-spin" : ""} />
           Verificar Alertas
         </button>
       </div>
 
-      <div className="flex gap-4 mb-6 border-b border-gray-200">
+      <div className="flex gap-4 mb-6 border-b border-border">
         <TabButton active={activeTab === "alerts"} onClick={() => setActiveTab("alerts")} label={`Alertas (${alerts.length})`} />
         <TabButton active={activeTab === "webhooks"} onClick={() => setActiveTab("webhooks")} label={`Webhooks (${webhooks.length})`} />
       </div>
@@ -116,10 +116,10 @@ export default function AutomationsPage() {
       {activeTab === "alerts" && (
         <div className="space-y-4">
           {alerts.length === 0 ? (
-            <div className="bg-white rounded-lg p-12 border border-gray-200 text-center">
-              <CheckCircle size={48} className="mx-auto text-green-500 mb-4" />
-              <p className="text-gray-600">Nenhum alerta ativo no momento</p>
-              <p className="text-sm text-gray-500 mt-2">Clique em "Verificar Alertas" para checar novamente</p>
+            <div className="bg-surface rounded-lg p-12 border border-border text-center">
+              <CheckCircle size={48} className="mx-auto text-label-emerald mb-4" />
+              <p className="text-text-muted">Nenhum alerta ativo no momento</p>
+              <p className="text-sm text-text-muted mt-2">Clique em "Verificar Alertas" para checar novamente</p>
             </div>
           ) : (
             alerts.map((alert) => (
@@ -132,12 +132,12 @@ export default function AutomationsPage() {
       {activeTab === "webhooks" && (
         <div>
           <div className="flex justify-between items-center mb-4">
-            <p className="text-sm text-gray-600">
-              Configure webhooks para receber notificações quando eventos importantes acontecem no CRM
+            <p className="text-sm text-text-muted">
+              Configure webhooks para receber notificaÃ§Ãµes quando eventos importantes acontecem no CRM
             </p>
             <button
               onClick={() => setShowWebhookForm(true)}
-              className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 text-sm"
+              className="flex items-center gap-2 bg-brand-500 text-white px-3 py-1.5 rounded-lg hover:bg-brand-600 text-sm"
             >
               <Plus size={16} />
               Novo Webhook
@@ -146,9 +146,9 @@ export default function AutomationsPage() {
 
           <div className="space-y-3">
             {webhooks.length === 0 ? (
-              <div className="bg-white rounded-lg p-12 border border-gray-200 text-center">
-                <Info size={48} className="mx-auto text-blue-500 mb-4" />
-                <p className="text-gray-600">Nenhum webhook configurado</p>
+              <div className="bg-surface rounded-lg p-12 border border-border text-center">
+                <Info size={48} className="mx-auto text-brand-500 mb-4" />
+                <p className="text-text-muted">Nenhum webhook configurado</p>
               </div>
             ) : (
               webhooks.map((webhook) => (
@@ -171,7 +171,7 @@ function TabButton({ active, onClick, label }) {
     <button
       onClick={onClick}
       className={`px-4 py-2 text-sm font-medium border-b-2 -mb-[1px] ${
-        active ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"
+        active ? "border-brand-500 text-brand-600" : "border-transparent text-text-muted hover:text-text-main"
       }`}
     >
       {label}
@@ -181,9 +181,9 @@ function TabButton({ active, onClick, label }) {
 
 function AlertCard({ alert, onResolve }) {
   const severityConfig = {
-    critical: { icon: XCircle, color: "text-red-600", bg: "bg-red-50", border: "border-red-200" },
-    warning: { icon: AlertTriangle, color: "text-yellow-600", bg: "bg-yellow-50", border: "border-yellow-200" },
-    info: { icon: Info, color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-200" },
+    critical: { icon: XCircle, color: "text-label-crimson", bg: "bg-label-crimson-bg", border: "border-red-200" },
+    warning: { icon: AlertTriangle, color: "text-label-yellow", bg: "bg-label-yellow-bg", border: "border-yellow-200" },
+    info: { icon: Info, color: "text-brand-600", bg: "bg-label-blue-bg", border: "border-label-blue-bg" },
   };
 
   const config = severityConfig[alert.severity] || severityConfig.info;
@@ -196,17 +196,17 @@ function AlertCard({ alert, onResolve }) {
         <div className="flex-1">
           <div className="flex justify-between items-start mb-2">
             <div>
-              <h3 className="font-semibold text-gray-900">{alert.title}</h3>
-              <p className="text-sm text-gray-700 mt-1">{alert.message}</p>
+              <h3 className="font-semibold text-text-main">{alert.title}</h3>
+              <p className="text-sm text-text-main mt-1">{alert.message}</p>
             </div>
             <button
               onClick={() => onResolve(alert.id)}
-              className="text-sm text-gray-600 hover:text-gray-900 underline"
+              className="text-sm text-text-muted hover:text-text-main underline"
             >
               Resolver
             </button>
           </div>
-          <div className="flex items-center gap-4 text-xs text-gray-500">
+          <div className="flex items-center gap-4 text-xs text-text-muted">
             <span className="uppercase font-medium">{alert.type}</span>
             <span>{new Date(alert.createdAt).toLocaleString("pt-BR")}</span>
           </div>
@@ -218,14 +218,14 @@ function AlertCard({ alert, onResolve }) {
 
 function WebhookCard({ webhook, onDelete }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4">
+    <div className="bg-surface border border-border rounded-lg p-4">
       <div className="flex justify-between items-start">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
-            <code className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">{webhook.url}</code>
+            <code className="text-sm font-mono bg-bg-alt px-2 py-1 rounded">{webhook.url}</code>
             <span
               className={`text-xs px-2 py-0.5 rounded ${
-                webhook.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                webhook.isActive ? "bg-label-emerald-bg text-label-emerald" : "bg-label-crimson-bg text-label-crimson"
               }`}
             >
               {webhook.isActive ? "Ativo" : "Inativo"}
@@ -233,23 +233,23 @@ function WebhookCard({ webhook, onDelete }) {
           </div>
           <div className="flex flex-wrap gap-2 mb-2">
             {webhook.events.map((event) => (
-              <span key={event} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+              <span key={event} className="text-xs bg-label-blue-bg text-brand-700 px-2 py-1 rounded">
                 {event}
               </span>
             ))}
           </div>
-          <div className="text-xs text-gray-500">
+          <div className="text-xs text-text-muted">
             {webhook.lastFiredAt ? (
-              <span>Último disparo: {new Date(webhook.lastFiredAt).toLocaleString("pt-BR")}</span>
+              <span>Ãšltimo disparo: {new Date(webhook.lastFiredAt).toLocaleString("pt-BR")}</span>
             ) : (
               <span>Nunca disparado</span>
             )}
-            {webhook.failCount > 0 && <span className="ml-3 text-red-600">Falhas: {webhook.failCount}</span>}
+            {webhook.failCount > 0 && <span className="ml-3 text-label-crimson">Falhas: {webhook.failCount}</span>}
           </div>
         </div>
         <button
           onClick={() => onDelete(webhook.id)}
-          className="text-red-600 hover:text-red-700 p-2"
+          className="text-label-crimson hover:text-red-700 p-2"
           title="Deletar webhook"
         >
           <Trash2 size={18} />
@@ -290,7 +290,7 @@ function WebhookForm({ onSave, onCancel }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-surface rounded-lg p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
         <h2 className="text-2xl font-bold mb-4">Novo Webhook</h2>
 
         <form
@@ -308,13 +308,13 @@ function WebhookForm({ onSave, onCancel }) {
               value={formData.url}
               onChange={(e) => setFormData({ ...formData, url: e.target.value })}
               placeholder="https://seu-servidor.com/webhook"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-2">Eventos * (selecione ao menos 1)</label>
-            <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded p-3">
+            <div className="space-y-2 max-h-48 overflow-y-auto border border-border rounded p-3">
               {availableEvents.map((event) => (
                 <label key={event} className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -335,11 +335,11 @@ function WebhookForm({ onSave, onCancel }) {
               type="text"
               value={formData.secret}
               onChange={(e) => setFormData({ ...formData, secret: e.target.value })}
-              placeholder="Para assinar requisições com HMAC"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              placeholder="Para assinar requisiÃ§Ãµes com HMAC"
+              className="w-full px-3 py-2 border border-border rounded-lg focus:ring-2 focus:ring-blue-500"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Se fornecido, o webhook incluirá header X-Webhook-Signature com HMAC-SHA256
+            <p className="text-xs text-text-muted mt-1">
+              Se fornecido, o webhook incluirÃ¡ header X-Webhook-Signature com HMAC-SHA256
             </p>
           </div>
 
@@ -347,14 +347,14 @@ function WebhookForm({ onSave, onCancel }) {
             <button
               type="submit"
               disabled={formData.events.length === 0}
-              className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="flex-1 bg-brand-500 text-white px-4 py-2 rounded-lg hover:bg-brand-600 disabled:opacity-50"
             >
               Salvar
             </button>
             <button
               type="button"
               onClick={onCancel}
-              className="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300"
+              className="flex-1 bg-bg-alt text-text-main px-4 py-2 rounded-lg hover:bg-bg-alt"
             >
               Cancelar
             </button>

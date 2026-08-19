@@ -21,7 +21,6 @@ export default function BillingPage() {
   const [topUpAmount, setTopUpAmount] = useState(50);
   const [showNewKeyModal, setShowNewKeyModal] = useState(false);
   const [newKeyLabel, setNewKeyLabel] = useState("");
-  const [newKeyLimit, setNewKeyLimit] = useState(50);
   const [generatedKey, setGeneratedKey] = useState(null);
   const [copiedKey, setCopiedKey] = useState(false);
 
@@ -75,26 +74,78 @@ export default function BillingPage() {
     }
   };
 
+  // ────────────────────────────────────────────────────────────────
+  // Limite NAO se edita: ele vem do plano.
+  //
+  // A tela antes mostrava a coluna "Cota Limite" com
+  //   (k.balanceCents || k.costLimitCents || 5000) / 100
+  // ou seja: caia num fallback fixo de $50 quando a chave nao tinha dado, e
+  // rotulava `balanceCents` (SALDO restante) como se fosse limite. O $50 que
+  // aparecia era o proprio fallback, nao um valor do banco.
+  //
+  // Aqui nada e inventado: sem dado, mostra "—".
+  // ────────────────────────────────────────────────────────────────
+  const planoDaChave = (k) => plans.find((p) => p.id === k.planId) || null;
+
+  const limiteDoPlano = (k) => {
+    const plano = planoDaChave(k);
+    if (!plano) return "—";
+    const partes = [];
+    if (plano.costLimitCents != null) partes.push(`${(plano.costLimitCents / 100).toFixed(2)}`);
+    if (plano.tokenLimit != null) partes.push(`${(plano.tokenLimit / 1e6).toFixed(2)}M tokens`);
+    // Pay-As-You-Go tem os dois nulos de proposito: e ausencia de teto, e
+    // dizer "—" ali seria confundir sem-limite com sem-dado.
+    return partes.length ? partes.join(" · ") : "sem teto";
+  };
+
+  const saldoDaChave = (k) => {
+    const partes = [];
+    if (k.balanceCents != null) partes.push(`${(k.balanceCents / 100).toFixed(2)}`);
+    if (k.tokenBalance != null) partes.push(`${(k.tokenBalance / 1e6).toFixed(2)}M tokens`);
+    return partes.length ? partes.join(" · ") : "—";
+  };
+
+  // Status derivado das colunas reais. Antes era "Ativa" fixo no JSX: chave
+  // revogada, banida ou com periodo vencido aparecia verde igual.
+  const statusDaChave = (k) => {
+    if (k.bannedAt) return { rotulo: "Banida", classe: "bg-red-500/10 text-red-500 border-red-500/20", ponto: "bg-red-500" };
+    if (k.revokedAt) return { rotulo: "Revogada", classe: "bg-red-500/10 text-red-500 border-red-500/20", ponto: "bg-red-500" };
+    if (!k.isActive) return { rotulo: "Inativa", classe: "bg-surface-2 text-text-muted border-border", ponto: "bg-gray-500" };
+    if (k.periodEnd && new Date(k.periodEnd) < new Date()) {
+      return { rotulo: "Vencida", classe: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20", ponto: "bg-yellow-500" };
+    }
+    return { rotulo: "Ativa", classe: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20", ponto: "bg-emerald-500" };
+  };
   const handleCreateApiKey = async (e) => {
     e.preventDefault();
     try {
+      // Sem costLimitCents: o limite e do PLANO. Mandar um valor daqui era
+      // oferecer ajuste manual de cota, que e justamente o que nao pode existir.
       const res = await fetch("/api/billing/api-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: newKeyLabel || "Chave de Produção", costLimitCents: newKeyLimit * 100 }),
+        body: JSON.stringify({ label: newKeyLabel || "Chave de Produção" }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setGeneratedKey(data.key || data.apiKey?.key || "sk-9router-prod-" + Math.random().toString(36).substring(2, 14));
-        fetchBillingData();
-      } else {
-        alert("Falha ao criar chave de faturamento.");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        alert(`Não foi possível criar a chave: ${errorData.error || res.statusText || res.status}`);
+        return;
       }
+      const data = await res.json();
+      const chave = data.key || data.apiKey?.key || null;
+      if (!chave) {
+        // O codigo antigo caia em "sk-9router-prod-" + Math.random() aqui:
+        // mostrava uma chave INVENTADA, que o usuario copiaria e que nunca
+        // autenticaria, porque nao existe no banco.
+        alert("O servidor aceitou o pedido mas não devolveu a chave. Nada foi gerado para copiar.");
+        return;
+      }
+      setGeneratedKey(chave);
+      fetchBillingData();
     } catch (err) {
       alert(`Erro ao criar chave: ${err.message}`);
     }
   };
-
   const handleInitiateCheckout = async () => {
     setCheckoutLoading(true);
     try {
@@ -549,11 +600,19 @@ export default function BillingPage() {
                     <ul className="space-y-2.5 text-xs text-text-main pt-2">
                       <li className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
-                        <span className="font-bold">{(plan.tokenLimit || 5000000).toLocaleString()} tokens / mês</span>
+                        {/* tokenLimit nulo significa SEM TETO (é o Pay-As-You-Go),
+                            não "5M". O fallback antigo `|| 5000000` anunciava um
+                            teto que o plano não tem — e no plano Starter, que tem
+                            100k, qualquer campo ausente viraria 5M também. */}
+                        <span className="font-bold">
+                          {plan.tokenLimit != null
+                            ? `${plan.tokenLimit.toLocaleString()} tokens / mês`
+                            : "Tokens sem teto (paga pelo uso)"}
+                        </span>
                       </li>
                       <li className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
-                        <span>{plan.rpm || 600} RPM de limite de velocidade</span>
+                        <span>{plan.rpm != null ? `${plan.rpm} RPM de limite de velocidade` : "RPM não definido"}</span>
                       </li>
                       <li className="flex items-center gap-2">
                         <span className="material-symbols-outlined text-emerald-500 text-base">check</span>
@@ -610,15 +669,16 @@ export default function BillingPage() {
                   <tr>
                     <th className="p-4">Identificador da Chave</th>
                     <th className="p-4">Prefixo / Token</th>
-                    <th className="p-4">Cota Limite</th>
+                    <th className="p-4">Plano</th>
+                    <th className="p-4">Limite do Plano</th>
+                    <th className="p-4">Saldo Restante</th>
                     <th className="p-4">Status</th>
-                    <th className="p-4 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {keys.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center text-text-muted">
+                      <td colSpan={6} className="p-8 text-center text-text-muted">
                         Nenhuma chave de faturamento criada ainda.
                       </td>
                     </tr>
@@ -627,20 +687,25 @@ export default function BillingPage() {
                       <tr key={k.id} className="hover:bg-bg-alt/50 transition-colors">
                         <td className="p-4 font-bold text-text-main">{k.label || k.name || "Chave de Produção"}</td>
                         <td className="p-4 font-mono text-text-muted">{k.key ? `${k.key.substring(0, 16)}...` : "sk-9router-***"}</td>
-                        <td className="p-4 text-text-main font-semibold">${((k.balanceCents || k.costLimitCents || 5000) / 100).toFixed(2)} USD</td>
+                        {/* O limite pertence ao PLANO, nunca a chave: e por isso que
+                            nao existe botao de editar aqui. A chave apenas HERDA
+                            plan.costLimitCents/plan.tokenLimit quando e criada
+                            (src/lib/billing/credit.js). O que a chave carrega e
+                            SALDO, que desce conforme o consumo — coisa diferente de
+                            limite, e antes as duas apareciam na mesma coluna. */}
+                        <td className="p-4 text-text-muted">{planoDaChave(k)?.name || "—"}</td>
+                        <td className="p-4 text-text-main font-semibold">{limiteDoPlano(k)}</td>
+                        <td className="p-4 text-text-main">{saldoDaChave(k)}</td>
                         <td className="p-4">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                            <span>Ativa</span>
-                          </span>
-                        </td>
-                        <td className="p-4 text-right">
-                          <button
-                            onClick={() => alert("Limite ajustado no banco de dados.")}
-                            className="text-text-muted hover:text-brand-500 font-bold"
-                          >
-                            Editar Limite
-                          </button>
+                          {(() => {
+                            const st = statusDaChave(k);
+                            return (
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${st.classe}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${st.ponto}`} />
+                                <span>{st.rotulo}</span>
+                              </span>
+                            );
+                          })()}
                         </td>
                       </tr>
                     ))
@@ -1057,17 +1122,12 @@ export default function BillingPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold mb-1">Limite Máximo de Gastos ($ USD):</label>
-                  <input
-                    type="number"
-                    value={newKeyLimit}
-                    onChange={(e) => setNewKeyLimit(Number(e.target.value))}
-                    className="w-full rounded-lg border border-border bg-transparent p-2 text-xs focus:border-brand-500 focus:outline-none"
-                    required
-                  />
-                </div>
-
+                {/* Nao ha campo de limite: a cota vem do plano contratado, e
+                    editar cota a mao (aqui ou no banco) desfaz o controle do
+                    plano. A chave herda plan.costLimitCents/plan.tokenLimit. */}
+                <p className="rounded-lg border border-border bg-bg-alt/50 p-2 text-[11px] text-text-muted">
+                  A cota desta chave será a do plano contratado — não é definida aqui.
+                </p>
                 <button
                   type="submit"
                   className="w-full rounded-lg bg-brand-500 py-2.5 text-xs font-bold text-white hover:bg-brand-600"

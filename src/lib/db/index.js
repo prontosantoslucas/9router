@@ -88,7 +88,7 @@ export {
   getContacts, getContactById, getContactByEmail,
   createContact, updateContact, deleteContact,
   getDeals, getDealById, createDeal, updateDeal, deleteDeal,
-  getActivities, createActivity, getContactStats,
+  getActivities, createActivity, getContactStats, getCrmDashboardStats,
 } from "./repos/crmRepo.js";
 
 // CRM Automations

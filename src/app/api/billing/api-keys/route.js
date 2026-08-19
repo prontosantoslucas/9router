@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdapter } from "@/lib/db/driver.js";
+import { createApiKey } from "@/lib/localDb.js";
+import { getConsistentMachineId } from "@/shared/utils/machineId.js";
 
 export const dynamic = "force-dynamic";
 
@@ -19,3 +21,24 @@ export async function GET(request) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
+
+export async function POST(request) {
+  try {
+    const body = await request.json();
+    const name = body.label || body.name || "Chave de Produção";
+    const machineId = await getConsistentMachineId();
+    const apiKey = await createApiKey(name, machineId);
+
+    return NextResponse.json({
+      key: apiKey.key,
+      name: apiKey.name,
+      id: apiKey.id,
+      machineId: apiKey.machineId,
+      apiKey,
+    }, { status: 201 });
+  } catch (e) {
+    console.error("POST /api/billing/api-keys error:", e);
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}
+

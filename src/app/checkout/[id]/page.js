@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, Suspense } from "react";
 import { useParams, useSearchParams } from "next/navigation";
@@ -6,7 +6,7 @@ import { Loader2, CheckCircle, XCircle, CreditCard, Lock } from "lucide-react";
 
 export default function PublicCheckoutPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-blue-600" size={32} /></div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-bg-alt"><Loader2 className="animate-spin text-brand-600" size={32} /></div>}>
       <CheckoutContent />
     </Suspense>
   );
@@ -33,7 +33,7 @@ function CheckoutContent() {
     const status = searchParams.get("status");
     if (status === "success") {
       setError(null);
-      // Atualiza o checkout após redirect do gateway
+      // Atualiza o checkout apÃ³s redirect do gateway
       setTimeout(fetchCheckout, 1500);
     }
   }, [searchParams]);
@@ -43,7 +43,7 @@ function CheckoutContent() {
       setLoading(true);
       const res = await fetch(`/api/checkout/${checkoutId}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Checkout não encontrado");
+      if (!res.ok) throw new Error(data.error || "Checkout nÃ£o encontrado");
       setCheckout(data.checkout);
       setContact(data.contact);
       setProviders(data.providers || []);
@@ -82,10 +82,10 @@ function CheckoutContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-bg-alt">
         <div className="text-center">
-          <Loader2 className="animate-spin text-blue-600 mx-auto mb-4" size={40} />
-          <p className="text-gray-500">Carregando pagamento...</p>
+          <Loader2 className="animate-spin text-brand-600 mx-auto mb-4" size={40} />
+          <p className="text-text-muted">Carregando pagamento...</p>
         </div>
       </div>
     );
@@ -93,12 +93,12 @@ function CheckoutContent() {
 
   if (error || !checkout) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
-          <XCircle className="text-red-500 mx-auto mb-4" size={48} />
-          <h1 className="text-xl font-bold mb-2">Pagamento indisponível</h1>
-          <p className="text-gray-600 mb-6">{error || "Link de checkout inválido ou expirado."}</p>
-          <a href="/" className="text-blue-600 hover:underline">← Voltar</a>
+      <div className="min-h-screen flex items-center justify-center bg-bg-alt">
+        <div className="bg-surface rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+          <XCircle className="text-label-crimson mx-auto mb-4" size={48} />
+          <h1 className="text-xl font-bold mb-2">Pagamento indisponÃ­vel</h1>
+          <p className="text-text-muted mb-6">{error || "Link de checkout invÃ¡lido ou expirado."}</p>
+          <a href="/" className="text-brand-600 hover:underline">â† Voltar</a>
         </div>
       </div>
     );
@@ -108,43 +108,43 @@ function CheckoutContent() {
   const isPaid = checkout.status === "paid";
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-bg-alt flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Card principal */}
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+        <div className="bg-surface rounded-2xl shadow-xl overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+          <div className="bg-gradient-to-r from-brand-600 to-brand-800 p-6 text-white">
             <h1 className="text-2xl font-bold mb-1">{checkout.description || "Pagamento"}</h1>
-            <p className="text-blue-100 text-sm">Fatura para {contact?.name || "Cliente"}</p>
+            <p className="text-brand-100 text-sm">Fatura para {contact?.name || "Cliente"}</p>
           </div>
 
           {/* Corpo */}
           <div className="p-6">
             {isPaid ? (
               <div className="text-center py-8">
-                <CheckCircle className="text-green-500 mx-auto mb-4" size={56} />
-                <h2 className="text-2xl font-bold text-green-700 mb-2">Pagamento Confirmado!</h2>
-                <p className="text-gray-600 mb-2">
+                <CheckCircle className="text-label-emerald mx-auto mb-4" size={56} />
+                <h2 className="text-2xl font-bold text-label-emerald mb-2">Pagamento Confirmado!</h2>
+                <p className="text-text-muted mb-2">
                   Recebemos <span className="font-bold">R$ {amount}</span> com sucesso.
                 </p>
-                <p className="text-gray-500 text-sm">
-                  Referência: {checkout.externalRef || checkout.id.slice(0, 8)}
+                <p className="text-text-muted text-sm">
+                  ReferÃªncia: {checkout.externalRef || checkout.id.slice(0, 8)}
                 </p>
               </div>
             ) : (
               <>
                 {/* Valor */}
                 <div className="text-center mb-6">
-                  <div className="text-sm text-gray-500 mb-1">Valor a pagar</div>
-                  <div className="text-5xl font-bold text-gray-900">
+                  <div className="text-sm text-text-muted mb-1">Valor a pagar</div>
+                  <div className="text-5xl font-bold text-text-main">
                     <span className="text-2xl align-top">R$</span> {amount}
                   </div>
                 </div>
 
-                {/* Seleção de gateway */}
+                {/* SeleÃ§Ã£o de gateway */}
                 {providers.length > 1 && (
                   <div className="mb-6">
-                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                    <label className="text-sm font-medium text-text-main mb-2 block">
                       Forma de pagamento
                     </label>
                     <div className="grid grid-cols-3 gap-2">
@@ -154,22 +154,22 @@ function CheckoutContent() {
                           onClick={() => setSelectedProvider(p)}
                           className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
                             selectedProvider === p
-                              ? "border-blue-600 bg-blue-50 text-blue-700"
-                              : "border-gray-200 hover:border-gray-300 text-gray-600"
+                              ? "border-brand-500 bg-label-blue-bg text-label-blue"
+                              : "border-border hover:border-border text-text-muted"
                           }`}
                         >
-                          {p === "stripe" ? "💳 Cartão" : p === "paypal" ? "🅿️ PayPal" : "🟡 Mercado Livre"}
+                          {p === "stripe" ? "ðŸ’³ CartÃ£o" : p === "paypal" ? "ðŸ…¿ï¸ PayPal" : "ðŸŸ¡ Mercado Livre"}
                         </button>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Botão */}
+                {/* BotÃ£o */}
                 <button
                   onClick={handlePay}
                   disabled={creating}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-3.5 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {creating ? (
                     <>
@@ -186,8 +186,8 @@ function CheckoutContent() {
               </>
             )}
 
-            {/* Segurança */}
-            <div className="mt-6 flex items-center justify-center gap-2 text-xs text-gray-400">
+            {/* SeguranÃ§a */}
+            <div className="mt-6 flex items-center justify-center gap-2 text-xs text-text-subtle">
               <Lock size={14} />
               Pagamento seguro e criptografado
             </div>
@@ -196,7 +196,7 @@ function CheckoutContent() {
 
         {/* Status */}
         {!isPaid && checkout.status !== "pending" && (
-          <div className="mt-4 text-center text-sm text-gray-500">
+          <div className="mt-4 text-center text-sm text-text-muted">
             Status: <span className="font-medium capitalize">{checkout.status}</span>
           </div>
         )}
@@ -204,3 +204,4 @@ function CheckoutContent() {
     </div>
   );
 }
+

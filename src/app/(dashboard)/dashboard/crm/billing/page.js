@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import {
@@ -68,7 +68,7 @@ export default function BillingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ provider, name: provider, config }),
       });
-      if (!res.ok) throw new Error("Erro ao salvar configuração");
+      if (!res.ok) throw new Error("Erro ao salvar configuraÃ§Ã£o");
       setShowConfig(false);
       await fetchAll();
       alert("Gateway configurado com sucesso!");
@@ -100,14 +100,14 @@ export default function BillingPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setShowConfig(true)}
-            className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg"
+            className="flex items-center gap-2 bg-bg-alt hover:bg-bg-alt text-text-main px-4 py-2 rounded-lg"
           >
             <Settings size={18} />
             Gateways
           </button>
           <button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+            className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white px-4 py-2 rounded-lg"
           >
             <Plus size={18} />
             Gerar Link de Checkout
@@ -123,8 +123,8 @@ export default function BillingPage() {
           return (
             <div
               key={provider}
-              className={`bg-white rounded-lg border p-4 ${
-                active ? "border-green-200" : "border-gray-200"
+              className={`bg-surface rounded-lg border p-4 ${
+                active ? "border-label-emerald-bg" : "border-border"
               }`}
             >
               <div className="flex items-center justify-between mb-2">
@@ -132,12 +132,12 @@ export default function BillingPage() {
                   {provider === "mercadolivre" ? "Mercado Livre" : provider}
                 </span>
                 {active ? (
-                  <span className="flex items-center gap-1 text-xs text-green-600">
+                  <span className="flex items-center gap-1 text-xs text-label-emerald">
                     <CheckCircle size={14} /> Conectado
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 text-xs text-gray-400">
-                    <XCircle size={14} /> Não configurado
+                  <span className="flex items-center gap-1 text-xs text-text-subtle">
+                    <XCircle size={14} /> NÃ£o configurado
                   </span>
                 )}
               </div>
@@ -159,23 +159,23 @@ export default function BillingPage() {
 
       {loading ? (
         <div className="text-center py-12">
-          <Loader2 className="animate-spin mx-auto text-blue-600" size={32} />
+          <Loader2 className="animate-spin mx-auto text-brand-600" size={32} />
         </div>
       ) : checkouts.length === 0 ? (
-        <div className="bg-white rounded-lg p-12 border text-center">
-          <Link2 size={48} className="mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-500">Nenhum link de checkout gerado ainda</p>
-          <p className="text-sm text-gray-400 mt-2">
+        <div className="bg-surface rounded-lg p-12 border text-center">
+          <Link2 size={48} className="mx-auto text-text-subtle mb-4" />
+          <p className="text-text-muted">Nenhum link de checkout gerado ainda</p>
+          <p className="text-sm text-text-subtle mt-2">
             Clique em "Gerar Link de Checkout" para criar o primeiro
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-surface rounded-lg border overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-bg-alt border-b">
               <tr>
                 <th className="px-4 py-3 text-left">Cliente</th>
-                <th className="px-4 py-3 text-left">Descrição</th>
+                <th className="px-4 py-3 text-left">DescriÃ§Ã£o</th>
                 <th className="px-4 py-3 text-right">Valor</th>
                 <th className="px-4 py-3 text-center">Status</th>
                 <th className="px-4 py-3 text-center">Link</th>
@@ -183,12 +183,12 @@ export default function BillingPage() {
             </thead>
             <tbody>
               {checkouts.map((c) => (
-                <tr key={c.id} className="border-b last:border-0 hover:bg-gray-50">
+                <tr key={c.id} className="border-b last:border-0 hover:bg-bg-alt">
                   <td className="px-4 py-3">
                     <div className="font-medium">{c.contactName}</div>
-                    {c.contactEmail && <div className="text-xs text-gray-500">{c.contactEmail}</div>}
+                    {c.contactEmail && <div className="text-xs text-text-muted">{c.contactEmail}</div>}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{c.description}</td>
+                  <td className="px-4 py-3 text-text-muted">{c.description}</td>
                   <td className="px-4 py-3 text-right font-semibold">
                     R$ {(c.amountCents / 100).toFixed(2)}
                   </td>
@@ -201,18 +201,18 @@ export default function BillingPage() {
                         href={`/checkout/${c.id}`}
                         target="_blank"
                         rel="noopener"
-                        className="text-blue-600 hover:text-blue-800"
+                        className="text-brand-600 hover:text-brand-700"
                         title="Abrir checkout"
                       >
                         <ExternalLink size={16} />
                       </a>
                       <button
                         onClick={() => copyLink(`${window.location.origin}/checkout/${c.id}`)}
-                        className="text-gray-500 hover:text-gray-700"
+                        className="text-text-muted hover:text-text-main"
                         title="Copiar link"
                       >
                         {copiedId === `${window.location.origin}/checkout/${c.id}` ? (
-                          <CheckCircle size={16} className="text-green-500" />
+                          <CheckCircle size={16} className="text-label-emerald" />
                         ) : (
                           <Copy size={16} />
                         )}
@@ -250,11 +250,11 @@ export default function BillingPage() {
 
 function StatusBadge({ status }) {
   const config = {
-    paid: { icon: CheckCircle, cls: "bg-green-100 text-green-700", label: "Pago" },
-    pending: { icon: Clock, cls: "bg-yellow-100 text-yellow-700", label: "Pendente" },
-    cancelled: { icon: XCircle, cls: "bg-gray-100 text-gray-600", label: "Cancelado" },
-    failed: { icon: XCircle, cls: "bg-red-100 text-red-700", label: "Falhou" },
-    expired: { icon: Clock, cls: "bg-gray-100 text-gray-600", label: "Expirado" },
+    paid: { icon: CheckCircle, cls: "bg-label-emerald-bg text-label-emerald", label: "Pago" },
+    pending: { icon: Clock, cls: "bg-label-yellow-bg text-label-yellow", label: "Pendente" },
+    cancelled: { icon: XCircle, cls: "bg-bg-alt text-text-muted", label: "Cancelado" },
+    failed: { icon: XCircle, cls: "bg-label-crimson-bg text-label-crimson", label: "Falhou" },
+    expired: { icon: Clock, cls: "bg-bg-alt text-text-muted", label: "Expirado" },
   };
   const c = config[status] || config.pending;
   const Icon = c.icon;
@@ -277,14 +277,14 @@ function CreateCheckoutModal({ contacts, activeProviders, onSave, onCancel }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+      <div className="bg-surface rounded-lg p-6 max-w-md w-full mx-4">
         <h2 className="text-2xl font-bold mb-4">Gerar Link de Checkout</h2>
         <form
           onSubmit={async (e) => {
             e.preventDefault();
             const result = await onSave(form);
             if (result?.checkoutUrl) {
-              if (confirm("Link criado! Copiar para a área de transferência?")) {
+              if (confirm("Link criado! Copiar para a Ã¡rea de transferÃªncia?")) {
                 navigator.clipboard.writeText(result.checkoutUrl);
               }
             }
@@ -320,7 +320,7 @@ function CreateCheckoutModal({ contacts, activeProviders, onSave, onCancel }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Descrição</label>
+            <label className="block text-sm font-medium mb-1">DescriÃ§Ã£o</label>
             <input
               type="text"
               value={form.description}
@@ -356,14 +356,14 @@ function CreateCheckoutModal({ contacts, activeProviders, onSave, onCancel }) {
             <button
               type="submit"
               disabled={activeProviders.length === 0}
-              className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="flex-1 bg-brand-500 text-white px-4 py-2 rounded-lg hover:bg-brand-600 disabled:opacity-50"
             >
               Gerar Link
             </button>
             <button
               type="button"
               onClick={onCancel}
-              className="flex-1 bg-gray-200 px-4 py-2 rounded-lg hover:bg-gray-300"
+              className="flex-1 bg-bg-alt px-4 py-2 rounded-lg hover:bg-bg-alt"
             >
               Cancelar
             </button>
@@ -393,16 +393,16 @@ function ConfigGatewaysModal({ integrations, onSave, onCancel }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-surface rounded-lg p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
         <h2 className="text-2xl font-bold mb-4">Configurar Gateways de Pagamento</h2>
 
-        <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-lg">
+        <div className="flex gap-2 mb-6 p-1 bg-bg-alt rounded-lg">
           {["stripe", "paypal", "mercadolivre"].map((p) => (
             <button
               key={p}
               onClick={() => switchProvider(p)}
               className={`flex-1 py-2 text-sm font-medium rounded ${
-                provider === p ? "bg-white shadow" : "text-gray-500"
+                provider === p ? "bg-surface shadow" : "text-text-muted"
               }`}
             >
               {p === "mercadolivre" ? "Mercado Livre" : p === "stripe" ? "Stripe" : "PayPal"}
@@ -411,8 +411,8 @@ function ConfigGatewaysModal({ integrations, onSave, onCancel }) {
         </div>
 
         {existing && (
-          <div className="mb-4 text-xs text-green-600 flex items-center gap-1">
-            <CheckCircle size={14} /> Gateway já configurado — salvar atualiza as credenciais
+          <div className="mb-4 text-xs text-label-emerald flex items-center gap-1">
+            <CheckCircle size={14} /> Gateway jÃ¡ configurado â€” salvar atualiza as credenciais
           </div>
         )}
 
@@ -442,8 +442,8 @@ function ConfigGatewaysModal({ integrations, onSave, onCancel }) {
                   placeholder="sk_live_..."
                   className="w-full px-3 py-2 border rounded-lg"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Obtenha em dashboard.stripe.com → Developers → API keys
+                <p className="text-xs text-text-muted mt-1">
+                  Obtenha em dashboard.stripe.com â†’ Developers â†’ API keys
                 </p>
               </div>
               <div>
@@ -498,18 +498,18 @@ function ConfigGatewaysModal({ integrations, onSave, onCancel }) {
                   placeholder="APP_USR-..."
                   className="w-full px-3 py-2 border rounded-lg"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Obtenha em mercadopago.com.br → Seu negócio → Credenciais de produção
+                <p className="text-xs text-text-muted mt-1">
+                  Obtenha em mercadopago.com.br â†’ Seu negÃ³cio â†’ Credenciais de produÃ§Ã£o
                 </p>
               </div>
             </>
           )}
 
           <div className="flex gap-3 pt-4">
-            <button type="submit" className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+            <button type="submit" className="flex-1 bg-brand-500 text-white px-4 py-2 rounded-lg hover:bg-brand-600">
               Salvar
             </button>
-            <button type="button" onClick={onCancel} className="flex-1 bg-gray-200 px-4 py-2 rounded-lg hover:bg-gray-300">
+            <button type="button" onClick={onCancel} className="flex-1 bg-bg-alt px-4 py-2 rounded-lg hover:bg-bg-alt">
               Cancelar
             </button>
           </div>

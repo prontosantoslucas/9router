@@ -1,19 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { Plus, Download, Trash2, CheckSquare, Square, ArrowRightLeft } from "lucide-react";
+import {
+  Plus, Download, Trash2, ArrowRightLeft, Loader2, Briefcase, Flag,
+  LayoutGrid, Table, Search, Filter, Sparkles, CheckCircle2, MoreVertical,
+  Calendar, Building2, User, ChevronRight, ArrowUpRight
+} from "lucide-react";
+import {
+  DEAL_STAGES, PRIORITIES, stageMeta, priorityMeta, sourceMeta,
+  initials, avatarColor, formatCurrency, formatDate, timeAgo, formatWhatsAppUrl
+} from "../crmMeta";
 
-const STAGES = [
-  { id: "lead", name: "Lead", color: "bg-gray-100" },
-  { id: "qualified", name: "Qualificado", color: "bg-blue-100" },
-  { id: "proposal", name: "Proposta", color: "bg-yellow-100" },
-  { id: "negotiation", name: "Negociação", color: "bg-orange-100" },
-  { id: "won", name: "Ganho", color: "bg-green-100" },
-  { id: "lost", name: "Perdido", color: "bg-red-100" },
-];
-
-export default function DealsKanbanPage() {
+export default function DealsPipelinePage() {
+  const [viewMode, setViewMode] = useState("kanban"); // "kanban" | "table"
   const [deals, setDeals] = useState([]);
   const [contacts, setContacts] = useState({});
   const [activeDeal, setActiveDeal] = useState(null);
@@ -22,12 +23,14 @@ export default function DealsKanbanPage() {
   const [selectedStage, setSelectedStage] = useState("lead");
   const [selected, setSelected] = useState(new Set());
   const [moveTarget, setMoveTarget] = useState("");
+  const [bulkPriority, setBulkPriority] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterPriority, setFilterPriority] = useState("all");
+  const [toast, setToast] = useState(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
+      activationConstraint: { distance: 8 },
     })
   );
 
@@ -35,27 +38,35 @@ export default function DealsKanbanPage() {
     fetchDeals();
   }, []);
 
+  function notify(msg) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  }
+
   async function fetchDeals() {
     try {
       setLoading(true);
       const res = await fetch("/api/crm/deals");
       const data = await res.json();
-      setDeals(data.deals || []);
+      const loadedDeals = data.deals || [];
+      setDeals(loadedDeals);
 
-      const contactIds = [...new Set(data.deals.map((d) => d.contactId))];
+      const contactIds = [...new Set(loadedDeals.map((d) => d.contactId).filter(Boolean))];
       const contactsData = {};
-      
+
       await Promise.all(
         contactIds.map(async (id) => {
-          const res = await fetch(`/api/crm/contacts/${id}`);
-          const data = await res.json();
-          if (data.contact) contactsData[id] = data.contact;
+          try {
+            const r = await fetch(`/api/crm/contacts/${id}`);
+            const d = await r.json();
+            if (d.contact) contactsData[id] = d.contact;
+          } catch { /* ignore */ }
         })
       );
-      
+
       setContacts(contactsData);
     } catch (error) {
-      console.error("Erro ao buscar deals:", error);
+      console.error("Erro ao buscar negócios:", error);
     } finally {
       setLoading(false);
     }
@@ -63,11 +74,9 @@ export default function DealsKanbanPage() {
 
   async function handleDragEnd(event) {
     const { active, over } = event;
-    
-    if (!over || active.id === over.id) {
-      setActiveDeal(null);
-      return;
-    }
+    setActiveDeal(null);
+
+    if (!over || active.id === over.id) return;
 
     const dealId = active.id;
     const newStage = over.id;
@@ -81,16 +90,13 @@ export default function DealsKanbanPage() {
 
       if (res.ok) {
         setDeals((prev) =>
-          prev.map((deal) =>
-            deal.id === dealId ? { ...deal, stage: newStage } : deal
-          )
+          prev.map((deal) => (deal.id === dealId ? { ...deal, stage: newStage } : deal))
         );
+        notify(`Estágio alterado para: ${stageMeta(newStage).label}`);
       }
     } catch (error) {
-      console.error("Erro ao atualizar deal:", error);
+      console.error("Erro ao atualizar estágio do deal:", error);
     }
-
-    setActiveDeal(null);
   }
 
   function handleDragStart(event) {
@@ -105,13 +111,16 @@ export default function DealsKanbanPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...formData, stage: selectedStage }),
       });
-
+      const data = await res.json();
       if (res.ok) {
         setShowForm(false);
         fetchDeals();
+        notify("✓ Negócio criado com sucesso!");
+      } else {
+        notify(data.error || "Erro ao criar negócio");
       }
     } catch (error) {
-      console.error("Erro ao criar deal:", error);
+      notify("Erro ao criar negócio");
     }
   }
 
@@ -135,12 +144,28 @@ export default function DealsKanbanPage() {
       setSelected(new Set());
       setMoveTarget("");
       fetchDeals();
+      notify(`Movido para ${stageMeta(moveTarget).label}`);
+    }
+  }
+
+  async function handleBulkPriority() {
+    if (selected.size === 0 || !bulkPriority) return;
+    const res = await fetch("/api/crm/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set-priority", ids: [...selected], priority: bulkPriority }),
+    });
+    if (res.ok) {
+      setSelected(new Set());
+      setBulkPriority("");
+      fetchDeals();
+      notify(`Prioridade alterada para ${priorityMeta(bulkPriority).label}`);
     }
   }
 
   async function handleBulkDelete() {
     if (selected.size === 0) return;
-    if (!confirm(`Deletar ${selected.size} negócio(s)?`)) return;
+    if (!confirm(`Tem certeza que deseja deletar ${selected.size} negócio(s)?`)) return;
     const res = await fetch("/api/crm/bulk", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -149,6 +174,7 @@ export default function DealsKanbanPage() {
     if (res.ok) {
       setSelected(new Set());
       fetchDeals();
+      notify(`${selected.size} negócio(s) excluído(s)`);
     }
   }
 
@@ -156,99 +182,348 @@ export default function DealsKanbanPage() {
     const link = document.createElement("a");
     link.href = "/api/crm/export?type=deals";
     link.click();
+    notify("Exportando CSV de negócios…");
   }
 
-  const dealsByStage = STAGES.reduce((acc, stage) => {
-    acc[stage.id] = deals.filter((deal) => deal.stage === stage.id);
-    return acc;
-  }, {});
+  // Filtros em memória
+  const filteredDeals = useMemo(() => {
+    return deals.filter((deal) => {
+      const matchesSearch =
+        !searchQuery ||
+        deal.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        contacts[deal.contactId]?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        contacts[deal.contactId]?.company?.toLowerCase().includes(searchQuery.toLowerCase());
 
-  if (loading) return <div className="p-6">Carregando...</div>;
+      const matchesPriority = filterPriority === "all" || deal.priority === filterPriority;
+
+      return matchesSearch && matchesPriority;
+    });
+  }, [deals, contacts, searchQuery, filterPriority]);
+
+  const dealsByStage = useMemo(() => {
+    return DEAL_STAGES.reduce((acc, stage) => {
+      acc[stage.value] = filteredDeals.filter((deal) => deal.stage === stage.value);
+      return acc;
+    }, {});
+  }, [filteredDeals]);
+
+  const openValue = filteredDeals
+    .filter((d) => !["won", "lost", "cancelled"].includes(d.stage))
+    .reduce((sum, d) => sum + (d.valueCents || 0), 0);
+  const wonValue = filteredDeals
+    .filter((d) => d.stage === "won")
+    .reduce((sum, d) => sum + (d.valueCents || 0), 0);
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Pipeline de Vendas</h1>
-        <button
-          onClick={handleExport}
-          className="flex items-center gap-2 bg-white border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 text-gray-700"
-          title="Exportar negócios (CSV)"
-        >
-          <Download size={18} />
-          CSV
-        </button>
+    <div className="space-y-5 pb-12">
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl border border-brand-500/30 bg-surface-2 px-4 py-2.5 text-xs font-semibold text-text-main shadow-elevated animate-in fade-in slide-in-from-bottom-2">
+          <Sparkles className="size-4 text-brand-500" />
+          <span>{toast}</span>
+        </div>
+      )}
+
+      {/* ── Top Header ── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-5">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs font-mono text-text-muted">
+            <Link href="/dashboard/crm" className="hover:text-text-main transition-colors">CRM</Link>
+            <span>/</span>
+            <span className="font-semibold text-brand-400">Pipeline de Vendas</span>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-black font-display text-text-main tracking-tight flex items-center gap-2.5">
+            <Briefcase className="size-6 text-brand-500" />
+            Pipeline & Funil Comercial
+          </h1>
+          <p className="text-xs text-text-muted">
+            <span className="font-semibold text-text-main">{formatCurrency(openValue)}</span> em negociação ativa •{" "}
+            <span className="font-semibold text-emerald-400">{formatCurrency(wonValue)} ganhos</span>
+          </p>
+        </div>
+
+        {/* View Switcher & Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Toggle Kanban vs Table */}
+          <div className="flex items-center rounded-lg border border-border bg-surface p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("kanban")}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                viewMode === "kanban"
+                  ? "bg-brand-500 text-white shadow-soft"
+                  : "text-text-muted hover:text-text-main"
+              }`}
+            >
+              <LayoutGrid className="size-3.5" />
+              <span>Kanban</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                viewMode === "table"
+                  ? "bg-brand-500 text-white shadow-soft"
+                  : "text-text-muted hover:text-text-main"
+              }`}
+            >
+              <Table className="size-3.5" />
+              <span>Tabela</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleExport}
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-muted hover:text-text-main hover:bg-surface-2 transition-colors"
+          >
+            <Download className="size-3.5" />
+            <span>CSV</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedStage("lead");
+              setShowForm(true);
+            }}
+            className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-brand-500 to-brand-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-soft hover:opacity-90 transition-opacity"
+          >
+            <Plus className="size-3.5" />
+            <span>Novo Negócio</span>
+          </button>
+        </div>
       </div>
 
+      {/* ── Search & Filter Bar ── */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-text-muted" />
+          <input
+            type="text"
+            placeholder="Buscar por negócio, contato ou empresa..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-9 w-full rounded-xl border border-border bg-surface pl-9 pr-3 text-xs text-text-main placeholder:text-text-muted focus:border-brand-500 focus:outline-none"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 text-xs font-semibold text-text-muted bg-surface border border-border px-2.5 py-1.5 rounded-xl">
+            <Filter className="size-3 text-brand-500" />
+            <select
+              value={filterPriority}
+              onChange={(e) => setFilterPriority(e.target.value)}
+              className="bg-transparent text-text-main font-semibold focus:outline-none text-xs"
+            >
+              <option value="all">Todas as prioridades</option>
+              {PRIORITIES.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Bulk Actions Floating Bar ── */}
       {selected.size > 0 && (
-        <div className="flex items-center gap-3 mb-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
-          <span className="text-sm font-medium text-blue-700">{selected.size} selecionado(s)</span>
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand-500/30 bg-label-blue-bg px-4 py-2 text-xs animate-in fade-in">
+          <span className="font-bold text-label-blue mr-1">{selected.size} selecionado(s)</span>
           <select
             value={moveTarget}
             onChange={(e) => setMoveTarget(e.target.value)}
-            className="text-xs px-2 py-1 border border-blue-300 rounded bg-white"
+            className="h-7 rounded-lg border border-border bg-surface px-2 text-xs text-text-main font-semibold focus:outline-none"
           >
-            <option value="">Mover para...</option>
-            {STAGES.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
+            <option value="">Mover estágio...</option>
+            {DEAL_STAGES.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
           <button
+            type="button"
             onClick={handleBulkMove}
             disabled={!moveTarget}
-            className="flex items-center gap-1 text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 disabled:opacity-50"
+            className="h-7 px-2.5 rounded-lg bg-brand-500 text-white font-bold hover:bg-brand-600 disabled:opacity-40 transition-colors flex items-center gap-1"
           >
-            <ArrowRightLeft size={14} /> Mover
+            <ArrowRightLeft className="size-3" /> Mover
           </button>
+
+          <select
+            value={bulkPriority}
+            onChange={(e) => setBulkPriority(e.target.value)}
+            className="h-7 rounded-lg border border-border bg-surface px-2 text-xs text-text-main font-semibold focus:outline-none"
+          >
+            <option value="">Definir prioridade...</option>
+            {PRIORITIES.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+          {bulkPriority && (
+            <button
+              type="button"
+              onClick={handleBulkPriority}
+              className="h-7 px-2.5 rounded-lg bg-surface border border-border font-bold text-text-main hover:bg-surface-2 transition-colors flex items-center gap-1"
+            >
+              <Flag className="size-3" /> Aplicar
+            </button>
+          )}
+
           <button
+            type="button"
             onClick={handleBulkDelete}
-            className="flex items-center gap-1 text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
+            className="h-7 px-2.5 rounded-lg bg-label-crimson-bg text-label-crimson font-bold hover:opacity-80 transition-opacity flex items-center gap-1"
           >
-            <Trash2 size={14} /> Deletar
+            <Trash2 className="size-3" /> Excluir
           </button>
+
           <button
+            type="button"
             onClick={() => setSelected(new Set())}
-            className="text-xs text-gray-500 hover:underline ml-auto"
+            className="ml-auto text-xs text-text-muted hover:text-text-main underline"
           >
-            Limpar
+            Limpar seleção
           </button>
         </div>
       )}
 
-      <DndContext
-        sensors={sensors}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {STAGES.map((stage) => (
-            <KanbanColumn
-              key={stage.id}
-              stage={stage}
-              deals={dealsByStage[stage.id] || []}
-              contacts={contacts}
-              selected={selected}
-              onToggleSelect={toggleSelect}
-              onAddDeal={() => {
-                setSelectedStage(stage.id);
-                setShowForm(true);
-              }}
-            />
-          ))}
+      {/* ── Main View: Kanban vs Table ── */}
+      {loading ? (
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="size-8 animate-spin text-brand-500" />
         </div>
+      ) : viewMode === "kanban" ? (
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <div className="flex gap-4 overflow-x-auto pb-4 items-start custom-scrollbar">
+            {DEAL_STAGES.map((stage) => (
+              <KanbanColumn
+                key={stage.value}
+                stage={stage}
+                deals={dealsByStage[stage.value] || []}
+                contacts={contacts}
+                selected={selected}
+                onToggleSelect={toggleSelect}
+                onAddDeal={() => {
+                  setSelectedStage(stage.value);
+                  setShowForm(true);
+                }}
+              />
+            ))}
+          </div>
 
-        <DragOverlay>
-          {activeDeal ? (
-            <DealCard
-              deal={activeDeal}
-              contact={contacts[activeDeal.contactId]}
-              isDragging
-            />
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+          <DragOverlay>
+            {activeDeal ? (
+              <DealCard deal={activeDeal} contact={contacts[activeDeal.contactId]} isDragging />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      ) : (
+        /* ── Plane Interactive Data Table ── */
+        <div className="rounded-2xl border border-border bg-surface overflow-hidden shadow-soft">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left text-xs text-text-main">
+              <thead className="border-b border-border bg-surface-2 text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                <tr>
+                  <th className="p-3.5 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={filteredDeals.length > 0 && selected.size === filteredDeals.length}
+                      onChange={() => {
+                        if (selected.size === filteredDeals.length) setSelected(new Set());
+                        else setSelected(new Set(filteredDeals.map((d) => d.id)));
+                      }}
+                      className="rounded border-border"
+                    />
+                  </th>
+                  <th className="p-3.5">Título do Negócio</th>
+                  <th className="p-3.5">Contato / Empresa</th>
+                  <th className="p-3.5">Estágio</th>
+                  <th className="p-3.5">Prioridade</th>
+                  <th className="p-3.5 text-right">Valor</th>
+                  <th className="p-3.5 text-right">Criado em</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {filteredDeals.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-xs text-text-muted">
+                      Nenhum negócio encontrado com os filtros atuais.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredDeals.map((deal) => {
+                    const contact = contacts[deal.contactId];
+                    const stage = stageMeta(deal.stage);
+                    const priority = priorityMeta(deal.priority);
+                    const isSel = selected.has(deal.id);
 
+                    return (
+                      <tr
+                        key={deal.id}
+                        className={`hover:bg-surface-2/60 transition-colors ${
+                          isSel ? "bg-brand-500/5" : ""
+                        }`}
+                      >
+                        <td className="p-3.5 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSel}
+                            onChange={() => toggleSelect(deal.id)}
+                            className="rounded border-border"
+                          />
+                        </td>
+                        <td className="p-3.5 font-bold text-text-main">
+                          <div className="flex items-center gap-2">
+                            <span className={`size-2 rounded-full ${stage.bg}`} />
+                            <span className="truncate max-w-[240px]">{deal.title}</span>
+                          </div>
+                        </td>
+                        <td className="p-3.5">
+                          {contact ? (
+                            <Link
+                              href={`/dashboard/crm/contacts/${contact.id}`}
+                              className="flex items-center gap-2 hover:text-brand-400 transition-colors"
+                            >
+                              <span className={`size-5 rounded-full flex items-center justify-center text-[8px] font-bold ${avatarColor(contact.name)}`}>
+                                {initials(contact.name)}
+                              </span>
+                              <span className="truncate max-w-[160px] font-medium">{contact.name}</span>
+                              {contact.company && (
+                                <span className="text-[10px] text-text-muted truncate">({contact.company})</span>
+                              )}
+                            </Link>
+                          ) : (
+                            <span className="text-text-muted italic">Sem contato</span>
+                          )}
+                        </td>
+                        <td className="p-3.5">
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${stage.bg} ${stage.text}`}>
+                            {stage.label}
+                          </span>
+                        </td>
+                        <td className="p-3.5">
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${priority.bg} ${priority.text}`}>
+                            {priority.label}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-right font-mono font-bold text-text-main">
+                          {formatCurrency(deal.valueCents, deal.currency)}
+                        </td>
+                        <td className="p-3.5 text-right text-text-muted text-[11px]">
+                          {formatDate(deal.createdAt)}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Novo Negócio ── */}
       {showForm && (
-        <DealFormWithContact
+        <DealForm
           onSave={handleCreateDeal}
           onCancel={() => setShowForm(false)}
           stage={selectedStage}
@@ -259,42 +534,53 @@ export default function DealsKanbanPage() {
 }
 
 function KanbanColumn({ stage, deals, contacts, selected, onToggleSelect, onAddDeal }) {
-  const totalValue = deals.reduce((sum, deal) => sum + deal.valueCents, 0);
+  const totalValue = deals.reduce((sum, deal) => sum + (deal.valueCents || 0), 0);
+  const sm = stageMeta(stage.value);
 
   return (
-    <div className="flex-shrink-0 w-80">
-      <div className={`${stage.color} rounded-lg p-4 mb-3`}>
-        <div className="flex justify-between items-center mb-2">
-          <h2 className="font-bold text-lg">{stage.name}</h2>
-          <span className="bg-white px-2 py-1 rounded text-sm font-semibold">
+    <div className="flex-shrink-0 w-80 flex flex-col">
+      {/* Column Header */}
+      <div className="mb-2.5 flex items-center justify-between px-1">
+        <div className="flex items-center gap-2">
+          <span className={`size-2.5 rounded-full ${sm.bg} ${sm.text}`} />
+          <h2 className="text-xs font-bold font-display text-text-main">{sm.label}</h2>
+          <span className="rounded-full bg-surface-2 border border-border px-2 py-0.5 text-[10px] font-bold text-text-muted">
             {deals.length}
           </span>
         </div>
-        <div className="text-sm font-medium">
-          ${(totalValue / 100).toFixed(2)}
-        </div>
+        <span className="text-xs font-mono font-bold text-text-muted">{formatCurrency(totalValue)}</span>
       </div>
 
+      {/* Droppable Container */}
       <div
-        id={stage.id}
-        className="space-y-3 min-h-[500px] bg-gray-50 rounded-lg p-3"
+        id={stage.value}
+        className="space-y-2.5 min-h-[460px] rounded-2xl border border-border bg-surface-2/50 p-2.5 flex-1 flex flex-col"
       >
-        {deals.map((deal) => (
-          <DealCard
-            key={deal.id}
-            deal={deal}
-            contact={contacts[deal.contactId]}
-            isSelected={selected.has(deal.id)}
-            onToggle={() => onToggleSelect(deal.id)}
-          />
-        ))}
+        <div className="space-y-2.5 flex-1">
+          {deals.map((deal) => (
+            <DealCard
+              key={deal.id}
+              deal={deal}
+              contact={contacts[deal.contactId]}
+              isSelected={selected.has(deal.id)}
+              onToggle={() => onToggleSelect(deal.id)}
+            />
+          ))}
+
+          {deals.length === 0 && (
+            <div className="flex h-24 items-center justify-center rounded-xl border border-dashed border-border text-xs text-text-muted/60">
+              Nenhum negócio nesta etapa
+            </div>
+          )}
+        </div>
 
         <button
+          type="button"
           onClick={onAddDeal}
-          className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-500 hover:text-blue-500 flex items-center justify-center gap-2"
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-2 text-xs font-semibold text-text-muted hover:border-brand-500/50 hover:text-brand-400 hover:bg-surface transition-all"
         >
-          <Plus size={20} />
-          Adicionar
+          <Plus className="size-3.5" />
+          <span>Adicionar negócio</span>
         </button>
       </div>
     </div>
@@ -302,55 +588,72 @@ function KanbanColumn({ stage, deals, contacts, selected, onToggleSelect, onAddD
 }
 
 function DealCard({ deal, contact, isDragging, isSelected, onToggle }) {
+  const pm = priorityMeta(deal.priority);
+  const sm = stageMeta(deal.stage);
+
   return (
     <div
       id={deal.id}
-      className={`bg-white p-4 rounded-lg border cursor-move hover:shadow-md transition-shadow ${
-        isDragging ? "opacity-50" : ""
-      } ${isSelected ? "border-blue-400 ring-1 ring-blue-300" : "border-gray-200"}`}
+      className={`group relative cursor-grab active:cursor-grabbing rounded-xl border bg-surface p-3.5 shadow-soft transition-all hover:shadow-elevated hover:border-brand-500/30 space-y-2.5 ${
+        isDragging ? "opacity-40 rotate-2 scale-105" : ""
+      } ${isSelected ? "border-brand-500 ring-2 ring-brand-500/20" : "border-border"}`}
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <h3 className="font-semibold">{deal.title}</h3>
+      {/* Left priority accent indicator */}
+      <span className={`absolute left-0 top-3 bottom-3 w-1 rounded-r-full ${pm.bg}`} />
+
+      <div className="flex items-start justify-between gap-2 pl-1.5">
+        <h3 className="text-xs font-bold text-text-main leading-snug group-hover:text-brand-400 transition-colors">
+          {deal.title}
+        </h3>
         <button
+          type="button"
           onClick={(e) => {
             e.stopPropagation();
-            onToggle && onToggle();
+            onToggle?.();
           }}
-          className="text-gray-400 hover:text-blue-600 shrink-0"
+          className={`shrink-0 rounded p-0.5 transition-colors ${
+            isSelected ? "text-brand-500" : "text-text-muted opacity-0 group-hover:opacity-100 hover:text-brand-500"
+          }`}
           title={isSelected ? "Deselecionar" : "Selecionar"}
         >
-          {isSelected ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} />}
+          <CheckCircle2 className={`size-4 ${isSelected ? "fill-brand-500 text-white" : ""}`} />
         </button>
       </div>
-      
-      {contact && (
-        <p className="text-sm text-gray-600 mb-2">{contact.name}</p>
-      )}
-      
-      <div className="flex justify-between items-center text-sm">
-        <span className="font-medium text-green-600">
-          ${(deal.valueCents / 100).toFixed(2)}
-        </span>
-        <span className="text-gray-500">
-          {new Date(deal.createdAt).toLocaleDateString("pt-BR")}
-        </span>
-      </div>
 
-      {deal.notes && (
-        <p className="text-xs text-gray-500 mt-2 line-clamp-2">{deal.notes}</p>
+      {contact && (
+        <div className="flex items-center gap-2 pl-1.5">
+          <span className={`size-5 rounded-full flex items-center justify-center text-[8px] font-bold ${avatarColor(contact.name)}`}>
+            {initials(contact.name)}
+          </span>
+          <span className="truncate text-xs text-text-muted font-medium">
+            {contact.name} {contact.company ? `• ${contact.company}` : ""}
+          </span>
+        </div>
       )}
+
+      <div className="flex items-center justify-between pl-1.5 pt-1 border-t border-border/50 text-xs">
+        <span className="font-bold font-mono text-text-main">{formatCurrency(deal.valueCents, deal.currency)}</span>
+        <div className="flex items-center gap-1 text-[10px] text-text-muted font-mono">
+          <Calendar className="size-3 text-text-muted/60" />
+          <span>{timeAgo(deal.createdAt)}</span>
+        </div>
+      </div>
     </div>
   );
 }
 
-function DealFormWithContact({ onSave, onCancel, stage }) {
+function DealForm({ onSave, onCancel, stage }) {
   const [contacts, setContacts] = useState([]);
   const [formData, setFormData] = useState({
     contactId: "",
     title: "",
-    valueCents: 0,
+    valueCents: 50000,
+    currency: "BRL",
+    priority: "medium",
     notes: "",
   });
+  const [saving, setSaving] = useState(false);
+  const sm = stageMeta(stage);
 
   useEffect(() => {
     fetchContacts();
@@ -362,85 +665,146 @@ function DealFormWithContact({ onSave, onCancel, stage }) {
       const data = await res.json();
       setContacts(data.contacts || []);
     } catch (error) {
-      console.error("Erro ao buscar contatos:", error);
+      console.error("Erro ao carregar contatos:", error);
     }
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    onSave(formData);
+    setSaving(true);
+    await onSave(formData);
+    setSaving(false);
   }
 
+  const inputCls =
+    "h-9 w-full rounded-xl border border-border bg-surface-2 px-3 text-xs text-text-main placeholder:text-text-muted focus:outline-none focus:border-brand-500";
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h2 className="text-2xl font-bold mb-4">Novo Negócio - {stage}</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+      <div className="w-full max-w-lg rounded-2xl border border-border bg-surface p-6 shadow-2xl space-y-5 animate-in zoom-in-95">
+        <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="space-y-0.5">
+            <h2 className="text-sm font-bold font-display text-text-main flex items-center gap-2">
+              <Briefcase className="size-4 text-brand-500" />
+              Novo Negócio no Pipeline
+            </h2>
+            <p className="text-xs text-text-muted">Cadastre uma nova oportunidade no funil de vendas.</p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-text-muted hover:text-text-main text-xs"
+          >
+            ✕
+          </button>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Contato *</label>
+            <label className="mb-1 block text-xs font-semibold text-text-muted">Contato / Cliente *</label>
             <select
               required
               value={formData.contactId}
               onChange={(e) => setFormData({ ...formData, contactId: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className={inputCls}
             >
               <option value="">Selecione um contato</option>
-              {contacts.map((contact) => (
-                <option key={contact.id} value={contact.id}>
-                  {contact.name} {contact.company ? `(${contact.company})` : ""}
+              {contacts.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} {c.company ? `(${c.company})` : ""}
                 </option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Título *</label>
+            <label className="mb-1 block text-xs font-semibold text-text-muted">Título do Negócio *</label>
             <input
               type="text"
               required
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              placeholder="Ex.: Implantação SaaS Pro + Suporte Anual"
+              className={inputCls}
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Valor ($)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={formData.valueCents / 100}
-              onChange={(e) =>
-                setFormData({ ...formData, valueCents: Math.round(parseFloat(e.target.value) * 100) })
-              }
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-text-muted">Valor Total</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.valueCents / 100}
+                onChange={(e) =>
+                  setFormData({ ...formData, valueCents: Math.round((parseFloat(e.target.value) || 0) * 100) })
+                }
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-text-muted">Moeda</label>
+              <select
+                value={formData.currency}
+                onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                className={inputCls}
+              >
+                <option value="BRL">BRL (R$)</option>
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-text-muted">Prioridade</label>
+              <select
+                value={formData.priority}
+                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                className={inputCls}
+              >
+                {PRIORITIES.map((p) => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-text-muted">Estágio Inicial</label>
+              <div className="flex h-9 items-center rounded-xl border border-border bg-surface-2 px-3 text-xs text-text-main font-semibold">
+                <span className={`mr-2 size-2 rounded-full ${sm.bg}`} />
+                {sm.label}
+              </div>
+            </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Notas</label>
+            <label className="mb-1 block text-xs font-semibold text-text-muted">Notas & Observações</label>
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              placeholder="Detalhes sobre a negociação, necessidades e prazos..."
+              className="w-full rounded-xl border border-border bg-surface-2 p-2.5 text-xs text-text-main placeholder:text-text-muted focus:border-brand-500 focus:outline-none"
             />
           </div>
 
-          <div className="flex gap-3 pt-4">
-            <button
-              type="submit"
-              className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-            >
-              Salvar
-            </button>
+          <div className="flex gap-2 pt-3 border-t border-border">
             <button
               type="button"
               onClick={onCancel}
-              className="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300"
+              className="flex-1 h-9 rounded-xl border border-border bg-surface hover:bg-surface-2 text-xs font-bold text-text-main transition-colors"
             >
               Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 h-9 rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-xs font-bold text-white shadow-soft hover:opacity-90 transition-opacity flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              {saving && <Loader2 className="size-3.5 animate-spin" />}
+              <span>Criar Negócio</span>
             </button>
           </div>
         </form>

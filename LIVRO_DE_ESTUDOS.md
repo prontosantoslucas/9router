@@ -1857,8 +1857,28 @@ Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encod
      - Instruções detalhadas para criação de interfaces modernas, suporte nativo a Lucide, Framer Motion, Recharts, Supabase e geração estrita de `src/App.tsx` e `src/main.tsx`.
   5. **Carregamento Unificado de Modelos ([CoderPageClient.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/coder/CoderPageClient.jsx))**:
      - O seletor de modelos agora carrega dinamicamente todos os combos e modelos cadastrados no gateway.
-  6. **Gatilho de Atualização do Railway**:
-     - Versão incrementada para `1.0.8` no [apps/agent/package.json](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/package.json).
+### Capítulo 89: Resolução de Conflito de Versões do React 18/19 (Minified React Error #525) e Blindagem do Layout da Toolbar no Coder
+
+* **Por que estava dando esse problema (Causa Raiz Detalhada)**:
+  1. **Minified React Error #525 no Preview Interativo**:
+     - No [`src/lib/coder/previewBuilder.js`](file:///c:/Users/user/Documents/GitHub/9router/src/lib/coder/previewBuilder.js), a lista de pacotes conhecidos `known` verificada na substituição de imports em tempo de execução continha apenas `["react", "react-dom", "react/jsx-runtime", ...]`, **omitindo `react-dom/client`**.
+     - Quando o gerador de código criava o arquivo de entrada `src/main.tsx` contendo `import { createRoot } from "react-dom/client"`, a rotina de reescrita tratava o caminho como um pacote desconhecido e o transformava dinamicamente em `https://esm.sh/react-dom/client` (sem fixar a versão).
+     - Como a CDN `esm.sh` entrega por padrão a versão mais recente do npm (**React 19**), a função `createRoot` era instanciada a partir do React 19, enquanto o arquivo `src/App.tsx` e o runtime do JSX eram importados do **React 18.3.1** definido no `<script type="importmap">`.
+     - Ao tentar montar elementos criados pelo JSX runtime do React 18 dentro do `createRoot` do React 19, o React abortava com o erro fatal: **`Minified React error #525`** (*"A React Element from an older version of React was rendered. This is not supported"*).
+     - Além disso, pacotes como `lucide-react`, `framer-motion` e `recharts` não estavam com suas dependências travadas com `?deps=react@18.3.1,react-dom@18.3.1`, permitindo que subdependências internas buscassem o React 19.
+  2. **Sobreposição e Quebra de Layout nos Botões da Toolbar (`Preview` e `Inspect`)**:
+     - No [`src/app/chat/components/CoderWorkspace.jsx`](file:///c:/Users/user/Documents/GitHub/9router/src/app/chat/components/CoderWorkspace.jsx), a barra de ferramentas superior (`h-12`) comportava o seletor de projetos à esquerda, o switcher de modos (`Preview`, `Inspect`, `Code`, `Diff`, `Banco`) e viewports ao centro, e as ações de exportação (`ZIP`, `Deploy`, `Commit`) à direita em um flex container com `justify-between` sem rolagem horizontal.
+     - Quando o usuário visualizava o Coder com o menu lateral do sistema (240px) e a barra de chat do Lucas (380px) abertos, o espaço restante da tela ficava estreito (< 800px).
+     - Como os botões do switcher central não possuíam as classes `shrink-0` e `whitespace-nowrap`, o mecanismo de cálculo do flexbox reduzia a largura dos botões abaixo do tamanho dos seus textos e ícones, fazendo com que o botão `Preview` e o botão `Inspect` colidissem e ficassem sobrepostos na interface.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Unificação e Fixação Estrita do React 18.3.1 ([previewBuilder.js](file:///c:/Users/user/Documents/GitHub/9router/src/lib/coder/previewBuilder.js))**:
+     - No `<script type="importmap">`, foram adicionadas e fixadas as versões exatas de `react@18.3.1`, `react-dom@18.3.1`, `react-dom/client@18.3.1?deps=react@18.3.1`, `react/jsx-runtime` e `react/jsx-dev-runtime`.
+     - As dependências externas (`lucide-react`, `framer-motion`, `recharts`) foram travadas com `?deps=react@18.3.1,react-dom@18.3.1`.
+     - No resolvedor de Blob URLs, a verificação foi aprimorada para preservar nativamente qualquer import relacionado a `react` e `react-dom/*`, garantindo que o browser utilize exclusivamente o `importmap` com React 18.3.1 sem reescrever URLs para o React 19.
+  2. **Blindagem e Responsividade da Toolbar ([CoderWorkspace.jsx](file:///c:/Users/user/Documents/GitHub/9router/src/app/chat/components/CoderWorkspace.jsx))**:
+     - Adicionado `overflow-x-auto custom-scrollbar` no container principal da barra de ferramentas superior.
+     - Aplicadas as classes `shrink-0` e `whitespace-nowrap` em todos os botões e grupos do menu superior (`Preview`, `Inspect`, `Code`, `Diff`, `Banco`, Viewports, `ZIP`, `Deploy`, `Commit`), assegurando espaçamento consistente e impedindo qualquer sobreposição mesmo em telas de menor resolução.
 
 ---
 

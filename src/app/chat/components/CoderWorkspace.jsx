@@ -152,13 +152,13 @@ export function CoderWorkspace({
   return (
     <div className={`flex flex-col h-full w-full bg-bg text-text-main overflow-hidden font-sans select-none ${standalone ? "" : "border-l border-border"}`}>
       {/* ── Lovable Toolbar Header ── */}
-      <div className="h-12 border-b border-border bg-surface px-3 flex items-center justify-between text-xs shrink-0 gap-2">
+      <div className="h-12 border-b border-border bg-surface px-3 flex items-center justify-between text-xs shrink-0 gap-3 overflow-x-auto custom-scrollbar">
         {/* Left: Project Selector & Checkpoints */}
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => setIsProjectsOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-surface-2 transition-colors font-bold text-text-main border border-border"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-surface-2 transition-colors font-bold text-text-main border border-border shrink-0"
           >
             <span className="material-symbols-outlined text-sm text-brand-500">folder</span>
             <span className="truncate max-w-[130px]">{projectName || "Meu Projeto"}</span>
@@ -166,11 +166,11 @@ export function CoderWorkspace({
           </button>
 
           {/* Checkpoints Rollback Dropdown */}
-          <div className="relative">
+          <div className="relative shrink-0">
             <button
               type="button"
               onClick={() => setShowCheckpointsDropdown((v) => !v)}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border hover:bg-surface-2 text-text-muted hover:text-text-main transition-colors text-[11px] font-semibold"
+              className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border hover:bg-surface-2 text-text-muted hover:text-text-main transition-colors text-[11px] font-semibold shrink-0"
               title="Histórico de versões e Rollback"
             >
               <span className="material-symbols-outlined text-[14px] text-brand-500">history</span>
@@ -212,13 +212,13 @@ export function CoderWorkspace({
         </div>
 
         {/* Center: View Switchers & Viewports */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {/* Mode Switcher */}
-          <div className="flex items-center bg-surface-2 p-0.5 rounded-lg border border-border">
+          <div className="flex items-center bg-surface-2 p-0.5 rounded-lg border border-border shrink-0">
             <button
               type="button"
               onClick={() => setViewMode("preview")}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
                 viewMode === "preview"
                   ? "bg-brand-500 text-white shadow-soft"
                   : "text-text-muted hover:text-text-main"
@@ -232,7 +232,7 @@ export function CoderWorkspace({
             <button
               type="button"
               onClick={() => setViewMode("inspect")}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
                 viewMode === "inspect"
                   ? "bg-brand-500 text-white shadow-soft"
                   : "text-text-muted hover:text-text-main"
@@ -246,7 +246,7 @@ export function CoderWorkspace({
             <button
               type="button"
               onClick={() => setViewMode("code")}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
                 viewMode === "code"
                   ? "bg-brand-500 text-white shadow-soft"
                   : "text-text-muted hover:text-text-main"
@@ -260,7 +260,7 @@ export function CoderWorkspace({
             <button
               type="button"
               onClick={() => setViewMode("diff")}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
                 viewMode === "diff"
                   ? "bg-brand-500 text-white shadow-soft"
                   : "text-text-muted hover:text-text-main"
@@ -274,7 +274,7 @@ export function CoderWorkspace({
             <button
               type="button"
               onClick={() => setViewMode("database")}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all shrink-0 whitespace-nowrap ${
                 viewMode === "database"
                   ? "bg-brand-500 text-white shadow-soft"
                   : "text-text-muted hover:text-text-main"
@@ -288,7 +288,7 @@ export function CoderWorkspace({
 
           {/* Viewport Switcher (Apenas no Preview/Inspect) */}
           {(viewMode === "preview" || viewMode === "inspect") && (
-            <div className="hidden lg:flex items-center bg-surface-2 p-0.5 rounded-lg border border-border">
+            <div className="hidden lg:flex items-center bg-surface-2 p-0.5 rounded-lg border border-border shrink-0">
               {[
                 { id: "desktop", icon: "desktop_windows", title: "Desktop (100%)" },
                 { id: "tablet", icon: "tablet_mac", title: "Tablet (768px)" },
@@ -298,7 +298,7 @@ export function CoderWorkspace({
                   key={vp.id}
                   type="button"
                   onClick={() => setViewport(vp.id)}
-                  className={`flex items-center justify-center size-6 rounded transition-colors ${
+                  className={`flex items-center justify-center size-6 rounded transition-colors shrink-0 ${
                     viewport === vp.id
                       ? "bg-brand-500 text-white shadow-soft"
                       : "text-text-muted hover:text-text-main"
@@ -317,7 +317,7 @@ export function CoderWorkspace({
           <button
             type="button"
             onClick={handleDownloadZip}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface border border-border text-text-muted hover:text-text-main text-xs font-semibold transition-all"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface border border-border text-text-muted hover:text-text-main text-xs font-semibold transition-all shrink-0 whitespace-nowrap"
             title="Download em ZIP"
           >
             <span className="material-symbols-outlined text-[15px]">download</span>
@@ -336,7 +336,7 @@ export function CoderWorkspace({
               }
               alert(`🚀 Deploy 1-Clique: Projeto '${projectName || "App"}' pronto para publicação.`);
             }}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gradient-to-r from-brand-500 to-brand-600 text-white font-bold text-xs shadow-soft hover:opacity-90 transition-opacity"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gradient-to-r from-brand-500 to-brand-600 text-white font-bold text-xs shadow-soft hover:opacity-90 transition-opacity shrink-0 whitespace-nowrap"
             title="Deploy 1-Clique"
           >
             <span className="material-symbols-outlined text-[15px]">rocket_launch</span>
@@ -346,7 +346,7 @@ export function CoderWorkspace({
           <button
             type="button"
             onClick={() => setIsGitHubOpen(true)}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface border border-border hover:border-brand-500/40 text-text-main font-bold text-xs shadow-soft transition-all"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface border border-border hover:border-brand-500/40 text-text-main font-bold text-xs shadow-soft transition-all shrink-0 whitespace-nowrap"
             title="Commit no GitHub"
           >
             <span className="material-symbols-outlined text-[15px]">commit</span>

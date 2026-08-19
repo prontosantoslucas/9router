@@ -31,6 +31,7 @@ const NAV_SECTIONS = [
     items: [
       { href: "/chat", label: "Chat do Lucas", icon: "forum", badge: "Live" },
       { href: "/coder", label: "Coder do Lucas", icon: "code", badge: "IDE" },
+      { href: "/dashboard2", label: "Prospecção 24/7 & Canais", icon: "rocket_launch", badge: "Auto" },
       { href: "/dashboard", label: "Painel de Controle", icon: "dashboard_customize" },
       { href: "/dashboard/painel", label: "Hábitos & Metas", icon: "psychology" },
     ],
@@ -74,10 +75,12 @@ const NAV_SECTIONS = [
     title: "Negócios",
     icon: "business_center",
     items: [
+      { href: "/dashboard/crm", label: "CRM Command Center", icon: "space_dashboard" },
+      { href: "/dashboard/crm/deals", label: "Pipeline & Kanban", icon: "view_kanban" },
+      { href: "/dashboard/crm/contacts", label: "Contatos & Clientes", icon: "people" },
       { href: "/dashboard/billing", label: "Planos & Faturas", icon: "payments" },
-      { href: "/dashboard/crm", label: "CRM de Clientes", icon: "people" },
-      { href: "/dashboard/crm/billing", label: "Checkout & Faturamento", icon: "credit_card" },
-      { href: "/dashboard/crm/analytics", label: "Analytics CRM", icon: "insights" },
+      { href: "/dashboard/crm/billing", label: "Checkout & Cobranças", icon: "credit_card" },
+      { href: "/dashboard/crm/analytics", label: "Analytics Comercial", icon: "insights" },
       { href: "/dashboard/crm/automations", label: "Automações CRM", icon: "bolt" },
     ],
   },
@@ -104,7 +107,7 @@ export default function Sidebar({ onClose }) {
     routing: true,
     metrics: true,
     tools: false,
-    business: false,
+    business: true,
     system: false,
   });
 

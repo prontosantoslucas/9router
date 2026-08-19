@@ -93,13 +93,15 @@ export function buildPreviewDoc(files = [], projectName = "App", options = {}) {
     "imports": {
       "react": "https://esm.sh/react@18.3.1",
       "react/": "https://esm.sh/react@18.3.1/",
-      "react-dom": "https://esm.sh/react-dom@18.3.1",
-      "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+      "react-dom": "https://esm.sh/react-dom@18.3.1?deps=react@18.3.1",
       "react-dom/": "https://esm.sh/react-dom@18.3.1/",
+      "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1",
       "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
-      "lucide-react": "https://esm.sh/lucide-react@0.468.0?external=react",
-      "framer-motion": "https://esm.sh/framer-motion@11.13.1?external=react,react-dom",
-      "recharts": "https://esm.sh/recharts@2.13.3?external=react,react-dom",
+      "react/jsx-dev-runtime": "https://esm.sh/react@18.3.1/jsx-dev-runtime",
+      "lucide-react": "https://esm.sh/lucide-react@0.468.0?deps=react@18.3.1",
+      "lucide-react/": "https://esm.sh/lucide-react@0.468.0/",
+      "framer-motion": "https://esm.sh/framer-motion@11.13.1?deps=react@18.3.1,react-dom@18.3.1",
+      "recharts": "https://esm.sh/recharts@2.13.3?deps=react@18.3.1,react-dom@18.3.1",
       "canvas-confetti": "https://esm.sh/canvas-confetti@1.9.3",
       "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.47.10",
       "clsx": "https://esm.sh/clsx@2.1.1",
@@ -296,12 +298,31 @@ export function buildPreviewDoc(files = [], projectName = "App", options = {}) {
                 const subUrl = getBlobUrl(resolved);
                 return prefix + subUrl + suffix;
               }
-              // Pacote npm externo não mapeado no importmap -> fallback esm.sh
+              
+              // Pacote npm mapeado no importmap nativo -> manter inalterado para resolução pelo browser
+              const isMappedInImportMap =
+                importPath === "react" ||
+                importPath.startsWith("react/") ||
+                importPath === "react-dom" ||
+                importPath.startsWith("react-dom/") ||
+                importPath === "lucide-react" ||
+                importPath.startsWith("lucide-react/") ||
+                importPath === "framer-motion" ||
+                importPath === "recharts" ||
+                importPath === "canvas-confetti" ||
+                importPath === "@supabase/supabase-js" ||
+                importPath === "clsx" ||
+                importPath === "tailwind-merge";
+
+              if (isMappedInImportMap) {
+                return match;
+              }
+
+              // Fallback para qualquer outro pacote npm de terceiros (fixando dependências no React 18.3.1)
               if (!importPath.startsWith(".") && !importPath.startsWith("/") && !importPath.startsWith("http")) {
-                const known = ["react", "react-dom", "react/jsx-runtime", "lucide-react", "framer-motion", "recharts", "canvas-confetti", "@supabase/supabase-js", "clsx", "tailwind-merge"];
-                if (!known.includes(importPath)) {
-                  return prefix + "https://esm.sh/" + importPath + suffix;
-                }
+                const cleanPkg = importPath.replace(/^npm:/, "");
+                const sep = cleanPkg.includes("?") ? "&" : "?";
+                return prefix + \`https://esm.sh/\${cleanPkg}\${sep}deps=react@18.3.1,react-dom@18.3.1\` + suffix;
               }
               return match;
             }

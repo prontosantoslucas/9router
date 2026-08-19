@@ -99,11 +99,11 @@ export default function Footer() {
             © {new Date().getFullYear()} {APP_CONFIG.name} Inc. All rights reserved.
           </p>
           <div className="flex gap-6 text-sm text-text-muted">
-            <Link href="#" className="hover:text-primary transition-colors">
-              Privacy Policy
+            <Link href="/dashboard/profile" className="hover:text-primary transition-colors">
+              Privacidade & Termos
             </Link>
-            <Link href="#" className="hover:text-primary transition-colors">
-              Terms of Service
+            <Link href="/dashboard/billing" className="hover:text-primary transition-colors">
+              Faturamento & Planos
             </Link>
           </div>
         </div>

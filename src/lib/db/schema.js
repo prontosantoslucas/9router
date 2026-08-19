@@ -3,7 +3,7 @@
 // pre-change safety backup in migrate.js: when the stored version is lower,
 // one lightweight DB backup is taken before applying schema changes. Forgetting
 // to bump only skips that backup Ã¢â‚¬â€ it does NOT break the additive auto-sync.
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export const PRAGMA_SQL = `
 PRAGMA journal_mode = WAL;
@@ -312,10 +312,11 @@ export const TABLES = {
       tags: "TEXT DEFAULT '[]'",
       notes: "TEXT",
       source: "TEXT",
+      status: "TEXT DEFAULT 'lead'", // lead, prospect, customer, inactive
       createdAt: "TEXT NOT NULL",
       updatedAt: "TEXT NOT NULL",
     },
-    indexes: ["CREATE INDEX IF NOT EXISTS idx_crm_contacts_email ON crmContacts(email)"],
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_crm_contacts_email ON crmContacts(email)", "CREATE INDEX IF NOT EXISTS idx_crm_contacts_status ON crmContacts(status)"],
   },
   crmDeals: {
     columns: {
@@ -325,13 +326,14 @@ export const TABLES = {
       valueCents: "INTEGER DEFAULT 0",
       currency: "TEXT DEFAULT 'USD'",
       stage: "TEXT NOT NULL DEFAULT 'lead'",
+      priority: "TEXT DEFAULT 'none'", // none, low, medium, high, urgent
       source: "TEXT",
       notes: "TEXT",
       closedAt: "TEXT",
       createdAt: "TEXT NOT NULL",
       updatedAt: "TEXT NOT NULL",
     },
-    indexes: ["CREATE INDEX IF NOT EXISTS idx_crm_deals_contact ON crmDeals(contactId)", "CREATE INDEX IF NOT EXISTS idx_crm_deals_stage ON crmDeals(stage)"],
+    indexes: ["CREATE INDEX IF NOT EXISTS idx_crm_deals_contact ON crmDeals(contactId)", "CREATE INDEX IF NOT EXISTS idx_crm_deals_stage ON crmDeals(stage)", "CREATE INDEX IF NOT EXISTS idx_crm_deals_priority ON crmDeals(priority)"],
   },
   crmActivities: {
     columns: {

@@ -57,12 +57,16 @@ export default function Dashboard2Client() {
   // vez verde, ficava verde a sessao inteira, mesmo com o socket fechado.
   const [waStatus, setWaStatus] = useState(null);
 
+  // Estatísticas do CRM (contatos, negócios, checkouts) para acesso rápido
+  const [crmStats, setCrmStats] = useState(null);
+
   useEffect(() => {
     fetchStats();
     fetchGoogleStatus();
     fetchBotStatus();
     fetchSidecars();
     fetchProspector();
+    fetchCrmStats();
   }, []);
 
   useEffect(() => {
@@ -88,6 +92,30 @@ export default function Dashboard2Client() {
     const t = setInterval(buscar, intervalMs);
     return () => { vivo = false; clearInterval(t); };
   }, [waQrCode, waLoadingQr]);
+
+  const fetchCrmStats = async () => {
+    try {
+      const [ctsRes, dealsRes, ckRes] = await Promise.all([
+        fetch("/api/crm/contacts?limit=1"),
+        fetch("/api/crm/deals?limit=1"),
+        fetch("/api/crm/checkouts?limit=1"),
+      ]);
+      const [ctsData, dealsData, ckData] = await Promise.all([
+        ctsRes.ok ? ctsRes.json() : null,
+        dealsRes.ok ? dealsRes.json() : null,
+        ckRes.ok ? ckRes.json() : null,
+      ]);
+      setCrmStats({
+        contacts: ctsData?.contacts?.length ?? 0,
+        deals: dealsData?.deals?.length ?? 0,
+        pendingCheckouts: (ckData?.checkouts || []).filter((c) => c.status === "pending").length,
+        totalCheckouts: ckData?.checkouts?.length ?? 0,
+      });
+    } catch (err) {
+      console.error("[Dashboard2] Erro ao carregar CRM:", err);
+      setCrmStats(null);
+    }
+  };
 
   const fetchProspector = async () => {
     try {
@@ -440,6 +468,74 @@ export default function Dashboard2Client() {
           <span>Atualizar Todos os Serviços</span>
         </button>
       </header>
+
+      {/* Acesso rápido ao CRM — cadastro, pipeline, link de compra */}
+      <section className="rounded-2xl border border-border/80 bg-surface/60 p-5 dark:bg-surface-2/40">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-lg font-extrabold flex items-center gap-2">
+              <span className="material-symbols-outlined text-brand-500">business_center</span>
+              Gestão de Clientes (CRM)
+            </h2>
+            <p className="text-xs text-text-muted mt-0.5">
+              Cadastre clientes, acompanhe o funil de vendas e gere links de cobrança.
+            </p>
+          </div>
+          <a
+            href="/dashboard/crm"
+            className="flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3.5 py-2 text-xs font-bold hover:border-brand-500/50 transition-all"
+          >
+            <span className="material-symbols-outlined text-sm">open_in_new</span>
+            Abrir CRM completo
+          </a>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <a
+            href="/dashboard/crm/contacts"
+            className="group rounded-xl border border-border bg-surface p-4 hover:border-brand-500/50 hover:shadow-soft transition-all"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="material-symbols-outlined text-brand-500">person_add</span>
+              <span className="text-2xl font-extrabold">{crmStats?.contacts ?? "—"}</span>
+            </div>
+            <div className="text-sm font-bold">Cadastrar Cliente</div>
+            <div className="text-[11px] text-text-muted mt-0.5">
+              Contatos registrados · clique para cadastrar novo
+            </div>
+          </a>
+
+          <a
+            href="/dashboard/crm/deals"
+            className="group rounded-xl border border-border bg-surface p-4 hover:border-brand-500/50 hover:shadow-soft transition-all"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="material-symbols-outlined text-brand-500">sales_pipeline</span>
+              <span className="text-2xl font-extrabold">{crmStats?.deals ?? "—"}</span>
+            </div>
+            <div className="text-sm font-bold">Status dos Negócios</div>
+            <div className="text-[11px] text-text-muted mt-0.5">
+              Funil: Lead → Ganho/Perdido · arraste para mover
+            </div>
+          </a>
+
+          <a
+            href="/dashboard/crm/billing"
+            className="group rounded-xl border border-border bg-surface p-4 hover:border-brand-500/50 hover:shadow-soft transition-all"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="material-symbols-outlined text-brand-500">credit_card</span>
+              <span className="text-2xl font-extrabold">
+                {crmStats?.pendingCheckouts ?? "—"}
+              </span>
+            </div>
+            <div className="text-sm font-bold">Gerar Link de Compra</div>
+            <div className="text-[11px] text-text-muted mt-0.5">
+              Checkout Stripe/PayPal/Mercado Livre · {crmStats?.totalCheckouts ?? 0} gerados
+            </div>
+          </a>
+        </div>
+      </section>
 
       {/* Grid de Estatísticas / Analytics */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

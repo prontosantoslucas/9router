@@ -1,10 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { TrendingUp, TrendingDown, DollarSign, Target, Users, Zap, ArrowUp, ArrowDown } from "lucide-react";
+import Link from "next/link";
+import {
+  TrendingUp, TrendingDown, DollarSign, Target, Users, Zap,
+  ArrowUp, ArrowDown, BarChart3, PieChart, Sparkles, RefreshCw,
+  Award, ShieldAlert, ArrowLeft
+} from "lucide-react";
+import { formatCurrency, initials, avatarColor } from "../crmMeta";
 
 export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [pipeline, setPipeline] = useState(null);
   const [forecast, setForecast] = useState(null);
   const [comparison, setComparison] = useState(null);
@@ -20,7 +27,6 @@ export default function AnalyticsPage() {
   async function fetchAnalytics() {
     try {
       setLoading(true);
-      
       const [mainRes, topRevRes, topUsageRes, roiRes, trendRes] = await Promise.all([
         fetch("/api/crm/analytics"),
         fetch("/api/crm/analytics?type=top-revenue&limit=10"),
@@ -46,79 +52,180 @@ export default function AnalyticsPage() {
       console.error("Erro ao buscar analytics:", error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }
 
-  if (loading) return <div className="p-6">Carregando analytics...</div>;
+  if (loading) {
+    return (
+      <div className="flex h-[70vh] items-center justify-center space-y-3 flex-col">
+        <div className="size-10 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+        <p className="text-xs font-mono text-text-muted">Carregando métricas de inteligência…</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Analytics & Insights</h1>
+    <div className="space-y-6 pb-12">
+      {/* ── Top Header ── */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-5">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs font-mono text-text-muted">
+            <Link href="/dashboard/crm" className="hover:text-text-main transition-colors">CRM</Link>
+            <span>/</span>
+            <span className="font-semibold text-brand-400">Analytics & Relatórios</span>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-black font-display text-text-main tracking-tight flex items-center gap-2.5">
+            <BarChart3 className="size-6 text-brand-500" />
+            Performance Comercial & Insights
+          </h1>
+          <p className="text-xs text-text-muted">
+            Métricas de conversão de pipeline, previsão de receita e ranking de clientes de maior valor.
+          </p>
+        </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <KPICard
-          label="Pipeline Value"
-          value={`$${((pipeline?.pipelineValue || 0) / 100).toFixed(2)}`}
-          icon={<DollarSign className="text-blue-600" size={24} />}
-        />
-        <KPICard
-          label="Win Rate"
-          value={`${pipeline?.winRate?.toFixed(1) || 0}%`}
-          icon={<Target className="text-green-600" size={24} />}
-        />
-        <KPICard
-          label="Total Deals"
-          value={pipeline?.totalDeals || 0}
-          icon={<Users className="text-purple-600" size={24} />}
-        />
-        <KPICard
-          label="Expected Revenue"
-          value={`$${forecast?.expectedRevenue?.toFixed(2) || 0}`}
-          icon={<TrendingUp className="text-orange-600" size={24} />}
-        />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setRefreshing(true);
+              fetchAnalytics();
+            }}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-1.5 text-xs font-bold text-text-main hover:bg-surface-2 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin text-brand-500" : ""}`} />
+            <span>Atualizar</span>
+          </button>
+        </div>
       </div>
 
-      {/* Month Comparison */}
+      {/* ── Top KPI Cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="rounded-2xl border border-border bg-surface p-4 space-y-2 shadow-soft">
+          <div className="flex items-center justify-between text-xs font-semibold text-text-muted">
+            <span>Pipeline Total</span>
+            <DollarSign className="size-4 text-brand-500" />
+          </div>
+          <div className="text-xl font-black font-display text-text-main">
+            {formatCurrency(pipeline?.pipelineValue || 0)}
+          </div>
+          <p className="text-[11px] text-text-muted">Volume total em negociação</p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-surface p-4 space-y-2 shadow-soft">
+          <div className="flex items-center justify-between text-xs font-semibold text-text-muted">
+            <span>Taxa de Ganho (Win Rate)</span>
+            <Target className="size-4 text-emerald-400" />
+          </div>
+          <div className="text-xl font-black font-display text-emerald-400">
+            {pipeline?.winRate?.toFixed(1) || 0}%
+          </div>
+          <p className="text-[11px] text-text-muted">Proporção de negócios fechados</p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-surface p-4 space-y-2 shadow-soft">
+          <div className="flex items-center justify-between text-xs font-semibold text-text-muted">
+            <span>Total de Oportunidades</span>
+            <Users className="size-4 text-purple-400" />
+          </div>
+          <div className="text-xl font-black font-display text-text-main">
+            {pipeline?.totalDeals || 0}
+          </div>
+          <p className="text-[11px] text-text-muted">Negócios gerados no histórico</p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-surface p-4 space-y-2 shadow-soft">
+          <div className="flex items-center justify-between text-xs font-semibold text-text-muted">
+            <span>Receita Esperada (Forecast)</span>
+            <TrendingUp className="size-4 text-orange-400" />
+          </div>
+          <div className="text-xl font-black font-display text-text-main">
+            {formatCurrency(Math.round((forecast?.expectedRevenue || 0) * 100))}
+          </div>
+          <p className="text-[11px] text-text-muted">Ponderada por estágio</p>
+        </div>
+      </div>
+
+      {/* ── Month Comparison ── */}
       {comparison && (
-        <div className="bg-white rounded-lg p-6 border border-gray-200 mb-6">
-          <h2 className="text-xl font-bold mb-4">Comparação Mensal</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <ComparisonCard
-              label="Deals Criados"
-              current={comparison.current.dealsCreated}
-              previous={comparison.previous.dealsCreated}
-              growth={comparison.growth.deals}
-            />
-            <ComparisonCard
-              label="Receita"
-              current={`$${comparison.current.revenue.toFixed(2)}`}
-              previous={`$${comparison.previous.revenue.toFixed(2)}`}
-              growth={comparison.growth.revenue}
-            />
-            <ComparisonCard
-              label="Deals Ganhos"
-              current={comparison.current.dealsWon}
-              previous={comparison.previous.dealsWon}
-              growth={((comparison.current.dealsWon - comparison.previous.dealsWon) / (comparison.previous.dealsWon || 1)) * 100}
-            />
+        <div className="rounded-2xl border border-border bg-surface p-5 space-y-4 shadow-soft">
+          <h2 className="text-sm font-bold font-display text-text-main flex items-center gap-2 border-b border-border pb-3">
+            <Sparkles className="size-4 text-brand-500" />
+            Comparativo Mês Atual vs Mês Anterior
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 rounded-xl bg-surface-2 border border-border space-y-1.5">
+              <span className="text-xs font-semibold text-text-muted">Novos Negócios Criados</span>
+              <div className="text-xl font-black text-text-main">{comparison.current?.dealsCreated || 0}</div>
+              <div className="flex items-center gap-1 text-[11px]">
+                {(comparison.growth?.deals || 0) >= 0 ? (
+                  <span className="flex items-center gap-0.5 text-emerald-400 font-bold">
+                    <ArrowUp className="size-3" /> +{comparison.growth?.deals?.toFixed(1)}%
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-0.5 text-crimson-400 font-bold">
+                    <ArrowDown className="size-3" /> {comparison.growth?.deals?.toFixed(1)}%
+                  </span>
+                )}
+                <span className="text-text-muted">vs mês anterior</span>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-surface-2 border border-border space-y-1.5">
+              <span className="text-xs font-semibold text-text-muted">Receita Realizada</span>
+              <div className="text-xl font-black text-emerald-400">{formatCurrency(Math.round((comparison.current?.revenue || 0) * 100))}</div>
+              <div className="flex items-center gap-1 text-[11px]">
+                {(comparison.growth?.revenue || 0) >= 0 ? (
+                  <span className="flex items-center gap-0.5 text-emerald-400 font-bold">
+                    <ArrowUp className="size-3" /> +{comparison.growth?.revenue?.toFixed(1)}%
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-0.5 text-crimson-400 font-bold">
+                    <ArrowDown className="size-3" /> {comparison.growth?.revenue?.toFixed(1)}%
+                  </span>
+                )}
+                <span className="text-text-muted">vs mês anterior</span>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-surface-2 border border-border space-y-1.5">
+              <span className="text-xs font-semibold text-text-muted">Negócios Ganhos</span>
+              <div className="text-xl font-black text-text-main">{comparison.current?.dealsWon || 0}</div>
+              <span className="text-[11px] text-text-muted font-mono">
+                {comparison.previous?.dealsWon || 0} no mês anterior
+              </span>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Deals Trend */}
+      {/* ── 30-Day Deal Trend Visualizer ── */}
       {dealsTrend.length > 0 && (
-        <div className="bg-white rounded-lg p-6 border border-gray-200 mb-6">
-          <h2 className="text-xl font-bold mb-4">Tendência de Deals (30 dias)</h2>
-          <div className="h-48 flex items-end gap-2">
+        <div className="rounded-2xl border border-border bg-surface p-5 space-y-4 shadow-soft">
+          <div className="flex items-center justify-between border-b border-border pb-3">
+            <h2 className="text-sm font-bold font-display text-text-main flex items-center gap-2">
+              <BarChart3 className="size-4 text-brand-500" />
+              Tendência de Novos Negócios (Últimos 30 Dias)
+            </h2>
+            <span className="text-xs font-mono text-text-muted">Histórico diário</span>
+          </div>
+
+          <div className="h-44 flex items-end gap-1.5 pt-4">
             {dealsTrend.map((day, i) => {
-              const maxDeals = Math.max(...dealsTrend.map(d => d.dealsCreated));
-              const height = maxDeals > 0 ? (day.dealsCreated / maxDeals) * 100 : 0;
-              
+              const maxDeals = Math.max(1, ...dealsTrend.map((d) => d.dealsCreated || 0));
+              const height = (day.dealsCreated / maxDeals) * 100;
+
               return (
-                <div key={i} className="flex-1 flex flex-col items-center">
-                  <div className="w-full bg-blue-500 rounded-t" style={{ height: `${height}%` }} title={`${day.date}: ${day.dealsCreated} deals`}></div>
-                  <span className="text-[10px] text-gray-500 mt-1">{day.date.slice(-2)}</span>
+                <div key={i} className="flex-1 flex flex-col items-center group h-full justify-end">
+                  <div
+                    className="w-full rounded-t-md bg-brand-500/40 group-hover:bg-brand-500 transition-all cursor-pointer relative"
+                    style={{ height: `${Math.max(height, 6)}%` }}
+                    title={`${day.date}: ${day.dealsCreated} negócio(s)`}
+                  />
+                  <span className="text-[9px] font-mono text-text-muted mt-1 truncate max-w-full">
+                    {day.date.slice(-2)}
+                  </span>
                 </div>
               );
             })}
@@ -126,26 +233,39 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Top Contacts by Revenue */}
-        <div className="bg-white rounded-lg p-6 border border-gray-200">
-          <h2 className="text-xl font-bold mb-4">Top 10 - Receita</h2>
+      {/* ── Top Rankings ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top Customers by Revenue */}
+        <div className="rounded-2xl border border-border bg-surface p-5 space-y-4 shadow-soft">
+          <h2 className="text-sm font-bold font-display text-text-main flex items-center gap-2 border-b border-border pb-3">
+            <Award className="size-4 text-yellow-400" />
+            Top Clientes por Receita (LTV)
+          </h2>
+
           {topRevenue.length === 0 ? (
-            <p className="text-gray-500">Sem dados</p>
+            <p className="py-8 text-center text-xs text-text-muted">Sem dados suficientes ainda.</p>
           ) : (
-            <div className="space-y-3">
-              {topRevenue.map((contact, i) => (
-                <div key={contact.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-gray-400">#{i + 1}</span>
-                    <div>
-                      <div className="font-semibold">{contact.name}</div>
-                      {contact.company && <div className="text-xs text-gray-500">{contact.company}</div>}
+            <div className="divide-y divide-border/60">
+              {topRevenue.map((item, idx) => (
+                <div key={item.id} className="py-2.5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="text-xs font-mono font-bold text-text-muted w-5 text-center">
+                      #{idx + 1}
+                    </span>
+                    <div className={`size-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${avatarColor(item.name)}`}>
+                      {initials(item.name)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-text-main truncate">{item.name}</p>
+                      <p className="text-[10px] text-text-muted truncate">{item.company || "Empresa"}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-bold text-green-600">${(contact.revenue / 100).toFixed(2)}</div>
-                    <div className="text-xs text-gray-500">{contact.totalDeals} deals</div>
+
+                  <div className="text-right shrink-0">
+                    <p className="text-xs font-bold font-mono text-emerald-400">
+                      {formatCurrency(item.revenue)}
+                    </p>
+                    <p className="text-[10px] text-text-muted">{item.totalDeals} negócio(s)</p>
                   </div>
                 </div>
               ))}
@@ -153,122 +273,37 @@ export default function AnalyticsPage() {
           )}
         </div>
 
-        {/* Top Contacts by Usage */}
-        <div className="bg-white rounded-lg p-6 border border-gray-200">
-          <h2 className="text-xl font-bold mb-4">Top 10 - Consumo API</h2>
-          {topUsage.length === 0 ? (
-            <p className="text-gray-500">Sem dados</p>
+        {/* ROI / Health Analysis */}
+        <div className="rounded-2xl border border-border bg-surface p-5 space-y-4 shadow-soft">
+          <h2 className="text-sm font-bold font-display text-text-main flex items-center gap-2 border-b border-border pb-3">
+            <Zap className="size-4 text-brand-500" />
+            Rentabilidade e Consumo por Conta
+          </h2>
+
+          {roi.length === 0 ? (
+            <p className="py-8 text-center text-xs text-text-muted">Sem dados de consumo vinculados.</p>
           ) : (
-            <div className="space-y-3">
-              {topUsage.map((contact, i) => (
-                <div key={contact.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-gray-400">#{i + 1}</span>
-                    <div>
-                      <div className="font-semibold">{contact.name}</div>
-                      {contact.company && <div className="text-xs text-gray-500">{contact.company}</div>}
-                    </div>
+            <div className="divide-y divide-border/60">
+              {roi.slice(0, 10).map((r, idx) => (
+                <div key={idx} className="py-2.5 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-text-main truncate">{r.contactName || "Cliente"}</p>
+                    <p className="text-[10px] text-text-muted">Custo API: ${r.cost?.toFixed(2) || "0.00"}</p>
                   </div>
-                  <div className="text-right">
-                    <div className="font-bold text-blue-600">${contact.totalCost?.toFixed(4) || "0"}</div>
-                    <div className="text-xs text-gray-500">{contact.totalRequests} reqs</div>
+                  <div className="text-right shrink-0">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                      (r.margin || 0) >= 0
+                        ? "bg-label-emerald-bg text-label-emerald"
+                        : "bg-label-crimson-bg text-label-crimson"
+                    }`}>
+                      Margem: {r.margin?.toFixed(1) || 0}%
+                    </span>
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
-      </div>
-
-      {/* ROI Analysis */}
-      {roi.length > 0 && (
-        <div className="bg-white rounded-lg p-6 border border-gray-200">
-          <h2 className="text-xl font-bold mb-4">Análise de ROI (Receita vs Custo API)</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="py-2 text-left">Cliente</th>
-                  <th className="text-right">Receita</th>
-                  <th className="text-right">Custo API</th>
-                  <th className="text-right">ROI</th>
-                </tr>
-              </thead>
-              <tbody>
-                {roi.slice(0, 10).map((row) => (
-                  <tr key={row.id} className="border-b">
-                    <td className="py-2">
-                      <div className="font-semibold">{row.name}</div>
-                      {row.company && <div className="text-xs text-gray-500">{row.company}</div>}
-                    </td>
-                    <td className="text-right text-green-600 font-medium">${(row.revenue / 100).toFixed(2)}</td>
-                    <td className="text-right text-gray-600">${row.apiCost?.toFixed(4) || "0"}</td>
-                    <td className="text-right">
-                      <span className={`font-bold ${row.roi >= 10 ? "text-green-600" : row.roi >= 5 ? "text-yellow-600" : "text-red-600"}`}>
-                        {row.roi?.toFixed(1)}x
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Forecast */}
-      {forecast && forecast.breakdown && (
-        <div className="bg-white rounded-lg p-6 border border-gray-200 mt-6">
-          <h2 className="text-xl font-bold mb-4">Previsão de Receita (Pipeline Weighted)</h2>
-          <div className="mb-4">
-            <div className="text-3xl font-bold text-blue-600">${forecast.expectedRevenue?.toFixed(2) || 0}</div>
-            <div className="text-sm text-gray-500">Receita esperada baseada em probabilidades por stage</div>
-          </div>
-          <div className="space-y-2">
-            {forecast.breakdown.map((stage) => (
-              <div key={stage.stage} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                <div>
-                  <span className="font-medium capitalize">{stage.stage}</span>
-                  <span className="text-xs text-gray-500 ml-2">({(stage.probability * 100).toFixed(0)}% prob.)</span>
-                </div>
-                <div className="text-right">
-                  <div className="font-semibold">${stage.expectedRevenue?.toFixed(2) || 0}</div>
-                  <div className="text-xs text-gray-500">${(stage.totalValue / 100).toFixed(2)} total</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function KPICard({ label, value, icon }) {
-  return (
-    <div className="bg-white p-6 rounded-lg border border-gray-200">
-      <div className="flex items-center justify-between mb-2">
-        {icon}
-      </div>
-      <div className="text-2xl font-bold mb-1">{value}</div>
-      <div className="text-sm text-gray-600">{label}</div>
-    </div>
-  );
-}
-
-function ComparisonCard({ label, current, previous, growth }) {
-  const isPositive = growth >= 0;
-  
-  return (
-    <div className="p-4 bg-gray-50 rounded-lg">
-      <div className="text-sm text-gray-600 mb-2">{label}</div>
-      <div className="flex items-baseline gap-3 mb-2">
-        <span className="text-2xl font-bold">{current}</span>
-        <span className="text-sm text-gray-500">vs {previous}</span>
-      </div>
-      <div className={`flex items-center gap-1 text-sm font-medium ${isPositive ? "text-green-600" : "text-red-600"}`}>
-        {isPositive ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
-        {Math.abs(growth).toFixed(1)}%
       </div>
     </div>
   );
