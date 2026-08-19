@@ -497,7 +497,12 @@ export default function DealsPipelinePage() {
                         <td className="p-3.5 font-bold text-text-main">
                           <div className="flex items-center gap-2">
                             <span className={`size-2 rounded-full ${stage.bg}`} />
-                            <span className="truncate max-w-[240px]">{deal.title}</span>
+                            <Link
+                              href={`/dashboard/crm/deals/${deal.id}`}
+                              className="truncate max-w-[240px] hover:text-brand-400 transition-colors"
+                            >
+                              {deal.title}
+                            </Link>
                           </div>
                         </td>
                         <td className="p-3.5">
@@ -640,6 +645,14 @@ function DealCard({ deal, contact, isDragging, isSelected, onToggle, onEdit }) {
           {deal.title}
         </h3>
         <div className="flex items-center gap-0.5 shrink-0">
+          <Link
+            href={`/dashboard/crm/deals/${deal.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="rounded p-0.5 text-text-muted opacity-0 group-hover:opacity-100 hover:text-brand-500 transition-colors"
+            title="Abrir página do negócio"
+          >
+            <ArrowUpRight className="size-3.5" />
+          </Link>
           <button
             type="button"
             onClick={(e) => {

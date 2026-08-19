@@ -215,7 +215,7 @@ export default function DealsTimelinePage() {
                       return (
                         <Link
                           key={deal.id}
-                          href="/dashboard/crm/deals"
+                          href={`/dashboard/crm/deals/${deal.id}`}
                           title={`${deal.title} — ${formatCurrency(deal.valueCents, deal.currency)}`}
                           className={`block truncate rounded-md px-1.5 py-1 text-[10px] font-bold ${sm.bg} ${sm.text} hover:opacity-80 transition-opacity`}
                         >
