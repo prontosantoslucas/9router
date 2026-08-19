@@ -95,17 +95,29 @@ export function RascunhosAba() {
           </button>
         </div>
 
-        {wa ? (
+        {status?.canais ? (
           <>
-            <p className="text-[11px] text-text-main">
-              WhatsApp hoje: <strong>{wa.enviadosHoje}/{wa.cap}</strong>
-              {" · "}fila {wa.naFila}
-              {" · "}rascunhos {wa.rascunhos}
-            </p>
-            <p className={`text-[10px] ${wa.pode ? "text-text-muted" : "text-warning"}`}>
-              {wa.pode
-                ? `Liberado. Intervalo de ${c?.intervalo_seg}s entre mensagens, janela ${c?.hora_inicio}h-${c?.hora_fim}h.`
-                : `Bloqueado: ${wa.motivo}`}
+            {/* Os dois canais, sempre. Mostrar só o WhatsApp enquanto a lista
+                trazia itens de Instagram fazia o cabeçalho descrever uma fila
+                diferente da que estava na tela. */}
+            {[["whatsapp", "WhatsApp"], ["instagram", "Instagram"]].map(([k, rotulo]) => {
+              const ch = status.canais[k];
+              if (!ch) return null;
+              return (
+                <div key={k}>
+                  <p className="text-[11px] text-text-main">
+                    {rotulo} hoje: <strong>{ch.enviadosHoje}/{ch.cap}</strong>
+                    {" · "}fila {ch.naFila}
+                    {" · "}rascunhos {ch.rascunhos}
+                  </p>
+                  <p className={`text-[10px] ${ch.pode ? "text-text-muted" : "text-warning"}`}>
+                    {ch.pode ? "Liberado." : `Bloqueado: ${ch.motivo}`}
+                  </p>
+                </div>
+              );
+            })}
+            <p className="text-[10px] text-text-muted">
+              Intervalo de {c?.intervalo_seg}s entre mensagens, janela {c?.hora_inicio}h-{c?.hora_fim}h.
             </p>
             {!status.rodando && (
               // Fila cheia com despachante parado é o caso em que nada sai e
@@ -178,7 +190,10 @@ export function RascunhosAba() {
           <button
             key={v}
             type="button"
-            onClick={() => setFiltro(v)}
+            // Limpa o aviso ao trocar de filtro: um erro de WhatsApp ficando na
+            // tela enquanto a lista passa a mostrar Instagram parece ser sobre o
+            // item visível, e não é.
+            onClick={() => { setFiltro(v); setAviso(null); }}
             className={`rounded px-2 py-0.5 text-[10px] font-semibold ${
               filtro === v ? "bg-brand-500 text-white" : "text-text-muted hover:bg-surface-2"
             }`}

@@ -196,6 +196,11 @@ function listarRascunhos({ status = "draft", channel = null, limit = 50 } = {}) 
     ORDER BY o.id DESC LIMIT ?
   `).all(...params, Math.min(Number(limit) || 50, 200));
 
+  // Mostra o texto COMO SERÁ ENVIADO, com a saudação resolvida. O token cru
+  // aparecendo na tela de revisão não deixa revisar nada — e foi assim que o
+  // defeito do envio passou desapercebido.
+  const { aplicarSaudacao } = require("./prospector");
+
   return rows.map((r) => ({
     id: r.id,
     leadId: r.lead_id,
@@ -204,8 +209,8 @@ function listarRascunhos({ status = "draft", channel = null, limit = 50 } = {}) 
     cidade: r.city || null,
     categoria: r.category || null,
     destino: r.channel === "whatsapp" ? r.phone : r.instagram_handle,
-    mensagem: r.message,
-    followup: r.followup_message,
+    mensagem: aplicarSaudacao(r.message),
+    followup: r.followup_message ? aplicarSaudacao(r.followup_message) : null,
     status: r.status,
     erro: r.error,
     em: r.created_at,
@@ -239,9 +244,18 @@ async function enviarUm(outreachId, { manual = false } = {}) {
   }
 
   const prospector = require("./prospector");
+
+  // O rascunho guarda o token {{SAUDACAO}} porque a saudação depende da HORA do
+  // envio: texto redigido de manhã e disparado às 15h não pode dizer "Bom dia".
+  // A resolução tem de acontecer aqui, no envio — e não acontecia em lugar
+  // nenhum: aplicarSaudacao() só era chamada pelas tools que EXIBEM rascunhos.
+  // Efeito: a revisão no chat mostrava "Bom dia" e o lead recebia "{{SAUDACAO}}"
+  // literal. A pré-visualização correta escondia o defeito.
+  const texto = prospector.aplicarSaudacao(row.message);
+
   const res = row.channel === "whatsapp"
-    ? await prospector.sendWhatsAppOutreach(destino, row.message)
-    : await prospector.sendInstagramOutreach(destino, row.message);
+    ? await prospector.sendWhatsAppOutreach(destino, texto)
+    : await prospector.sendInstagramOutreach(destino, texto);
 
   if (!res.ok) {
     db.prepare("UPDATE prospector_outreach SET status = 'failed', error = ? WHERE id = ?").run(res.error || "falha", row.id);
