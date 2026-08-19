@@ -91,7 +91,7 @@ export default function BillingPage() {
     const plano = planoDaChave(k);
     if (!plano) return "—";
     const partes = [];
-    if (plano.costLimitCents != null) partes.push(`${(plano.costLimitCents / 100).toFixed(2)}`);
+    if (plano.costLimitCents != null) partes.push(`US$ ${(plano.costLimitCents / 100).toFixed(2)}`);
     if (plano.tokenLimit != null) partes.push(`${(plano.tokenLimit / 1e6).toFixed(2)}M tokens`);
     // Pay-As-You-Go tem os dois nulos de proposito: e ausencia de teto, e
     // dizer "—" ali seria confundir sem-limite com sem-dado.
@@ -100,7 +100,7 @@ export default function BillingPage() {
 
   const saldoDaChave = (k) => {
     const partes = [];
-    if (k.balanceCents != null) partes.push(`${(k.balanceCents / 100).toFixed(2)}`);
+    if (k.balanceCents != null) partes.push(`US$ ${(k.balanceCents / 100).toFixed(2)}`);
     if (k.tokenBalance != null) partes.push(`${(k.tokenBalance / 1e6).toFixed(2)}M tokens`);
     return partes.length ? partes.join(" · ") : "—";
   };
