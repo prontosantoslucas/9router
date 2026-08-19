@@ -139,7 +139,7 @@ async function calculateCost(provider, model, tokens) {
     if (!pricing) return 0;
 
     // Delegate the actual math to the single source of truth (avoids the two
-    // copies drifting apart Ã¢â‚¬â€ see open-sse/providers/pricing.js for the
+    // copies drifting apart — see open-sse/providers/pricing.js for the
     // cache-inclusive prompt_tokens convention this assumes).
     const { calculateCostFromTokens } = await import("open-sse/providers/pricing.js");
     return calculateCostFromTokens(tokens, pricing);
@@ -189,7 +189,7 @@ export function trackPendingRequest(model, provider, connectionId, started, erro
     lastErrorProvider.ts = Date.now();
   }
 
-  // [PENDING] console line removed; lifecycle is visible via "Ã¢â€“Â¶" and "Ã°Å¸â€œÅ  done" lines
+  // [PENDING] console line removed; lifecycle is visible via "▶" and "📊 done" lines
   scheduleStatsEvent("pending");
 }
 
@@ -261,7 +261,7 @@ export async function saveRequestUsage(entry) {
     let inserted = false;
 
     // All 3 writes (history insert, daily upsert, lifetime counter) in ONE transaction.
-    // better-sqlite3 is sync Ã¢â€ â€™ no JS yield mid-transaction Ã¢â€ â€™ no race in same process.
+    // better-sqlite3 is sync → no JS yield mid-transaction → no race in same process.
     db.transaction(() => {
       const existing = db.get(
         `SELECT id, endpoint FROM usageHistory
@@ -434,7 +434,7 @@ export async function getUsageStats(period = "all") {
     }
   }
 
-  // last10Minutes Ã¢â‚¬â€ query 10min window
+  // last10Minutes — query 10min window
   const now = new Date();
   const currentMinuteStart = new Date(Math.floor(now.getTime() / 60000) * 60000);
   const tenMinutesAgo = new Date(currentMinuteStart.getTime() - 9 * 60 * 1000);
@@ -729,7 +729,7 @@ export async function getChartData(period = "7d") {
   const today = new Date();
   const labelFn = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-  // Build map of dateKey Ã¢â€ â€™ day data
+  // Build map of dateKey → day data
   const dayRows = loadDaysInRange(db, bucketCount);
   const dayMap = {};
   for (const r of dayRows) dayMap[r.dateKey] = parseJson(r.data, {});

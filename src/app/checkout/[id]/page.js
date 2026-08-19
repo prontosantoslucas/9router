@@ -1,12 +1,19 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, Suspense } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { Loader2, CheckCircle, XCircle, CreditCard, Lock } from "lucide-react";
+import Link from "next/link";
+import { Loader2, CheckCircle, XCircle, CreditCard, Lock, ArrowLeft, ShieldCheck, Zap } from "lucide-react";
 
 export default function PublicCheckoutPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-bg-alt"><Loader2 className="animate-spin text-brand-600" size={32} /></div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-bg-alt">
+          <Loader2 className="animate-spin text-brand-500" size={32} />
+        </div>
+      }
+    >
       <CheckoutContent />
     </Suspense>
   );
@@ -23,7 +30,7 @@ function CheckoutContent() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState(null);
   const [providers, setProviders] = useState([]);
-  const [selectedProvider, setSelectedProvider] = useState("stripe");
+  const [selectedProvider, setSelectedProvider] = useState("mercadopago");
 
   useEffect(() => {
     fetchCheckout();
@@ -33,7 +40,7 @@ function CheckoutContent() {
     const status = searchParams.get("status");
     if (status === "success") {
       setError(null);
-      // Atualiza o checkout apÃ³s redirect do gateway
+      // Atualiza o checkout após redirect do gateway
       setTimeout(fetchCheckout, 1500);
     }
   }, [searchParams]);
@@ -43,7 +50,7 @@ function CheckoutContent() {
       setLoading(true);
       const res = await fetch(`/api/checkout/${checkoutId}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Checkout nÃ£o encontrado");
+      if (!res.ok) throw new Error(data.error || "Checkout não encontrado");
       setCheckout(data.checkout);
       setContact(data.contact);
       setProviders(data.providers || []);
@@ -83,9 +90,9 @@ function CheckoutContent() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg-alt">
-        <div className="text-center">
-          <Loader2 className="animate-spin text-brand-600 mx-auto mb-4" size={40} />
-          <p className="text-text-muted">Carregando pagamento...</p>
+        <div className="text-center space-y-3">
+          <Loader2 className="animate-spin text-brand-500 mx-auto" size={40} />
+          <p className="text-xs font-mono text-text-muted">Carregando detalhes do pagamento...</p>
         </div>
       </div>
     );
@@ -93,115 +100,121 @@ function CheckoutContent() {
 
   if (error || !checkout) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bg-alt">
-        <div className="bg-surface rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
-          <XCircle className="text-label-crimson mx-auto mb-4" size={48} />
-          <h1 className="text-xl font-bold mb-2">Pagamento indisponÃ­vel</h1>
-          <p className="text-text-muted mb-6">{error || "Link de checkout invÃ¡lido ou expirado."}</p>
-          <a href="/" className="text-brand-600 hover:underline">â† Voltar</a>
+      <div className="min-h-screen flex items-center justify-center bg-bg-alt p-4">
+        <div className="bg-surface rounded-2xl border border-border p-8 max-w-md w-full text-center shadow-xl space-y-4">
+          <XCircle className="text-crimson-400 mx-auto" size={48} />
+          <h1 className="text-lg font-bold text-text-main">Pagamento indisponível</h1>
+          <p className="text-xs text-text-muted leading-relaxed">{error || "Link de checkout inválido ou expirado."}</p>
+          <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-400 hover:underline pt-2">
+            <ArrowLeft size={14} /> Voltar para o início
+          </Link>
         </div>
       </div>
     );
   }
 
-  const amount = (checkout.amountCents / 100).toFixed(2);
+  const amount = (checkout.amountCents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const isPaid = checkout.status === "paid";
 
   return (
     <div className="min-h-screen bg-bg-alt flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md space-y-4">
         {/* Card principal */}
-        <div className="bg-surface rounded-2xl shadow-xl overflow-hidden">
+        <div className="bg-surface rounded-2xl border border-border shadow-2xl overflow-hidden">
           {/* Header */}
-          <div className="bg-gradient-to-r from-brand-600 to-brand-800 p-6 text-white">
-            <h1 className="text-2xl font-bold mb-1">{checkout.description || "Pagamento"}</h1>
-            <p className="text-brand-100 text-sm">Fatura para {contact?.name || "Cliente"}</p>
+          <div className="bg-gradient-to-r from-brand-500 to-brand-600 p-6 text-white space-y-1">
+            <div className="flex items-center gap-2 text-xs text-white/80 font-mono">
+              <ShieldCheck size={14} /> Checkout Seguro
+            </div>
+            <h1 className="text-xl font-bold font-display text-white">{checkout.description || "Pagamento de Serviços"}</h1>
+            <p className="text-xs text-white/80">Fatura emitida para: {contact?.name || "Cliente"}</p>
           </div>
 
           {/* Corpo */}
-          <div className="p-6">
+          <div className="p-6 space-y-6">
             {isPaid ? (
-              <div className="text-center py-8">
-                <CheckCircle className="text-label-emerald mx-auto mb-4" size={56} />
-                <h2 className="text-2xl font-bold text-label-emerald mb-2">Pagamento Confirmado!</h2>
-                <p className="text-text-muted mb-2">
-                  Recebemos <span className="font-bold">R$ {amount}</span> com sucesso.
+              <div className="text-center py-6 space-y-3">
+                <CheckCircle className="text-emerald-400 mx-auto" size={56} />
+                <h2 className="text-xl font-bold text-emerald-400 font-display">Pagamento Confirmado!</h2>
+                <p className="text-xs text-text-muted">
+                  Recebemos <span className="font-bold text-text-main">R$ {amount}</span> com sucesso.
                 </p>
-                <p className="text-text-muted text-sm">
-                  ReferÃªncia: {checkout.externalRef || checkout.id.slice(0, 8)}
+                <p className="text-[11px] font-mono text-text-muted bg-surface-2 py-1.5 px-3 rounded-lg">
+                  Referência: {checkout.externalRef || checkout.id.slice(0, 12)}
                 </p>
               </div>
             ) : (
               <>
                 {/* Valor */}
-                <div className="text-center mb-6">
-                  <div className="text-sm text-text-muted mb-1">Valor a pagar</div>
-                  <div className="text-5xl font-bold text-text-main">
-                    <span className="text-2xl align-top">R$</span> {amount}
+                <div className="text-center space-y-1 bg-surface-2 p-4 rounded-xl border border-border">
+                  <div className="text-xs text-text-muted font-medium">Valor total a pagar</div>
+                  <div className="text-4xl font-black font-display text-text-main">
+                    <span className="text-lg font-bold text-brand-400 mr-1">R$</span>{amount}
                   </div>
                 </div>
 
-                {/* SeleÃ§Ã£o de gateway */}
+                {/* Seleção de gateway */}
                 {providers.length > 1 && (
-                  <div className="mb-6">
-                    <label className="text-sm font-medium text-text-main mb-2 block">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-text-muted block">
                       Forma de pagamento
                     </label>
                     <div className="grid grid-cols-3 gap-2">
                       {providers.map((p) => (
                         <button
                           key={p}
+                          type="button"
                           onClick={() => setSelectedProvider(p)}
-                          className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                          className={`p-2.5 rounded-xl border text-xs font-bold transition-all ${
                             selectedProvider === p
-                              ? "border-brand-500 bg-label-blue-bg text-label-blue"
-                              : "border-border hover:border-border text-text-muted"
+                              ? "border-brand-500 bg-brand-500/10 text-brand-400 shadow-soft"
+                              : "border-border bg-surface-2 hover:border-brand-500/50 text-text-muted"
                           }`}
                         >
-                          {p === "stripe" ? "ðŸ’³ CartÃ£o" : p === "paypal" ? "ðŸ…¿ï¸ PayPal" : "ðŸŸ¡ Mercado Livre"}
+                          {p === "stripe" ? "💳 Cartão" : p === "paypal" ? "🅿️ PayPal" : "⚡ Pix"}
                         </button>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* BotÃ£o */}
+                {/* Botão de Pagar */}
                 <button
+                  type="button"
                   onClick={handlePay}
                   disabled={creating}
-                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-3.5 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-brand-500 to-brand-600 hover:opacity-95 text-white font-bold py-3 rounded-xl shadow-soft transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-xs"
                 >
                   {creating ? (
                     <>
-                      <Loader2 className="animate-spin" size={20} />
-                      Processando...
+                      <Loader2 className="animate-spin size-4" />
+                      <span>Processando pagamento...</span>
                     </>
                   ) : (
                     <>
-                      <CreditCard size={20} />
-                      Pagar {amount}
+                      <Zap className="size-4" />
+                      <span>Pagar R$ {amount} agora</span>
                     </>
                   )}
                 </button>
               </>
             )}
 
-            {/* SeguranÃ§a */}
-            <div className="mt-6 flex items-center justify-center gap-2 text-xs text-text-subtle">
-              <Lock size={14} />
-              Pagamento seguro e criptografado
+            {/* Segurança */}
+            <div className="pt-2 flex items-center justify-center gap-1.5 text-[11px] font-mono text-text-muted border-t border-border">
+              <Lock size={12} className="text-emerald-400" />
+              <span>Ambiente seguro com criptografia de ponta a ponta</span>
             </div>
           </div>
         </div>
 
-        {/* Status */}
+        {/* Status adicional */}
         {!isPaid && checkout.status !== "pending" && (
-          <div className="mt-4 text-center text-sm text-text-muted">
-            Status: <span className="font-medium capitalize">{checkout.status}</span>
+          <div className="text-center text-xs font-mono text-text-muted">
+            Status da Fatura: <span className="font-bold uppercase text-brand-400">{checkout.status}</span>
           </div>
         )}
       </div>
     </div>
   );
 }
-

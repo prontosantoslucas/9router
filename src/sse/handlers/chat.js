@@ -50,7 +50,7 @@ export async function handleChat(request, clientRawRequest = null) {
 
   const modelStr = body.model;
 
-  // Request summary is emitted as the unified "Ã¢â€“Â¶" line in chatCore (has fmt/thinking/account)
+  // Request summary is emitted as the unified "▶" line in chatCore (has fmt/thinking/account)
 
   // Log API key (masked)
   const authHeader = request.headers.get("Authorization");
@@ -245,7 +245,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
 
   const { provider, model } = modelInfo;
 
-  // Routing shown in the unified "Ã¢â€“Â¶" line (client model Ã¢â€ â€™ provider/model)
+  // Routing shown in the unified "▶" line (client model → provider/model)
 
   // Extract userAgent from request
   const userAgent = request?.headers?.get("user-agent") || "";
@@ -274,7 +274,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
     }
 
-    // Account selection shown in the unified "Ã¢â€“Â¶" line (acc:...)
+    // Account selection shown in the unified "▶" line (acc:...)
     const refreshedCredentials = await checkAndRefreshToken(provider, credentials);
 
     // Ensure real project ID is available for providers that need it (P0 fix: cold miss)
@@ -340,7 +340,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model, result.resetsAtMs);
 
     if (shouldFallback) {
-      log.warn("FALLBACK", `Ã¢â€¡â€ž ACC:${credentials.connectionName} UNAVAILABLE (${result.status}) Ã¢â€ â€™ NEXT ACCOUNT`);
+      log.warn("FALLBACK", `⇞ ACC:${credentials.connectionName} UNAVAILABLE (${result.status}) → NEXT ACCOUNT`);
       excludeConnectionIds.add(credentials.connectionId);
       lastError = result.error;
       lastStatus = result.status;

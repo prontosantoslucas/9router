@@ -1880,8 +1880,95 @@ Os Capítulos 70 e 71 corrigiram problemas reais da cadeia de busca (duplo encod
      - Adicionado `overflow-x-auto custom-scrollbar` no container principal da barra de ferramentas superior.
      - Aplicadas as classes `shrink-0` e `whitespace-nowrap` em todos os botões e grupos do menu superior (`Preview`, `Inspect`, `Code`, `Diff`, `Banco`, Viewports, `ZIP`, `Deploy`, `Commit`), assegurando espaçamento consistente e impedindo qualquer sobreposição mesmo em telas de menor resolução.
 
+### Capítulo 90: Reestruturação do CRM Real de Vendas e Unificação Visual Inspirada no MakePlane e mimrai-crm
+
+* **Por que foi feita essa alteração (Causa Raiz Detalhada & Necessidade de Negócio)**:
+  1. **Fragmentação Estética e Conflito de Temas (Light vs Dark Mode)**:
+     - As telas originais do CRM utilizavam classes Tailwind estáticas de tema claro (`bg-white`, `border-gray-200`, `text-gray-600`), criando um contraste abrupto e visualmente quebrado com o restante da aplicação MaxRouter e seu tema escuro nativo (*Linear/Plane Dark Theme* definido em `globals.css`).
+  2. **Incompletude Funcional e Falta de Visão de Negócio Real**:
+     - O CRM possuía interfaces prototípicas com cartões simplificados, sem funil visual de conversão, sem alternância ágil entre modo **Kanban** e **Tabela Linear**, sem links de acionamento direto para canais de comunicação (como WhatsApp `wa.me/` em 1 clique) e sem integração fluida com o robô de prospecção contínua 24/7.
+  3. **Demanda de Referência (MakePlane & mimrai-crm)**:
+     - O usuário solicitou explicitamente transformar o CRM em um sistema comercial robusto e real, utilizando as referências do **MakePlane** (design system escuro de alta densidade, cartões de oportunidades com indicadores de prioridade na lateral, micro-badges de status translúcidos, filtros rápidos com contadores e visualização dupla de dados) e do **mimrai-crm** (pipeline comercial com estágios parametrizados, perfil do cliente 360°, linha do tempo de atividades e previsão ponderada de receita/forecast).
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Expansão e Padronização do Design System & Metadados ([crmMeta.js](file:///c:/Users/user/Documents/GitHub/9router/src/app/(dashboard)/dashboard/crm/crmMeta.js))**:
+     - Configurados os estágios comerciais com probabilidade estatística de fechamento (`Novo Lead` 10%, `Qualificado` 25%, `Proposta Enviada` 50%, `Em Negociação` 75%, `Fechado / Ganho` 100%, `Perdido` 0%).
+     - Mapeadas as origens de lead (`prospector` [Prospecção 24/7], `whatsapp`, `inbound`, `referral`, `outbound`) e prioridades visuais (`urgent`, `high`, `medium`, `low`, `none`).
+     - Criada a função utilitária `formatWhatsAppUrl(phone)` para normalização de DDI/DDD e geração instantânea de link de conversa no WhatsApp Web.
+  2. **Reconstrução do CRM Command Center ([src/app/(dashboard)/dashboard/crm/page.js](file:///c:/Users/user/Documents/GitHub/9router/src/app/(dashboard)/dashboard/crm/page.js))**:
+     - **Cards de Métricas em Tempo Real**: Pipeline Ativo, Receita Ganha, Previsão Ponderada (Forecast), Taxa de Conversão (Win Rate) e Total de Contatos.
+     - **Funil de Conversão Visual**: Barras dinâmicas de progresso exibindo a volumetria, valor em reais/dólares e porcentagem de conversão em cada etapa do funil.
+     - **Painel Duplo de Oportunidades & Leads Recentes**: Acesso imediato aos negócios de maior valor e contatos com botão de WhatsApp direto.
+     - **Sincronização com o Robô 24/7**: Botão `⚡ Sincronizar Prospecção` que importa automaticamente os estabelecimentos minerados pelo Agente Lucas diretamente para a base de contatos e funil do CRM.
+  3. **Pipeline de Vendas com Visão Dupla Kanban / Tabela Linear ([src/app/(dashboard)/dashboard/crm/deals/page.js](file:///c:/Users/user/Documents/GitHub/9router/src/app/(dashboard)/dashboard/crm/deals/page.js))**:
+     - **Modo Kanban**: Colunas estilizadas com contagem de negócios, somatório financeiro por etapa, arrastar e soltar (Dnd-Kit) fluido e cartões com faixa lateral de prioridade (*Linear/Plane style*).
+     - **Modo Tabela**: Grid de dados tabular de alta densidade estilo planilha com busca em tempo real por título, contato ou empresa, e ordenação de colunas.
+     - **Ações em Massa (Bulk Actions)**: Barra flutuante para mover de estágio, alterar prioridade ou excluir múltiplos negócios simultaneamente.
+  4. **Diretório de Contatos & Perfil do Cliente 360° ([contacts/page.js](file:///c:/Users/user/Documents/GitHub/9router/src/app/(dashboard)/dashboard/crm/contacts/page.js) e [contacts/[id]/page.js](file:///c:/Users/user/Documents/GitHub/9router/src/app/(dashboard)/dashboard/crm/contacts/[id]/page.js))**:
+     - Filtros rápidos por chips (*Todos*, *Leads*, *Prospects*, *Clientes*, *Inativos*).
+     - Acionamento direto via WhatsApp, Email e Telefone em 1 clique em todas as linhas da tabela.
+     - Perfil completo em duas colunas: Identidade e canais de contato à esquerda; Abas interativas à direita (Negócios vinculados, Linha do Tempo de Atividades com inclusão rápida de notas, API Keys e Consumo de Tokens).
+  5. **Analytics & Relatórios Comerciais ([analytics/page.js](file:///c:/Users/user/Documents/GitHub/9router/src/app/(dashboard)/dashboard/crm/analytics/page.js))**:
+     - Painel analítico com gráfico de barras da tendência de criação de negócios nos últimos 30 dias, comparativo mensal de crescimento percentual e ranking dos 10 maiores clientes por LTV (receita gerada).
+
+---
+
+### Capítulo 91: Auditoria Completa do Sistema, Eliminação de Botões Inativos e Normalização Pré-Deploy
+
+* **Por que foi feita essa alteração (Causa Raiz Detalhada & Varredura Geral)**:
+  1. **Endpoints Faltantes / Botões Desconectados**:
+     - No painel de faturamento ([`BillingPage.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/(dashboard)/dashboard/billing/page.js)), o botão de criar chave de API chamava `POST /api/billing/api-keys`, rota que só possuía o handler `GET` implementado, retornando erro HTTP 405.
+  2. **Links Mortos no Rodapé Global**:
+     - No [`Footer.js`](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/Footer.js), os links de "Privacy Policy" e "Terms of Service" estavam apontando para `href="#"` em vez de rotas navegáveis reais do sistema.
+  3. **Rotas Críticas Ausentes no Menu Lateral (Sidebar)**:
+     - As novas telas do CRM (`Pipeline & Kanban`, `Contatos & Leads`, `Checkout & Cobranças`) e o painel de `Prospecção 24/7 & Canais (/dashboard2)` não estavam mapeadas na barra lateral de navegação.
+  4. **Corrupção de Caracteres UTF-8 em Telas Secundárias**:
+     - Telas como `crm/automations` e `crm/billing` continham textos acentuados corrompidos em Latin-1 (`AutomaÃ§Ãµes`, `notificaÃ§Ãµes`, `configuraÃ§Ã£o`).
+  5. **Parser SSE & NDJSON no Roteador de Modelos**:
+     - O utilitário `parseSSELine` rejeitava linhas NDJSON cruas sem o cabeçalho `data:`, causando falhas de streaming em modelos locais e provedores de formato direto.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Implementação do Handler `POST /api/billing/api-keys` ([src/app/api/billing/api-keys/route.js](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/billing/api-keys/route.js))**:
+     - Adicionada a função `POST` conectada com `createApiKey` e resolução de `machineId`, permitindo a geração real e cópia de chaves de API pelo painel.
+  2. **Atualização da Navegação e Rodapé ([Sidebar.js](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/Sidebar.js) e [Footer.js](file:///c:/Users/user/Documents/GitHub/9router/src/shared/components/Footer.js))**:
+     - Adicionados atalhos diretos para `/dashboard/crm/deals`, `/dashboard/crm/contacts`, `/dashboard2` e `/dashboard/crm/billing` na barra lateral com suporte a colapso e flyouts.
+     - Substituídos os links `href="#"` no rodapé por `/dashboard/profile` e `/dashboard/billing`.
+  4. **Varredura Completa e Eliminação de Mojibake UTF-8 ([checkout/[id]/page.js](file:///c:/Users/user/Documents/GitHub/9router/src/app/checkout/[id]/page.js), [schema.js](file:///c:/Users/user/Documents/GitHub/9router/src/lib/db/schema.js), [usageRepo.js](file:///c:/Users/user/Documents/GitHub/9router/src/lib/db/repos/usageRepo.js), [chat.js](file:///c:/Users/user/Documents/GitHub/9router/src/sse/handlers/chat.js))**:
+     - Realizada busca global por sequências corrompidas `Ã§`, `Ã£`, `Ã³`, `Ã­`, `Ã¡`, `Ã¢â‚¬â€`, `Ã¢â€“Â¶`.
+     - Todos os arquivos com textos antigos em Latin-1 foram reescritos e sanitizados com acentuação correta em UTF-8 nativo e símbolos padronizados (`—`, `▶`, `→`, `⇞`).
+  5. **Normalização de Streaming SSE/NDJSON ([streamHelpers.js](file:///c:/Users/user/Documents/GitHub/9router/open-sse/utils/streamHelpers.js))**:
+     - `parseSSELine` agora processa nativamente tanto linhas em formato JSON cru quanto blocos com prefixo `data:`.
+  6. **Incremento de Versão para Disparo no Railway ([apps/agent/package.json](file:///c:/Users/user/Documents/GitHub/9router/apps/agent/package.json))**:
+     - Versão atualizada para `1.0.9`.
+
+---
+
+### Capítulo 92: Resolução de Pagamento Simulado vs Produção (PayPal, Stripe e Mercado Pago)
+
+* **Por que o pagamento estava caindo como simulado (Causa Raiz Detalhada)**:
+  1. **Lookup Incompleto da Integração (`checkout.integrationId` vs `provider`)**:
+     - No [`src/lib/payments.js`](file:///c:/Users/user/Documents/GitHub/9router/src/lib/payments.js), as funções `createPayPalSession`, `createStripeSession` e `createMercadoLivreSession` realizavam a busca da credencial do gateway exclusivamente por `getIntegrationById(checkout.integrationId)`.
+     - Quando o link de checkout era criado sem vincular um ID fixo ou quando o cliente selecionava uma forma de pagamento diferente no checkout público, `checkout.integrationId` vinha como `null`.
+     - Isso fazia a busca retornar `null` e lançar o erro `"PayPal não configurado (clientId/clientSecret ausentes)"`, mesmo com o PayPal configurado e salvo no banco de dados.
+  2. **Mascaração com Mock Automático na Rota de Pagamento**:
+     - No [`src/app/api/checkout/[id]/pay/route.js`](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/checkout/[id]/pay/route.js), o bloco `catch` interceptava qualquer exceção retornada pela API do gateway e chamava automaticamente `createSandboxIntegration`, marcando o pedido como pago localmente com `{ mock: true, message: "Pagamento simulado (sandbox)" }`.
+     - Isso impedia o redirecionamento para o PayPal real e escondia o motivo do erro (como credenciais de Sandbox sendo usadas no endpoint Live `api-m.paypal.com` ou `integrationId` nulo).
+  3. **Conflito entre Credenciais de Sandbox e Live do PayPal**:
+     - No PayPal Developer, existem duas abas: **Sandbox** (para testes com `api-m.sandbox.paypal.com`) e **Live** (para produção com `api-m.paypal.com`).
+     - Se o usuário cadastrar um `Client ID` / `Secret` gerado no Sandbox do PayPal em um endpoint Live, a API do PayPal recusa a autenticação com erro `invalid_client`.
+
+* **Como foi resolvido (Solução Técnica Passo a Passo)**:
+  1. **Fallback Inteligente de Integração por Provedor ([payments.js](file:///c:/Users/user/Documents/GitHub/9router/src/lib/payments.js))**:
+     - Implementada a busca encadeada: tenta primeiro pelo `checkout.integrationId` e, caso nulo, busca a integração ativa pelo nome do provedor (`getIntegrationByProvider("paypal")`).
+  2. **Suporte a Ambientes Live & Sandbox com Auto-Detecção ([payments.js](file:///c:/Users/user/Documents/GitHub/9router/src/lib/payments.js))**:
+     - O PayPal agora tenta autenticar via `https://api-m.paypal.com` (Live). Se as credenciais forem do ambiente de testes (`sb-` ou rejeitadas com `invalid_client`), a conexão é tentada no endpoint Sandbox `https://api-m.sandbox.paypal.com`.
+     - Em ambos os casos, a API cria o pedido real no PayPal (`/v2/checkout/orders`) e devolve o link oficial de aprovação e pagamento (`approveLink.href`), redirecionando o cliente para a tela do PayPal.
+  3. **Eliminação de Mock Silencioso na Rota de Cobrança ([pay/route.js](file:///c:/Users/user/Documents/GitHub/9router/src/app/api/checkout/[id]/pay/route.js))**:
+     - A rota `POST /api/checkout/[id]/pay` agora encaminha o provedor escolhido, gera o link real de pagamento e, em caso de erro de credenciais, retorna a mensagem detalhada para que o usuário saiba exatamente o que ajustar no painel do PayPal/Stripe.
+
 ---
 
 *Este livro de estudos é atualizado continuamente a cada novo recurso, depuração ou aprimoramento do 9Router.*
+
 
 
