@@ -36,7 +36,7 @@ export default function BillingAdminPage() {
           <p className="text-text-muted">No users yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[560px]">
               <thead>
                 <tr className="text-left text-text-muted border-b border-border">
                   <th className="pb-2">Email</th>
@@ -70,7 +70,7 @@ export default function BillingAdminPage() {
           <p className="text-text-muted">No paid keys.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[560px]">
               <thead>
                 <tr className="text-left text-text-muted border-b border-border">
                   <th className="pb-2">Key</th>
@@ -109,7 +109,7 @@ export default function BillingAdminPage() {
           <p className="text-text-muted">No payments.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[560px]">
               <thead>
                 <tr className="text-left text-text-muted border-b border-border">
                   <th className="pb-2">Date</th>

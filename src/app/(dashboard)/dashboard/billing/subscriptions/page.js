@@ -88,7 +88,7 @@ export default function SubscriptionsPage() {
       ) : (
         <div className="rounded-lg border border-border bg-surface overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="border-b border-border bg-surface-2">
                   <th className="text-left px-4 py-3 text-xs font-semibold text-text-muted uppercase tracking-wider">User</th>

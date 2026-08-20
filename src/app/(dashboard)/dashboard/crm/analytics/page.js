@@ -344,7 +344,7 @@ export default function AnalyticsPage() {
           </h2>
 
           <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left text-xs text-text-main">
+            <table className="w-full text-left text-xs text-text-main min-w-[560px]">
               <thead className="border-b border-border bg-surface-2 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                 <tr>
                   <th className="p-3">Estágio</th>

@@ -135,7 +135,7 @@ export default function AnalyticsPage() {
         <h2 className="text-lg font-semibold mb-4">Top Users (API Keys by Cost)</h2>
         {topKeys.length === 0 ? <p className="text-text-muted text-sm">No key data</p> : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[560px]">
               <thead><tr className="text-left text-text-muted border-b border-border">
                 <th className="pb-2">Key</th><th className="pb-2">Model</th><th className="pb-2">Provider</th><th className="pb-2 text-right">Requests</th><th className="pb-2 text-right">Tokens</th><th className="pb-2 text-right">Cost</th>
               </tr></thead>

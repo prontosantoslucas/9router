@@ -205,7 +205,7 @@ export default function PxpipeClient() {
       <Card className="p-4">
         <h3 className="font-medium mb-3">History</h3>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[720px]">
             <thead>
               <tr className="text-left text-xs text-text-muted border-b border-border">
                 <th className="py-2 pr-3">Time</th>

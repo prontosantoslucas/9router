@@ -160,7 +160,7 @@ export default function UsageTable({
         <h3 className="font-semibold">{title}</h3>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left">
+        <table className="w-full text-sm text-left min-w-[600px]">
           <thead className="bg-bg-subtle/30 text-text-muted uppercase text-xs">
             <tr>
               {columns.map((col) => (

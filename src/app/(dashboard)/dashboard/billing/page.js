@@ -664,7 +664,7 @@ export default function BillingPage() {
 
           <div className="card-soft border border-border overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left text-xs min-w-[720px]">
                 <thead className="bg-bg-alt border-b border-border text-text-muted font-bold uppercase tracking-wider">
                   <tr>
                     <th className="p-4">Identificador da Chave</th>
@@ -727,7 +727,7 @@ export default function BillingPage() {
 
           <div className="card-soft border border-border overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left text-xs min-w-[720px]">
                 <thead className="bg-bg-alt border-b border-border text-text-muted font-bold uppercase tracking-wider">
                   <tr>
                     <th className="p-4">Data</th>

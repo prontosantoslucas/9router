@@ -475,7 +475,7 @@ export default function DealsPipelinePage() {
         /* ── Plane Interactive Data Table ── */
         <div className="rounded-2xl border border-border bg-surface overflow-hidden shadow-soft">
           <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left text-xs text-text-main">
+            <table className="w-full text-left text-xs text-text-main min-w-[840px]">
               <thead className="border-b border-border bg-surface-2 text-[11px] font-bold text-text-muted uppercase tracking-wider">
                 <tr>
                   <th className="p-3.5 w-10 text-center">
