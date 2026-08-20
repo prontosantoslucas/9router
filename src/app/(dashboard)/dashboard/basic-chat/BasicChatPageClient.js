@@ -741,7 +741,7 @@ export default function BasicChatPageClient() {
   return (
     <div className="relative flex-1 flex flex-col h-full min-h-0 min-w-0 bg-[#212121] text-white overflow-hidden">
       <div className="relative mx-auto flex flex-1 h-full min-h-0 w-full max-w-4xl flex-col">
-        <div className="flex shrink-0 items-center justify-between gap-3 px-4 py-3 lg:px-6">
+        <div className="sticky top-0 z-20 flex shrink-0 items-center justify-between gap-3 bg-[#212121] px-4 py-3 lg:px-6">
           <div ref={modelMenuRef} className="relative">
             <button
               type="button"
@@ -856,7 +856,7 @@ export default function BasicChatPageClient() {
         ) : null}
 
         <div className="flex flex-1 flex-col min-h-0">
-          <div className="flex-1 overflow-y-auto py-4 custom-scrollbar">
+          <div className="min-h-0 flex-1 overflow-y-auto py-4 custom-scrollbar">
             {currentMessages.length === 0 ? (
               <div className="flex min-h-[50vh] items-center justify-center px-4 text-center">
                 <div className="max-w-xl space-y-4">
