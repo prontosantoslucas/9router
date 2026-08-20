@@ -847,7 +847,7 @@ export default function BillingPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold mb-2">Escolha o Gateway / Provedor:</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {[
                       { id: "mercadopago", label: "Mercado Pago (PIX / BR)", icon: "qr_code_2" },
                       { id: "stripe", label: "Stripe (Cartão Global)", icon: "credit_card" },
@@ -990,7 +990,7 @@ export default function BillingPage() {
 
             <div className="space-y-3">
               <label className="block text-xs font-bold">Selecione o Valor da Recarga:</label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {[10, 25, 50, 100].map((v) => (
                   <button
                     key={v}

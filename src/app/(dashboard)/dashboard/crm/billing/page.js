@@ -449,7 +449,7 @@ function CreateCheckoutModal({ contacts, activeProviders, onSave, onCancel }) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-semibold text-text-muted mb-1">Valor (R$)</label>
               <input

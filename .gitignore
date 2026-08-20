@@ -88,3 +88,5 @@ memoria.*
 *.tmp
 
 sidecars/linkedin-mcp/
+
+dev-server.err.log

@@ -723,7 +723,7 @@ function SimpleDealModal({ contactId, onSave, onCancel }) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-semibold text-text-muted">Valor</label>
               <input
@@ -810,7 +810,7 @@ function EditContactModal({ contact, onSave, onCancel }) {
             <input required type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className={inputCls} />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-semibold text-text-muted">Email</label>
               <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className={inputCls} />
@@ -821,7 +821,7 @@ function EditContactModal({ contact, onSave, onCancel }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-semibold text-text-muted">Empresa</label>
               <input type="text" value={formData.company} onChange={(e) => setFormData({ ...formData, company: e.target.value })} className={inputCls} />

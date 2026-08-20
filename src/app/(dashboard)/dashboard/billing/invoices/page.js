@@ -80,7 +80,8 @@ export default function InvoicesPage() {
             </div>
           ) : (
             <div className="rounded-lg border border-border bg-surface overflow-hidden">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full text-sm min-w-[560px]">
                 <thead><tr className="border-b border-border bg-surface-2">
                   <th className="text-left px-4 py-3 text-xs font-semibold text-text-muted uppercase tracking-wider">Amount</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-text-muted uppercase tracking-wider">Status</th>
@@ -99,7 +100,8 @@ export default function InvoicesPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+                </table>
+              </div>
             </div>
           )}
         </div>
@@ -137,22 +139,24 @@ export default function InvoicesPage() {
               </div>
               <div className="text-xs text-text-muted mb-3">{inv.description || `${inv.periodStart?.slice(0, 10)} → ${inv.periodEnd?.slice(0, 10)}`}</div>
               {inv.lineItems?.length > 0 && (
-                <table className="w-full text-xs border-t border-border pt-2">
-                  <thead><tr className="text-text-muted">
-                    <th className="text-left py-1.5 pr-2 font-semibold uppercase tracking-wider">Model</th>
-                    <th className="text-right py-1.5 px-2 font-semibold uppercase tracking-wider">Requests</th>
-                    <th className="text-right py-1.5 pl-2 font-semibold uppercase tracking-wider">Amount</th>
-                  </tr></thead>
-                  <tbody>
-                    {inv.lineItems.map(item => (
-                      <tr key={item.id} className="border-t border-border-subtle">
-                        <td className="py-1.5 pr-2 font-mono text-text-main">{item.model}</td>
-                        <td className="text-right py-1.5 px-2 text-text-muted">{item.quantity}</td>
-                        <td className="text-right py-1.5 pl-2 text-text-main font-medium">{(item.amountCents / 100).toFixed(2)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-xs border-t border-border pt-2 min-w-[360px]">
+                    <thead><tr className="text-text-muted">
+                      <th className="text-left py-1.5 pr-2 font-semibold uppercase tracking-wider">Model</th>
+                      <th className="text-right py-1.5 px-2 font-semibold uppercase tracking-wider">Requests</th>
+                      <th className="text-right py-1.5 pl-2 font-semibold uppercase tracking-wider">Amount</th>
+                    </tr></thead>
+                    <tbody>
+                      {inv.lineItems.map(item => (
+                        <tr key={item.id} className="border-t border-border-subtle">
+                          <td className="py-1.5 pr-2 font-mono text-text-main">{item.model}</td>
+                          <td className="text-right py-1.5 px-2 text-text-muted">{item.quantity}</td>
+                          <td className="text-right py-1.5 pl-2 text-text-main font-medium">{(item.amountCents / 100).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           ))}
