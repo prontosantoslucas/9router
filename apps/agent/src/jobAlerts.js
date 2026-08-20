@@ -119,8 +119,10 @@ async function runOne(alert) {
     raw = await runJobHunt(crit);
   } catch (err) {
     console.error(`[jobAlerts] ${alert.id}: runJobHunt lançou:`, err.message);
-    db.prepare(`UPDATE job_alerts SET last_run = ? WHERE id = ?`).run(now, alert.id);
-    return { alert: alert.id, error: err.message };
+    // NÃO avança last_run em erro: alerta continua "due" e re-tenta no
+    // próximo tick (15 min). Antes last_run era gravado mesmo com falha, o
+    // que mascarava o problema — alerta só voltava a tentar em 168h.
+    return { alert: alert.id, error: err.message, retry_in: "next tick" };
   }
 
   // runJobHunt agora devolve { text, job_ids, items } — job_id de fonte

@@ -1451,13 +1451,24 @@ async function start() {
       try {
         const result = await processMessage(chatId, task.label, "Scheduler");
         const text = result?.content || result?.message || "(sem conteúdo)";
+        // Notificação fantasma: quando o job falha (LLM/tool/API do Gmail ou
+        // Agenda), o erro volta como conteúdo normal e seria enviado ao
+        // usuário como se fosse resposta real. Detecta e descarta: loga a
+        // falha no console e NÃO envia.
+        const isFailure = result?.model === "error"
+          || !result
+          || /^❌/i.test(text.trim());
+        if (isFailure) {
+          console.error(`[Scheduler] tarefa ${task.id} ("${task.label}") falhou — envio descartado: ${text.slice(0, 400)}`);
+          return;
+        }
         // channelSender detecta canal por chatId + fail-soft (fallback pra webchat)
         const send = await channelSender.send(chatId, text);
         if (!send.ok) {
           console.warn(`[Scheduler] send falhou pra chat=${chatId}: ${send.error}`);
         }
       } catch (err) {
-        console.error(`[Scheduler] Erro ao processar tarefa: ${err.message}`);
+        console.error(`[Scheduler] Erro ao processar tarefa ${task.id} ("${task.label}"): ${err.message}`);
       }
     });
   } else {

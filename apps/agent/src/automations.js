@@ -160,7 +160,7 @@ async function checkScheduleTrigger(auto) {
 async function checkGmailNewTrigger(auto) {
   let gmail;
   try { gmail = require("./google/gmail"); }
-  catch { return []; }
+  catch (e) { throw new Error(`gmail module indisponível: ${e.message}`); }
 
   const oauth = require("./google/oauth");
   if (!oauth?.isAuthorized?.()) return [];
@@ -172,19 +172,17 @@ async function checkGmailNewTrigger(auto) {
   const timeFilter = lastRunSecs ? `after:${lastRunSecs}` : "newer_than:5m";
   const fullQuery = [userQuery, timeFilter].filter(Boolean).join(" ");
 
-  try {
-    const items = await gmail.searchEmails(fullQuery, MAX_MATCHES_PER_TICK);
-    return (items || []).map((m) => ({
-      from: m.from || m.sender || "",
-      subject: m.subject || "(sem assunto)",
-      snippet: m.snippet || "",
-      date: m.date || m.receivedAt || "",
-      id: m.id || m.messageId,
-    }));
-  } catch (e) {
-    console.warn(`[automations] gmail_new trigger falhou (${auto.id}): ${e.message}`);
-    return [];
-  }
+  // API do Gmail fora do ar/NÃO é "sem emails": lança pra quem chamou registrar
+  // error_count/last_error. Antes retornava [] e o tick tratava como "nada
+  // novo" — falha silenciosa, sem rastreabilidade (notificação fantasma).
+  const items = await gmail.searchEmails(fullQuery, MAX_MATCHES_PER_TICK);
+  return (items || []).map((m) => ({
+    from: m.from || m.sender || "",
+    subject: m.subject || "(sem assunto)",
+    snippet: m.snippet || "",
+    date: m.date || m.receivedAt || "",
+    id: m.id || m.messageId,
+  }));
 }
 
 // ── Action executors ─────────────────────────────────────────────────────
@@ -237,12 +235,20 @@ async function tick() {
       if (auto.trigger.type === "schedule") matches = await checkScheduleTrigger(auto);
       else if (auto.trigger.type === "gmail_new") matches = await checkGmailNewTrigger(auto);
     } catch (e) {
+      console.error(`[automations] trigger falhou (${auto.id} "${auto.label}", ${auto.trigger.type}): ${e.message}`);
       db.prepare(`UPDATE automations SET error_count = error_count + 1, last_error = ? WHERE id = ?`)
         .run(e.message, auto.id);
       continue;
     }
 
-    if (!matches.length) continue;
+    if (!matches.length) {
+      // Trigger rodou sem erro e sem matches: reseta falhas passadas para o
+      // contador refletir só falhas CONSECUTIVAS atuais.
+      if (auto.error_count) {
+        db.prepare(`UPDATE automations SET error_count = 0, last_error = NULL WHERE id = ?`).run(auto.id);
+      }
+      continue;
+    }
 
     let executed = 0;
     for (const ctx of matches.slice(0, MAX_MATCHES_PER_TICK)) {
