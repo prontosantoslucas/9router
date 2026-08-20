@@ -52,17 +52,20 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerStyle: { backgroundColor: '#0b0f17' },
-        headerTitleStyle: { color: '#f8fafc', fontWeight: '700', fontSize: 17 },
+        headerTitleStyle: { color: '#f8fafc', fontWeight: '700', fontSize: 16 },
         headerTintColor: '#818cf8',
+        headerShadowVisible: false,
         tabBarStyle: {
-          backgroundColor: '#141c2c',
-          borderTopColor: '#233047',
-          height: 62,
-          paddingBottom: 8,
-          paddingTop: 8,
+          backgroundColor: '#0f172a',
+          borderTopColor: '#1e2d45',
+          borderTopWidth: 1,
+          height: 58,
+          paddingBottom: 6,
+          paddingTop: 6,
         },
         tabBarActiveTintColor: '#818cf8',
-        tabBarInactiveTintColor: '#64748b',
+        tabBarInactiveTintColor: '#475569',
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         headerRight: () => (
           <TouchableOpacity
             onPress={logout}

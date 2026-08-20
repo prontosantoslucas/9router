@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from './_layout';
 
@@ -55,87 +56,99 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={styles.card}>
-        <View style={styles.iconRing}>
-          <Ionicons name="sparkles" size={42} color="#6366f1" />
-        </View>
-
-        <Text style={styles.title}>Agente Lucas</Text>
-        <Text style={styles.subtitle}>Assistente Pessoal & 2º Cérebro Notion</Text>
-
-        {errorMsg && (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={18} color="#ef4444" />
-            <Text style={styles.errorText}>{errorMsg}</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.card}>
+          {/* Marca */}
+          <View style={styles.brandRow}>
+            <View style={styles.iconRing}>
+              <Ionicons name="sparkles" size={30} color="#6366f1" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>Agente Lucas</Text>
+              <Text style={styles.subtitle}>Assistente Pessoal & 2º Cérebro Notion</Text>
+            </View>
           </View>
-        )}
 
-        {showServerConfig && (
+          {errorMsg && (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={18} color="#ef4444" />
+              <Text style={styles.errorText}>{errorMsg}</Text>
+            </View>
+          )}
+
+          {showServerConfig && (
+            <View style={styles.inputBox}>
+              <Ionicons name="globe-outline" size={20} color="#64748b" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="https://maxrouter.up.railway.app"
+                placeholderTextColor="#64748b"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={serverUrl}
+                onChangeText={(txt: string) => setServerUrl(txt)}
+              />
+            </View>
+          )}
+
           <View style={styles.inputBox}>
-            <Ionicons name="globe-outline" size={20} color="#64748b" style={styles.inputIcon} />
+            <Ionicons name="key-outline" size={20} color="#64748b" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="https://maxrouter.up.railway.app"
+              placeholder="Digite sua senha de acesso"
               placeholderTextColor="#64748b"
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={serverUrl}
-              onChangeText={(txt: string) => setServerUrl(txt)}
+              secureTextEntry
+              autoFocus
+              value={password}
+              onChangeText={(txt: string) => {
+                setPassword(txt);
+                if (errorMsg) setErrorMsg(null);
+              }}
+              onSubmitEditing={handleLogin}
+              returnKeyType="go"
             />
           </View>
-        )}
 
-        <View style={styles.inputBox}>
-          <Ionicons name="key-outline" size={20} color="#64748b" style={styles.inputIcon} />
-          <TextInput
-            style={styles.input}
-            placeholder="Digite sua senha de acesso"
-            placeholderTextColor="#64748b"
-            secureTextEntry
-            value={password}
-            onChangeText={(txt: string) => {
-              setPassword(txt);
-              if (errorMsg) setErrorMsg(null);
-            }}
-            onSubmitEditing={handleLogin}
-          />
+          <TouchableOpacity
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleLogin}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            {loading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <>
+                <Text style={styles.buttonText}>Acessar o App</Text>
+                <Ionicons name="arrow-forward" size={18} color="#ffffff" style={{ marginLeft: 8 }} />
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setShowServerConfig(!showServerConfig)}
+            style={{ marginTop: 16, alignItems: 'center' }}
+          >
+            <Text style={{ color: '#64748b', fontSize: 12 }}>
+              {showServerConfig ? 'Ocultar URL do Servidor' : `Servidor: ${serverUrl}`}
+            </Text>
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleLogin}
-          disabled={loading}
-          activeOpacity={0.85}
-        >
-          {loading ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <>
-              <Text style={styles.buttonText}>Acessar o App</Text>
-              <Ionicons name="arrow-forward" size={18} color="#ffffff" style={{ marginLeft: 8 }} />
-            </>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => setShowServerConfig(!showServerConfig)}
-          style={{ marginTop: 16, alignItems: 'center' }}
-        >
-          <Text style={{ color: '#64748b', fontSize: 12 }}>
-            {showServerConfig ? 'Ocultar URL do Servidor' : `Servidor: ${serverUrl}`}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#0b0f17',
+  },
   container: {
     flex: 1,
     backgroundColor: '#0b0f17',
@@ -144,40 +157,41 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#141c2c',
-    borderRadius: 28,
-    padding: 28,
+    borderRadius: 24,
+    padding: 24,
     borderWidth: 1,
     borderColor: '#233047',
     shadowColor: '#6366f1',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.12,
     shadowRadius: 24,
     elevation: 10,
   },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
   iconRing: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: 'rgba(99, 102, 241, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'center',
-    marginBottom: 20,
+    marginRight: 14,
     borderWidth: 1,
     borderColor: 'rgba(99, 102, 241, 0.3)',
   },
   title: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: '700',
     color: '#f8fafc',
-    textAlign: 'center',
-    marginBottom: 6,
+    marginBottom: 2,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#94a3b8',
-    textAlign: 'center',
-    marginBottom: 26,
   },
   errorBox: {
     flexDirection: 'row',
@@ -185,7 +199,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(239, 68, 68, 0.12)',
     borderRadius: 14,
     padding: 12,
-    marginBottom: 18,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.25)',
   },
@@ -199,12 +213,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#0b0f17',
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#233047',
-    paddingHorizontal: 16,
-    marginBottom: 20,
-    height: 54,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+    height: 52,
   },
   inputIcon: {
     marginRight: 10,
@@ -216,8 +230,8 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: '#6366f1',
-    height: 54,
-    borderRadius: 16,
+    height: 52,
+    borderRadius: 14,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',

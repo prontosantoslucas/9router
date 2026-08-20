@@ -42,6 +42,12 @@
           "photosPermission": "Permita que o Lucas acesse suas fotos para análise de imagens.",
           "cameraPermission": "Permita que o Lucas acesse a câmera para tirar fotos para análise."
         }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Permita que o Lucas acesse seu microfone para conversar com você no Modo Live."
+        }
       ]
     ]
   }

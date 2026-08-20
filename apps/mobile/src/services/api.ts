@@ -179,6 +179,15 @@ export const apiService = {
     return data;
   },
 
+  // ──────── API DE TRANSCRIÇÃO DE VOZ (STT — Groq Whisper) ────────
+  async transcribeAudio(base64: string, mimeType = 'audio/m4a', filename = 'audio.m4a'): Promise<string> {
+    const data = await this.request('/api/agent/audio/transcribe', {
+      method: 'POST',
+      body: JSON.stringify({ base64, mimeType, filename }),
+    });
+    return (data?.text || '').trim();
+  },
+
   // ──────── API DE NOTION / 2º CÉREBRO ────────
   async listNotes(): Promise<NotionNote[]> {
     try {
