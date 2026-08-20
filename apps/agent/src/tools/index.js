@@ -289,13 +289,14 @@ const TOOLS = {
   },
   schedule: {
     name: "schedule",
-    desc: "Agenda uma tarefa para execução futura. delay em segundos.",
+    desc: "Agenda uma tarefa para execução futura. delay em segundos. Se passar repeat_seconds, vira recorrente (ex.: 86400 = todo dia, 604800 = toda semana).",
     args: {
       type: "object",
       properties: {
-        delay: { type: "number", description: "Delay em segundos" },
+        delay: { type: "number", description: "Delay em segundos até o primeiro disparo" },
         task: { type: "string", description: "Descrição da tarefa" },
         action: { type: "string", description: "Ação a executar (opcional)" },
+        repeat_seconds: { type: "number", description: "Intervalo de recorrência em segundos (opcional). Ex.: 86400 = diário" },
       },
       required: ["delay", "task"],
     },
@@ -304,6 +305,11 @@ const TOOLS = {
       const label = args.task || args.action || "tarefa";
       const meta = { action: args.action };
       if (ctx?.chatId) meta.chatId = ctx.chatId;
+      const rep = parseInt(args.repeat_seconds) || 0;
+      if (rep > 0) {
+        scheduler.addRecurring(delay, rep, label, meta);
+        return `✅ Tarefa recorrente agendada: "${label}" em ${delay}s, repetindo a cada ${rep}s`;
+      }
       scheduler.add(delay, label, meta);
       return `✅ Tarefa agendada: "${label}" em ${delay}s`;
     },
@@ -1119,11 +1125,39 @@ Exemplos de uso:
         label: { type: "string", description: "Nome curto descritivo (ex: 'emails urgentes → wa')" },
         trigger: {
           type: "object",
-          description: "type='schedule'|'gmail_new'. Config: schedule={repeat_seconds:604800, first_at?:ISO}; gmail_new={query:'string Gmail search'}.",
+          description: "Gatilho do disparo.",
+          properties: {
+            type: { type: "string", enum: ["schedule", "gmail_new"] },
+            config: {
+              type: "object",
+              description: "schedule: {repeat_seconds (segundos, obrigatório), first_at? (ISO 8601, ex 2026-08-21T08:00:00-03:00)}. gmail_new: {query (busca Gmail)}.",
+              properties: {
+                repeat_seconds: { type: "integer", description: "Intervalo em segundos (86400 = diário, 604800 = semanal)" },
+                first_at: { type: "string", description: "Primeiro disparo em ISO 8601 (ex: 2026-08-21T08:00:00-03:00)" },
+                query: { type: "string", description: "Busca Gmail (ex: 'is:unread subject:urgente')" },
+              },
+            },
+          },
+          required: ["type", "config"],
         },
         action: {
           type: "object",
-          description: "type='send_message'|'run_tool'|'process_message'. Config depende do type — ver desc da tool.",
+          description: "Ação executada quando o gatilho disparar.",
+          properties: {
+            type: { type: "string", enum: ["send_message", "run_tool", "process_message"] },
+            config: {
+              type: "object",
+              description: "send_message: {chat_id, template}. process_message: {chat_id, prompt_template}. run_tool: {tool_name, args_template}.",
+              properties: {
+                chat_id: { type: "string" },
+                template: { type: "string" },
+                prompt_template: { type: "string" },
+                tool_name: { type: "string" },
+                args_template: { type: "object" },
+              },
+            },
+          },
+          required: ["type", "config"],
         },
       },
       required: ["label", "trigger", "action"],

@@ -47,6 +47,33 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS auto_enabled ON automations (enabled, trigger_type);
 `);
 
+// ── Trigger validation ────────────────────────────────────────────────────
+
+function validateTriggerConfig(trigger) {
+  const cfg = trigger.config || {};
+  if (trigger.type === "schedule") {
+    const rep = parseInt(cfg.repeat_seconds, 10);
+    if (!Number.isFinite(rep) || rep <= 0) {
+      throw new Error(
+        "Gatilho schedule requer repeat_seconds (segundos, inteiro > 0). " +
+        "Ex.: 86400 = diário, 604800 = semanal."
+      );
+    }
+    if (cfg.first_at) {
+      const ts = new Date(cfg.first_at).getTime();
+      if (!Number.isFinite(ts)) {
+        throw new Error(
+          `first_at inválido: "${cfg.first_at}". Use ISO 8601 (ex.: 2026-08-21T08:00:00-03:00).`
+        );
+      }
+    }
+  } else if (trigger.type === "gmail_new") {
+    if (cfg.query && typeof cfg.query !== "string") {
+      throw new Error("gmail_new config.query deve ser string (busca do Gmail).");
+    }
+  }
+}
+
 // ── CRUD ────────────────────────────────────────────────────────────────
 
 function createAutomation({ chatId, label, trigger, action, condition = null }) {
@@ -63,6 +90,8 @@ function createAutomation({ chatId, label, trigger, action, condition = null }) 
   if (!validActions.includes(action.type)) {
     throw new Error(`action.type inválido: ${action.type}. Aceita: ${validActions.join(", ")}`);
   }
+
+  validateTriggerConfig(trigger);
 
   const id = crypto.randomBytes(6).toString("hex");
   db.prepare(
